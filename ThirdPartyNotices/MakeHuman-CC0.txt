@@ -1,0 +1,6 @@
+MakeHuman Community core assets and derivatives are documented by the project as CC0.
+
+Reference URL:
+https://static.makehumancommunity.org/about/license.html
+
+This file is a local placeholder record. Replace with the exact captured license text used for your imported development assets and retrieval date.

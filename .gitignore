@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.venv/
+venv/
+.env
+.env.*
+!.env.example
+
+# .NET / Desktop
+desktop/**/bin/
+desktop/**/obj/
+
+# IDE
+.vscode/
+.vs/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local runtime data
+logs/
+*.log
+storage/
+workspace/
+
+# Git
+.git/

@@ -1,0 +1,10 @@
+{
+  "displayName": "Jarvis Male",
+  "profile": "male",
+  "modelFile": "avatar.glb",
+  "format": "glb",
+  "licenseName": "REPLACE_WITH_LICENSE",
+  "licenseUrl": "https://example.com/license",
+  "redistributionAllowed": false,
+  "attribution": "Replace after purchasing a licensed avatar asset."
+}

@@ -1,0 +1,47 @@
+[
+  {
+    "name": "BSOAUTALB002",
+    "address": "BSOAUTALB002",
+    "role": "MoveIT monitored server"
+  },
+  {
+    "name": "BSOAUTALB001",
+    "address": "BSOAUTALB001",
+    "role": "MoveIT monitored server"
+  },
+  {
+    "name": "BSOREPALB001",
+    "address": "BSOREPALB001",
+    "role": "MoveIT monitored server"
+  },
+  {
+    "name": "BSOXERALB001",
+    "address": "BSOXERALB001",
+    "role": "MoveIT monitored server"
+  },
+  {
+    "name": "BSOXEREALB002",
+    "address": "BSOXEREALB002",
+    "role": "MoveIT monitored server"
+  },
+  {
+    "name": "BSOTRNALB001",
+    "address": "BSOTRNALB001",
+    "role": "MoveIT monitored server"
+  },
+  {
+    "name": "BSOAPPALB001",
+    "address": "BSOAPPALB001",
+    "role": "MoveIT monitored server"
+  },
+  {
+    "name": "BSOAUTALB601",
+    "address": "BSOAUTALB601",
+    "role": "MoveIT monitored server"
+  },
+  {
+    "name": "BSO-HPC-001",
+    "address": "BSO-HPC-001",
+    "role": "MoveIT monitored server"
+  }
+]

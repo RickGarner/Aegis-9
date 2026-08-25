@@ -1,0 +1,46 @@
+{
+  "id": "jarvis-female-dev",
+  "displayName": "Female Development Avatar",
+  "version": 1,
+  "profile": "female",
+  "format": "glb",
+  "model": "jarvis-female.glb",
+  "voiceId": "af_heart",
+  "scale": 1.0,
+  "cameraTarget": [0.0, 1.55, 0.0],
+  "cameraOrbit": "0deg 82deg 1.6m",
+  "animationNames": {
+    "idle": "Idle",
+    "greeting": "Greeting",
+    "thinking": "Thinking",
+    "speaking": "Speaking"
+  },
+  "morphTargets": {
+    "blinkLeft": "eyeBlinkLeft",
+    "blinkRight": "eyeBlinkRight",
+    "jawOpen": "jawOpen",
+    "mouthSmileLeft": "mouthSmileLeft",
+    "mouthSmileRight": "mouthSmileRight"
+  },
+  "visemeMap": {
+    "sil": "viseme_sil",
+    "PP": "viseme_PP",
+    "FF": "viseme_FF",
+    "TH": "viseme_TH",
+    "DD": "viseme_DD",
+    "kk": "viseme_kk",
+    "CH": "viseme_CH",
+    "SS": "viseme_SS",
+    "nn": "viseme_nn",
+    "RR": "viseme_RR",
+    "aa": "viseme_aa",
+    "E": "viseme_E",
+    "I": "viseme_I",
+    "O": "viseme_O",
+    "U": "viseme_U"
+  },
+  "licenseName": "REPLACE_WITH_LICENSE",
+  "licenseUrl": "https://example.com/license",
+  "redistributionAllowed": false,
+  "attribution": "Replace after importing a validated MakeHuman/MPFB development avatar."
+}

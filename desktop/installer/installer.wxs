@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Basic WiX authoring template - adapt and expand for your installer needs -->
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Product Id="*" Name="Jarvis" Language="1033" Version="1.0.0.0" Manufacturer="Jarvis" UpgradeCode="PUT-GUID-HERE">
+	<Package InstallerVersion="500" Compressed="yes" InstallScope="perMachine" />
+
+	<MediaTemplate />
+
+	<Directory Id="TARGETDIR" Name="SourceDir">
+	  <Directory Id="ProgramFilesFolder">
+		<Directory Id="INSTALLFOLDER" Name="Jarvis" />
+	  </Directory>
+	</Directory>
+
+	<!-- Feature & components will be harvested from build output; use heat.exe to generate component fragments -->
+	<Feature Id="ProductFeature" Title="Jarvis" Level="1">
+	  <ComponentGroupRef Id="AppComponents" />
+	</Feature>
+  </Product>
+</Wix>

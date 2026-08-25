@@ -1,0 +1,86 @@
+* { box-sizing: border-box; }
+html, body {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  font-family: Segoe UI, Tahoma, sans-serif;
+  color: #e7f0ed;
+  background: radial-gradient(circle at 25% 20%, #183c45 0%, #0f1e24 42%, #0a1419 100%);
+}
+.ambient {
+  position: fixed;
+  inset: 0;
+  background:
+    radial-gradient(circle at 80% 10%, rgba(95, 211, 154, 0.15), transparent 30%),
+    radial-gradient(circle at 10% 85%, rgba(88, 184, 209, 0.18), transparent 32%);
+  filter: blur(2px);
+  pointer-events: none;
+}
+.shell {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  grid-template-rows: auto auto auto 1fr auto auto;
+  gap: 8px;
+  padding: 16px;
+  width: 100%;
+  height: 100%;
+}
+h1 { margin: 0; font-size: 20px; letter-spacing: 0.08em; color: #5fd39a; }
+#state { margin: 0; color: #8ba29d; font-size: 13px; }
+.state-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.state-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 86px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+.state-ready {
+  color: #d6f8e7;
+  background: rgba(44, 124, 87, 0.45);
+  border-color: #5fd39a;
+}
+.state-thinking {
+  color: #fff2d4;
+  background: rgba(122, 88, 34, 0.5);
+  border-color: #f2b35d;
+}
+.state-speaking {
+  color: #daf5ff;
+  background: rgba(35, 93, 119, 0.48);
+  border-color: #58b8d1;
+}
+.state-unavailable {
+  color: #ffd9d3;
+  background: rgba(117, 42, 38, 0.52);
+  border-color: #e77f72;
+}
+#meta { margin: 0; color: #cfd9d6; font-size: 12px; }
+#viewer {
+  width: 100%;
+  height: 100%;
+  min-height: 280px;
+  border: 1px solid #30434a;
+  border-radius: 8px;
+  background: linear-gradient(160deg, #1b2d33, #0e181d);
+}
+#fallback {
+  border: 1px solid #5b4746;
+  background: rgba(70, 35, 33, 0.5);
+  border-radius: 8px;
+  padding: 12px;
+}
+#fallback.hidden { display: none; }
+#fallback h2 { margin: 0 0 6px; font-size: 16px; color: #f2b35d; }
+#fallbackText { margin: 0; color: #f0d7cf; font-size: 12px; }
+#attribution { margin: 0; font-size: 11px; color: #8ba29d; }

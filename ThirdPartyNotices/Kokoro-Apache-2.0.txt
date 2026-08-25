@@ -1,0 +1,6 @@
+Kokoro-82M is published under Apache License 2.0.
+
+Reference URL:
+https://huggingface.co/hexgrad/Kokoro-82M
+
+This file is a local placeholder record. Replace with the exact Apache-2.0 notice text bundled with your selected runtime implementation and dependency set.
