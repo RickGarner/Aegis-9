@@ -7,7 +7,7 @@
   "model": "jarvis-male.glb",
   "voiceId": "am_fenrir",
   "scale": 1.0,
-  "cameraTarget": [0.0, 1.55, 0.0],
+  "cameraTarget": [0.0, 1.1, 0.0],
   "cameraOrbit": "0deg 82deg 1.6m",
   "animationNames": {
     "idle": "Idle",

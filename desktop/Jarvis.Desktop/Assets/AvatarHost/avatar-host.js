@@ -235,6 +235,12 @@ const loadAvatarFromManifest = async (manifestUrl, selectedAvatarId) => {
   const modelUrl = new URL(modelName, manifestUrl).toString();
   viewer.src = "";
   viewer.src = modelUrl;
+  if (Array.isArray(manifest.cameraTarget) && manifest.cameraTarget.length === 3) {
+    viewer.cameraTarget = manifest.cameraTarget.map((value) => `${Number(value) || 0}m`).join(" ");
+  }
+  if (manifest.cameraOrbit) {
+    viewer.cameraOrbit = String(manifest.cameraOrbit);
+  }
   viewer.addEventListener("error", () => {
     setFallback("The avatar model could not be rendered by the local WebView2 runtime.");
   }, { once: true });
