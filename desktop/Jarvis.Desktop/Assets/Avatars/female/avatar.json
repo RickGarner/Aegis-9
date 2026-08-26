@@ -7,8 +7,8 @@
   "model": "jarvis-female.glb",
   "voiceId": "af_heart",
   "scale": 1.0,
-  "cameraTarget": [0.0, 1.1, 0.0],
-  "cameraOrbit": "0deg 82deg 1.6m",
+  "cameraTarget": [0.0, 1.65, 0.0],
+  "cameraOrbit": "0deg 82deg 0.85m",
   "animationNames": {
     "idle": "Default"
   },

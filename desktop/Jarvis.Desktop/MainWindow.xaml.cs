@@ -158,8 +158,10 @@ public partial class MainWindow : Window
             {
                 _inlineAvatarWebView = new WebView2
                 {
-                    HorizontalAlignment = HorizontalAlignment.Stretch,
-                    VerticalAlignment = VerticalAlignment.Stretch,
+                    Width = 150,
+                    Height = 136,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center,
                 };
                 AvatarPresence.Child = _inlineAvatarWebView;
             }
