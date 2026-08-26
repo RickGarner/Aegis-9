@@ -33,15 +33,19 @@ foreach ($profile in $profiles) {
 
     $isAvatarJson = $metadataPath -eq $avatarJsonPath
     $modelField = if ($isAvatarJson) { "model" } else { "modelFile" }
-    $requiredFields = @("displayName", "profile", $modelField, "format", "licenseName", "licenseUrl", "redistributionAllowed", "attribution")
+    $requiredFields = @("displayName", "profile", $modelField, "format", "licenseName", "licenseUrl", "redistributionAllowed", "localUseAllowed", "attribution")
     foreach ($field in $requiredFields) {
         if ($null -eq $manifest.$field -or [string]::IsNullOrWhiteSpace([string]$manifest.$field) -and $field -ne "redistributionAllowed") {
             $errors += "[$profile] Missing required field '$field' in $metadataPath"
         }
     }
 
-    if (-not $manifest.redistributionAllowed) {
-        $errors += "[$profile] redistributionAllowed is false; host will refuse to load this avatar."
+    if (-not $manifest.redistributionAllowed -and -not $manifest.localUseAllowed) {
+        $errors += "[$profile] Neither redistributionAllowed nor localUseAllowed is true; host will refuse to load this avatar."
+    }
+
+    if (-not $manifest.redistributionAllowed -and $manifest.localUseAllowed) {
+        Write-Host "[$profile] Local-use-only asset; redistribution remains disabled." -ForegroundColor Yellow
     }
 
     if ($manifest.profile -ne $profile) {
@@ -57,6 +61,12 @@ foreach ($profile in $profiles) {
     $modelPath = Join-Path $profileDir $modelName
     if (-not (Test-Path $modelPath)) {
         $errors += "[$profile] Model file not found: $modelPath"
+    }
+    elseif ($format -eq "glb") {
+        $modelBytes = [IO.File]::ReadAllBytes($modelPath)
+        if ($modelBytes.Length -lt 1024 -or $modelBytes.Length -lt 20 -or [Text.Encoding]::ASCII.GetString($modelBytes, 0, 4) -ne "glTF") {
+            $errors += "[$profile] GLB file is missing or incomplete: $modelPath"
+        }
     }
 }
 

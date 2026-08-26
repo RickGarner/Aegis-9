@@ -39,8 +39,9 @@
     "O": "viseme_O",
     "U": "viseme_U"
   },
-  "licenseName": "REPLACE_WITH_LICENSE",
-  "licenseUrl": "https://example.com/license",
+  "licenseName": "ActorCore free content license - verify account terms",
+  "licenseUrl": "https://actorcore.reallusion.com/",
   "redistributionAllowed": false,
-  "attribution": "Replace after importing a validated MakeHuman/MPFB development avatar."
+  "localUseAllowed": true,
+  "attribution": "ActorCore / Reallusion. Replace the incomplete export and confirm the applicable account and free-content terms before packaging or redistributing."
 }

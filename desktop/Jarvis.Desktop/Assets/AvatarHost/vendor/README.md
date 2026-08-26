@@ -2,6 +2,8 @@
 
 This folder stores local runtime dependencies used by the WebView2 avatar host.
 
+The current pinned GLB renderer is `model-viewer.min.js` version 4.0.0 from the Google Model Viewer project. It is vendored locally so the installed application does not require a runtime CDN connection. See `ThirdPartyNotices/THIRD-PARTY-NOTICES.md` for provenance and licensing.
+
 ## Required for GLB/GLTF preview
 
 - model-viewer.min.js

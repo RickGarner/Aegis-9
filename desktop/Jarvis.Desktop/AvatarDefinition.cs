@@ -52,6 +52,9 @@ public sealed class AvatarDefinition
     [JsonPropertyName("redistributionAllowed")]
     public bool RedistributionAllowed { get; set; }
 
+    [JsonPropertyName("localUseAllowed")]
+    public bool LocalUseAllowed { get; set; }
+
     [JsonPropertyName("attribution")]
     public string Attribution { get; set; } = string.Empty;
 }

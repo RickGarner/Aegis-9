@@ -28,5 +28,8 @@ logs/
 storage/
 workspace/
 
+# Local avatar source downloads
+resources/
+
 # Git
 .git/

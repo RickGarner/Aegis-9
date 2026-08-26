@@ -4,6 +4,8 @@
 |---|---|---|---|---|---|---|
 | MakeHuman core assets (development avatars) | MakeHuman Community | https://static.makehumancommunity.org/about/license.html | Pending capture | CC0 (project-stated for core assets) | desktop/Jarvis.Desktop/Assets/Avatars/* | Preserve local license reference and verify non-core assets individually |
 | Kokoro-82M model/runtime | hexgrad | https://huggingface.co/hexgrad/Kokoro-82M | Pending runtime integration | Apache-2.0 | Local Kokoro runtime/models under Assets/Voices (future) | Include Apache notice and attribution for transitive dependencies |
+| ActorCore free actors | Reallusion | https://actorcore.reallusion.com/ | Downloaded 2026-08-26; account/free-content terms pending verification | ActorCore/Reallusion terms | desktop/Jarvis.Desktop/Assets/Avatars/* | Local-use-only until the specific account and actor terms are verified; do not redistribute |
+| model-viewer | Google | https://github.com/google/model-viewer | 4.0.0, downloaded 2026-08-26 | Apache-2.0 | desktop/Jarvis.Desktop/Assets/AvatarHost/vendor/model-viewer.min.js | Preserve upstream Apache notice if distributed |
 | WebView2 | Microsoft | https://www.nuget.org/packages/Microsoft.Web.WebView2 | 1.0.2849.39 | Microsoft package license | desktop/Jarvis.Desktop runtime dependency | Include package attribution via installer/package notices as required |
 
 ## Notes

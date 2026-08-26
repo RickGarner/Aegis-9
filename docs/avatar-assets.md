@@ -11,6 +11,7 @@ Implemented in this repository:
 - Avatar orchestration: `desktop/Jarvis.Desktop/IAvatarService.cs`, `desktop/Jarvis.Desktop/AvatarService.cs`, `desktop/Jarvis.Desktop/AvatarProtocol.cs`, `desktop/Jarvis.Desktop/AvatarVisualState.cs`
 - Speech scaffolding: `desktop/Jarvis.Desktop/ISpeechService.cs`, `desktop/Jarvis.Desktop/KokoroSpeechService.cs`, `desktop/Jarvis.Desktop/SpeechRequest.cs`, `desktop/Jarvis.Desktop/SpeechResult.cs`
 - Local web host assets: `desktop/Jarvis.Desktop/Assets/AvatarHost/`
+- Vendored GLB renderer: `desktop/Jarvis.Desktop/Assets/AvatarHost/vendor/model-viewer.min.js` version 4.0.0
 - Profile metadata: `desktop/Jarvis.Desktop/Assets/Avatars/male/avatar.json`, `desktop/Jarvis.Desktop/Assets/Avatars/female/avatar.json`, with legacy `manifest.json` fallback
 - Operator controls: settings for selected avatar/profile, voice IDs, lip-sync, and host toggle, plus Ctrl+click open from the avatar panel
 
@@ -60,6 +61,7 @@ Current host notes:
 - GLB/GLTF preview is supported after `desktop/Jarvis.Desktop/Assets/AvatarHost/vendor/model-viewer.min.js` is provided locally.
 - VRM files are detected but currently require a dedicated runtime extension; the host shows a fallback message until that adapter is added.
 - The host only loads profiles whose `avatar.json` or fallback manifest explicitly sets `redistributionAllowed: true`.
+- Development assets may use `localUseAllowed: true` while `redistributionAllowed` remains false; this keeps account-restricted ActorCore content local and prevents accidental packaging.
 - C# sends versioned JSON messages to the runtime for avatar load, state, expression, speech start, and speech stop; JavaScript reports ready/error states back to WebView2.
 - Kokoro speech output is scaffolded through a local HTTP endpoint and remains graceful when the service is unavailable.
 

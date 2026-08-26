@@ -70,9 +70,9 @@ public sealed class AvatarAssetCatalog
             return AvatarAssetSelection.Missing($"Model file was not found: {modelPath}");
         }
 
-        if (!definition.RedistributionAllowed)
+        if (!definition.RedistributionAllowed && !definition.LocalUseAllowed)
         {
-            return AvatarAssetSelection.Missing($"Avatar '{definition.Id}' does not permit redistribution.");
+            return AvatarAssetSelection.Missing($"Avatar '{definition.Id}' does not permit local use or redistribution.");
         }
 
         return new AvatarAssetSelection(

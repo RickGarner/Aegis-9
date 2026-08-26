@@ -32,6 +32,7 @@ Use this layout:
 - `desktop/Jarvis.Desktop/Assets/Avatars/female/avatar.json`
 
 Set `redistributionAllowed` to `true` only when your license explicitly allows redistribution under your deployment model.
+For ActorCore account/free-content downloads, use `localUseAllowed: true` only after confirming the specific actor terms permit local application use. Keep `redistributionAllowed: false` until redistribution is explicitly permitted.
 
 ## 3) Install local runtime dependency (GLB)
 
