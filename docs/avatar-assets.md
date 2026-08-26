@@ -22,6 +22,8 @@ If model files are missing or not licensed for redistribution, Jarvis automatica
 
 The supplied Wolforge package is currently used for both the male and female profile choices. The local GLB is installed as `wolforge_jarvis_avatar.glb` in each profile directory. It contains the nine named clips `Idle`, `Blink`, `JawOpen`, `Speaking`, `Listening`, `Thinking`, `Success`, `Warning`, and `Error`, plus named `Jaw`, eye, ear, head, muzzle, and circuit nodes. This is a temporary profile substitution until separate male/female assets are selected.
 
+The reproducible builder now uses faceted ellipsoid/prism forms for the cranium, muzzle, jaw, nose, cheeks, eyes, ears, and neck instead of rectangular box forms, producing a rounded wolf-like silhouette while preserving the existing animation node contract.
+
 The Wolforge asset is marked `localUseAllowed: true` and `redistributionAllowed: false` pending final project licensing confirmation.
 
 ## Direction

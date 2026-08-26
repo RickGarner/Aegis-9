@@ -58,13 +58,14 @@ const applyState = (state, detail) => {
 };
 
 const playAnimation = (name, loop = false) => {
-  if (!name || !viewer || !viewer.animationName) {
+  const modelViewer = viewer;
+  if (!name || !modelViewer) {
     return;
   }
-  viewer.animationName = name;
-  viewer.currentTime = 0;
-  if (typeof viewer.play === "function") {
-    viewer.play({ repetitions: loop ? Infinity : 1 });
+  modelViewer.animationName = name;
+  modelViewer.currentTime = 0;
+  if (typeof modelViewer.play === "function") {
+    modelViewer.play({ repetitions: loop ? Infinity : 1 });
   }
 };
 
@@ -108,7 +109,7 @@ const stopSpeech = () => {
 };
 
 const forEachMorphMesh = (callback) => {
-  const scene = viewer.model?.scene;
+  const scene = viewer()?.model?.scene;
   if (!scene || typeof scene.traverse !== "function") {
     return;
   }
@@ -212,7 +213,10 @@ const startAmplitudeTracking = () => {
     }
     const amplitude = sum / bins.length;
     const intensity = Math.min(1, Math.max(0, amplitude * 3));
-    viewer.style.filter = `brightness(${1 + intensity * 0.18})`;
+    const modelViewer = viewer();
+    if (modelViewer) {
+      modelViewer.style.filter = `brightness(${1 + intensity * 0.18})`;
+    }
   }, 60);
 };
 
@@ -246,24 +250,29 @@ const loadAvatarFromManifest = async (manifestUrl, selectedAvatarId) => {
   await ensureModelViewerRuntime();
 
   const modelUrl = new URL(modelName, manifestUrl).toString();
-  viewer.src = "";
-  viewer.src = modelUrl;
+  const modelViewer = viewer();
+  if (!modelViewer) {
+    throw new Error("Wolforge model viewer element is unavailable.");
+  }
+  modelViewer.src = "";
+  modelViewer.src = modelUrl;
   if (Array.isArray(manifest.cameraTarget) && manifest.cameraTarget.length === 3) {
-    viewer.cameraTarget = manifest.cameraTarget.map((value) => `${Number(value) || 0}m`).join(" ");
+    const target = payload.compact ? [0, 0.35, 0] : manifest.cameraTarget;
+    modelViewer.cameraTarget = target.map((value) => `${Number(value) || 0}m`).join(" ");
   }
   if (manifest.cameraOrbit) {
-    viewer.cameraOrbit = String(manifest.cameraOrbit);
+    modelViewer.cameraOrbit = payload.compact ? "0deg 82deg 4.8m" : String(manifest.cameraOrbit);
   }
-  viewer.addEventListener("error", () => {
+  modelViewer.addEventListener("error", () => {
     setFallback("The avatar model could not be rendered by the local WebView2 runtime.");
   }, { once: true });
   morphTargetNames = manifest.morphTargets || {};
   animationNames = manifest.animationNames || {};
   const availableAnimations = Object.values(animationNames);
   if (availableAnimations.length > 0) {
-    viewer.animationName = availableAnimations[0];
+    modelViewer.animationName = availableAnimations[0];
   }
-  viewer.addEventListener("load", () => {
+  modelViewer.addEventListener("load", () => {
     scheduleBlink();
   }, { once: true });
   nameEl.textContent = String(manifest.displayName || selectedAvatarId || "Jarvis Avatar").toUpperCase();
@@ -329,7 +338,7 @@ const handleEnvelope = async (envelope) => {
         startSpeakingMotion();
         currentAudio.onended = () => {
           stopSpeech();
-          viewer.style.filter = "none";
+          viewer()?.style.setProperty("filter", "none");
           applyState("ready", "Speech playback complete");
         };
         await currentAudio.play();
@@ -337,7 +346,7 @@ const handleEnvelope = async (envelope) => {
       }
       case "avatar.speech.stop": {
         stopSpeech();
-        viewer.style.filter = "none";
+        viewer()?.style.setProperty("filter", "none");
         applyState("ready", "Speech cancelled");
         break;
       }

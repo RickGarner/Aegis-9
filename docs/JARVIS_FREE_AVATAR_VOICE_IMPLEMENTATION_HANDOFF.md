@@ -15,6 +15,7 @@ Jarvis now has the first architecture slice of this specification implemented in
 - Pinned local `model-viewer.min.js` 4.0.0 runtime for GLB preview, with no runtime CDN dependency.
 - Inline main-window avatar host: the saved avatar selection is loaded automatically into the command-center presence panel at startup and after Settings Save, with native WPF fallback retained.
 - Temporary Wolforge integration: both male and female profile choices use the supplied local `wolforge_jarvis_avatar.glb`; its nine named state clips are mapped through the existing local model-viewer host.
+- Wolforge geometry refresh: the reproducible builder was updated to replace the square primary head forms with faceted organic head/muzzle/jaw/ear geometry while retaining the named animation nodes and clips.
 
 Current avatar authoring note: the development avatars are being created in Blender 5.2 from ActorCore FBX downloads. The integrated exports are `jarvis-male.glb` and `jarvis-female.glb`. Both have been inspected and contain 121 facial morph targets, including ARKit-style controls; the female export also contains one animation clip named `Default`, while the male export currently contains no animation clips.
 

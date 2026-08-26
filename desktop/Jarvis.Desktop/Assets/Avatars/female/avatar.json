@@ -7,7 +7,7 @@
   "model": "wolforge_jarvis_avatar.glb",
   "voiceId": "af_heart",
   "scale": 1.0,
-  "cameraTarget": [0.0, 1.45, 0.0],
+  "cameraTarget": [0.0, 0.0, 0.0],
   "cameraOrbit": "0deg 82deg 7.2m",
   "animationNames": {
     "idle": "Idle",
