@@ -46,6 +46,7 @@ From the repository root, create or update `.env` from `.env.example`, then run:
 - Native chat, session, files, alerts, settings, provider health, and workflow attachment contracts are implemented in `MonitoringClient.cs`.
 - Native avatar presence and local preferences are implemented in the main/settings windows and `UserPreferences.cs`.
 - Local avatar/voice scaffolding now includes WebView2 avatar host messaging, avatar metadata contracts, Kokoro speech service interfaces, persisted selected avatar/voice settings, and a native fallback when the 3D or TTS runtime is unavailable.
+- The saved avatar is now loaded automatically into the main WPF command-center presence panel through an inline local WebView2 host; saving a new avatar in Settings refreshes that panel, while model/runtime errors restore the native placeholder.
 - The current male/female development avatars are being created in Blender 5.2 using the MakeHuman/MPFB path documented in `docs/avatar-onboarding-playbook.md`.
 - `/api/chat` now has a bounded local artifact generation path for recognized script/file requests; the first implemented case creates `storage/generated/scripts/add-two-numbers.ps1` for the PowerShell add-two-numbers prompt before falling back to the configured LLM.
 - The MonitorWindow was hardened to avoid crashes when theme resource keys (GreenBrush/AmberBrush) are missing; it falls back to system brushes.

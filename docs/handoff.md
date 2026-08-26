@@ -44,6 +44,7 @@ Current implementation includes:
 - native chat entries are selectable and read-only; Enter-to-send is configurable and persisted locally
 - native avatar presence supports human-like WPF rendering, hover/click reactions, chat states, and persisted name/theme preferences
 - local 3D avatar host window with avatar.json/manifest-driven male/female profile selection, WebView2 virtual-host mapping, versioned JSON messages, and native fallback when licensed models are unavailable
+- saved avatar selection now initializes an inline WebView2 avatar in the main command-center presence panel at startup and refreshes immediately after Settings Save; the native WPF avatar is restored on runtime/model failure
 - avatar/voice service scaffolding with persisted avatar ID, male/female voice IDs, lip-sync preference, Kokoro local endpoint configuration, cancellable speech flow, and graceful TTS failure handling
 - local artifact generation for recognized script/file requests; current implemented request creates `storage/generated/scripts/add-two-numbers.ps1` for the PowerShell add-two-numbers prompt
 - avatar authoring note: the operator is creating the development avatars in Blender 5.2 using the MakeHuman/MPFB path described in the avatar docs

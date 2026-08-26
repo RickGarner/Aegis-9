@@ -33,6 +33,7 @@ If you need the web dashboard, use `D:\Jarvis_Web` instead. The two folders do n
 - Native MoveIT Automation and Server Status monitor windows
 - Native human-like avatar presence with persisted display-name/theme preferences and interaction states
 - Local 3D avatar host window with avatar.json/manifest-based male/female profile loading, WebView2 local virtual-host mapping, and automatic fallback to the native avatar
+- Saved avatar selection loads automatically into the main command-center avatar panel at startup and remains the default until changed in Settings; the native drawing remains the fallback
 - Local avatar/voice configuration scaffolding for MakeHuman/MPFB avatars, Blender 5.2 authoring, Kokoro voice IDs, lip-sync preference, and speech cancellation
 - Bounded local artifact generation for recognized script/file requests; the first implemented path creates a PowerShell add-two-numbers script under local generated storage
 - SQLite persistence for chat, activity logs, staged-file metadata, approvals, and workflow state

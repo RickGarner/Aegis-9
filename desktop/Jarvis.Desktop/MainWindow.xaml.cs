@@ -1,9 +1,12 @@
 using System.IO;
+using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using Microsoft.Win32;
+using Microsoft.Web.WebView2.Core;
+using Microsoft.Web.WebView2.Wpf;
 
 namespace Jarvis.Desktop;
 
@@ -18,6 +21,9 @@ public partial class MainWindow : Window
     private readonly IAvatarService _avatarService;
     private int _avatarMood;
     private AvatarWindow? _avatarWindow;
+    private UIElement? _nativeAvatarVisual;
+    private WebView2? _inlineAvatarWebView;
+    private bool _inlineAvatarReady;
 
     public MainWindow()
     {
@@ -34,6 +40,7 @@ public partial class MainWindow : Window
         Loaded += async (_, _) =>
         {
             await _avatarService.InitializeAsync();
+            await InitializeInlineAvatarAsync();
             await LoadProviderHealthAsync();
             await LoadSystemHealthAsync();
             await LoadSessionAsync();
@@ -62,6 +69,7 @@ public partial class MainWindow : Window
         CommandInput.IsEnabled = false;
         AvatarStatusText.Text = "THINKING";
         await _avatarService.SetStateAsync(AvatarVisualState.Thinking);
+        await SetInlineAvatarStateAsync("thinking", "Thinking");
         try
         {
             var response = await _client.ChatAsync(_messages, _attachedFileIds, CancellationToken.None);
@@ -70,6 +78,7 @@ public partial class MainWindow : Window
             ConnectionText.Text = $"Local command center · {response.Model}";
             AvatarStatusText.Text = "SPEAKING";
             await _avatarService.SetStateAsync(AvatarVisualState.Speaking);
+            await SetInlineAvatarStateAsync("speaking", "Speaking");
 
             var speechResult = await _avatarService.SpeakTextAsync(response.Content, CancellationToken.None);
             if (!speechResult.Success)
@@ -88,6 +97,7 @@ public partial class MainWindow : Window
             CommandInput.IsEnabled = true;
             AvatarStatusText.Text = "READY FOR COMMANDS";
             await _avatarService.SetStateAsync(AvatarVisualState.Idle);
+            await SetInlineAvatarStateAsync("ready", "Ready for commands");
         }
         ConversationList.ScrollIntoView(ConversationList.Items[^1]);
         CommandInput.Clear();
@@ -102,16 +112,170 @@ public partial class MainWindow : Window
         AvatarStatusText.Text = "READY FOR COMMANDS";
     }
 
-    private void SettingsButton_Click(object sender, RoutedEventArgs e)
+    private async void SettingsButton_Click(object sender, RoutedEventArgs e)
     {
         var settings = new SettingsWindow(_preferences) { Owner = this };
-        settings.ShowDialog();
+        var saved = settings.ShowDialog() == true;
         ApplyAvatarPreferences();
         ComposerHintText.Text = _preferences.EnterSendsMessage ? "Enter to send · Shift+Enter for a new line" : "Enter for a new line · use Issue command to send";
-        ConnectionText.Text = "Settings closed · restart Jarvis to apply configuration changes";
+        if (saved)
+        {
+            await InitializeInlineAvatarAsync();
+            ConnectionText.Text = "Settings saved · selected avatar applied";
+        }
+        else
+        {
+            ConnectionText.Text = "Settings closed · changes discarded";
+        }
     }
 
     private void OpenAvatarHostButton_Click(object sender, RoutedEventArgs e) => OpenAvatarHostWindow();
+
+    private async Task InitializeInlineAvatarAsync()
+    {
+        if (!_preferences.UseThreeDimensionalAvatar)
+        {
+            RestoreNativeAvatar();
+            return;
+        }
+
+        var selection = new AvatarAssetCatalog().GetSelection(_preferences.AvatarProfile);
+        if (!selection.IsAvailable || selection.Definition is null)
+        {
+            RestoreNativeAvatar();
+            return;
+        }
+
+        try
+        {
+            _nativeAvatarVisual ??= AvatarPresence.Child as UIElement;
+            if (_nativeAvatarVisual is null)
+            {
+                return;
+            }
+
+            if (_inlineAvatarWebView is null)
+            {
+                _inlineAvatarWebView = new WebView2
+                {
+                    HorizontalAlignment = HorizontalAlignment.Stretch,
+                    VerticalAlignment = VerticalAlignment.Stretch,
+                };
+                AvatarPresence.Child = _inlineAvatarWebView;
+            }
+
+            _inlineAvatarWebView.Visibility = Visibility.Visible;
+            await _inlineAvatarWebView.EnsureCoreWebView2Async();
+            var runtimeRoot = ResolveAvatarHostRoot();
+            var assetsRoot = ResolveAvatarAssetsRoot();
+            var core = _inlineAvatarWebView.CoreWebView2;
+            core.Settings.AreDevToolsEnabled = false;
+            core.Settings.IsStatusBarEnabled = false;
+            core.Settings.AreDefaultContextMenusEnabled = false;
+            core.Settings.AreHostObjectsAllowed = false;
+            core.SetVirtualHostNameToFolderMapping("jarvis-inline.local", runtimeRoot, CoreWebView2HostResourceAccessKind.DenyCors);
+            core.SetVirtualHostNameToFolderMapping("jarvis-inline-assets.local", assetsRoot, CoreWebView2HostResourceAccessKind.Allow);
+            core.WebMessageReceived -= InlineAvatarWebMessageReceived;
+            core.NavigationCompleted -= InlineAvatarNavigationCompleted;
+            core.WebMessageReceived += InlineAvatarWebMessageReceived;
+            core.NavigationCompleted += InlineAvatarNavigationCompleted;
+            _inlineAvatarReady = false;
+            core.Navigate("https://jarvis-inline.local/index.html");
+            _nativeAvatarVisual.Visibility = Visibility.Collapsed;
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or WebView2RuntimeNotFoundException)
+        {
+            ConnectionText.Text = $"3D avatar unavailable · {ex.Message}";
+            RestoreNativeAvatar();
+        }
+    }
+
+    private async void InlineAvatarNavigationCompleted(object? sender, CoreWebView2NavigationCompletedEventArgs e)
+    {
+        if (!e.IsSuccess || _inlineAvatarWebView?.CoreWebView2 is null)
+        {
+            RestoreNativeAvatar();
+            return;
+        }
+
+        _inlineAvatarReady = true;
+        var activeAvatar = _avatarService.ActiveAvatar;
+        if (activeAvatar is null)
+        {
+            RestoreNativeAvatar();
+            return;
+        }
+
+        var manifestUrl = $"https://jarvis-inline-assets.local/{activeAvatar.Profile}/avatar.json";
+        await SendInlineAvatarMessageAsync(AvatarProtocol.Build("avatar.load", new
+        {
+            manifestUrl,
+            selectedAvatarId = activeAvatar.Id,
+            lipSyncEnabled = _preferences.EnableLipSync,
+            voiceId = activeAvatar.VoiceId,
+        }));
+    }
+
+    private void InlineAvatarWebMessageReceived(object? sender, CoreWebView2WebMessageReceivedEventArgs e)
+    {
+        try
+        {
+            var message = JsonSerializer.Deserialize<AvatarMessage>(e.WebMessageAsJson);
+            if (message?.Type == "avatar.error")
+            {
+                RestoreNativeAvatar();
+            }
+        }
+        catch (JsonException)
+        {
+            RestoreNativeAvatar();
+        }
+    }
+
+    private Task SetInlineAvatarStateAsync(string state, string detail) =>
+        SendInlineAvatarMessageAsync(AvatarProtocol.Build("avatar.state", new { state, detail }));
+
+    private Task SendInlineAvatarMessageAsync(string message)
+    {
+        if (!_inlineAvatarReady || _inlineAvatarWebView?.CoreWebView2 is null)
+        {
+            return Task.CompletedTask;
+        }
+
+        _inlineAvatarWebView.CoreWebView2.PostWebMessageAsJson(message);
+        return Task.CompletedTask;
+    }
+
+    private void RestoreNativeAvatar()
+    {
+        _inlineAvatarReady = false;
+        if (_inlineAvatarWebView is not null)
+        {
+            _inlineAvatarWebView.Visibility = Visibility.Collapsed;
+        }
+        if (_nativeAvatarVisual is not null)
+        {
+            AvatarPresence.Child = _nativeAvatarVisual;
+            _nativeAvatarVisual.Visibility = Visibility.Visible;
+        }
+    }
+
+    private static string ResolveAvatarHostRoot() => ResolveAssetRoot("AvatarHost");
+    private static string ResolveAvatarAssetsRoot() => ResolveAssetRoot("Avatars");
+
+    private static string ResolveAssetRoot(string assetFolder)
+    {
+        var current = new DirectoryInfo(AppDomain.CurrentDomain.BaseDirectory);
+        while (current is not null)
+        {
+            var local = Path.Combine(current.FullName, "Assets", assetFolder);
+            if (Directory.Exists(local)) return local;
+            var source = Path.Combine(current.FullName, "desktop", "Jarvis.Desktop", "Assets", assetFolder);
+            if (Directory.Exists(source)) return source;
+            current = current.Parent;
+        }
+        throw new InvalidOperationException($"Avatar asset directory '{assetFolder}' was not found.");
+    }
 
     private void ApplyAvatarPreferences()
     {

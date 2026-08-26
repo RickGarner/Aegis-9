@@ -14,6 +14,7 @@ Implemented in this repository:
 - Vendored GLB renderer: `desktop/Jarvis.Desktop/Assets/AvatarHost/vendor/model-viewer.min.js` version 4.0.0
 - Profile metadata: `desktop/Jarvis.Desktop/Assets/Avatars/male/avatar.json`, `desktop/Jarvis.Desktop/Assets/Avatars/female/avatar.json`, with legacy `manifest.json` fallback
 - Operator controls: settings for selected avatar/profile, voice IDs, lip-sync, and host toggle, plus Ctrl+click open from the avatar panel
+- Startup behavior: the saved selected avatar is loaded into the main command-center presence panel after initial sign-in/startup and remains active until the user saves a different selection
 
 If model files are missing or not licensed for redistribution, Jarvis automatically falls back to the native WPF avatar.
 
@@ -54,6 +55,7 @@ Do not add model files until the license explicitly permits local application us
 - Support GLB as the general local model format.
 - Host the renderer locally using a WPF-compatible WebView2 host.
 - Keep the current native WPF avatar as a fallback when a model is missing or fails to load.
+- Embed the local WebView2 host in the main presence panel so the selected 3D avatar is the primary visual presence; retain the separate host window for inspection/camera interaction.
 - Voice input, text generation, and text-to-speech will drive a shared avatar state model rather than directly controlling renderer details.
 
 Current host notes:
