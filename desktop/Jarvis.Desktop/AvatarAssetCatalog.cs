@@ -22,7 +22,11 @@ public sealed class AvatarAssetCatalog
         var selected = avatars.FirstOrDefault(item => item.Profile.Equals(profile, StringComparison.OrdinalIgnoreCase));
         if (selected is not null)
         {
-            return BuildSelection(selected);
+            var preferredSelection = BuildSelection(selected);
+            if (preferredSelection.IsAvailable)
+            {
+                return preferredSelection;
+            }
         }
 
         selected = avatars.FirstOrDefault(item => item.Profile.Equals(profile == "male" ? "female" : "male", StringComparison.OrdinalIgnoreCase));

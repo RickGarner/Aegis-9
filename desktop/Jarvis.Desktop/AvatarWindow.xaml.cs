@@ -129,7 +129,7 @@ public partial class AvatarWindow : Window
         core.Settings.AreDefaultContextMenusEnabled = false;
         core.Settings.AreHostObjectsAllowed = false;
         core.SetVirtualHostNameToFolderMapping("jarvis.local", runtimeRoot, CoreWebView2HostResourceAccessKind.DenyCors);
-        core.SetVirtualHostNameToFolderMapping("jarvis-assets.local", assetsRoot, CoreWebView2HostResourceAccessKind.DenyCors);
+        core.SetVirtualHostNameToFolderMapping("jarvis-assets.local", assetsRoot, CoreWebView2HostResourceAccessKind.Allow);
     }
 
     private async void CoreWebView2_NavigationCompleted(object? sender, CoreWebView2NavigationCompletedEventArgs e)

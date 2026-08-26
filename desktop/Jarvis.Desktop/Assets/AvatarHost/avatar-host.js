@@ -12,6 +12,9 @@ let currentAudio = null;
 let currentAudioContext = null;
 let currentAnalyser = null;
 let amplitudeTimer = null;
+let blinkTimer = null;
+let speakingTimer = null;
+let morphTargetNames = {};
 
 nameEl.textContent = "JARVIS AVATAR";
 metaEl.textContent = "Runtime initialized";
@@ -42,6 +45,11 @@ const applyState = (state, detail) => {
   stateBadgeEl.textContent = resolved.label;
   stateEl.textContent = resolved.text;
   setBadgeClass(resolved.badge);
+  if (normalized === "speaking") {
+    startSpeakingMotion();
+  } else if (normalized !== "loading") {
+    stopSpeakingMotion();
+  }
   if (detail && typeof detail === "string" && detail.trim().length > 0) {
     metaEl.textContent = detail;
   }
@@ -83,6 +91,94 @@ const stopSpeech = () => {
     currentAudioContext = null;
   }
   currentAnalyser = null;
+  stopSpeakingMotion();
+};
+
+const forEachMorphMesh = (callback) => {
+  const scene = viewer.model?.scene;
+  if (!scene || typeof scene.traverse !== "function") {
+    return;
+  }
+  scene.traverse((node) => {
+    if (node.morphTargetDictionary && node.morphTargetInfluences) {
+      callback(node);
+    }
+  });
+};
+
+const setMorphTarget = (name, value) => {
+  if (!name) {
+    return;
+  }
+  forEachMorphMesh((mesh) => {
+    const index = mesh.morphTargetDictionary[name];
+    if (typeof index === "number") {
+      mesh.morphTargetInfluences[index] = Math.max(0, Math.min(1, value));
+    }
+  });
+};
+
+const clearMorphTarget = (name) => setMorphTarget(name, 0);
+
+const blink = () => {
+  const left = morphTargetNames.blinkLeft;
+  const right = morphTargetNames.blinkRight;
+  const combined = morphTargetNames.blink;
+  if (combined) {
+    setMorphTarget(combined, 1);
+    setTimeout(() => clearMorphTarget(combined), 130);
+    return;
+  }
+  setMorphTarget(left, 1);
+  setMorphTarget(right, 1);
+  setTimeout(() => {
+    clearMorphTarget(left);
+    clearMorphTarget(right);
+  }, 130);
+};
+
+const scheduleBlink = () => {
+  if (blinkTimer) {
+    clearTimeout(blinkTimer);
+  }
+  blinkTimer = setTimeout(() => {
+    blink();
+    scheduleBlink();
+  }, 3500 + Math.random() * 3500);
+};
+
+const stopSpeakingMotion = () => {
+  if (speakingTimer) {
+    clearInterval(speakingTimer);
+    speakingTimer = null;
+  }
+  clearMorphTarget(morphTargetNames.jawOpen);
+  clearMorphTarget(morphTargetNames.mouthOpen);
+};
+
+const startSpeakingMotion = () => {
+  stopSpeakingMotion();
+  const jaw = morphTargetNames.jawOpen || morphTargetNames.mouthOpen;
+  if (!jaw) {
+    return;
+  }
+  speakingTimer = setInterval(() => {
+    const intensity = currentAnalyser ? 0.25 + Math.random() * 0.55 : 0.45;
+    setMorphTarget(jaw, intensity);
+  }, 90);
+};
+
+const applyExpression = (expression, intensity) => {
+  const amount = Math.max(0, Math.min(1, Number(intensity) || 1));
+  if (expression === "happy" || expression === "smile") {
+    setMorphTarget(morphTargetNames.mouthSmile, amount);
+    setMorphTarget(morphTargetNames.mouthSmileLeft, amount);
+    setMorphTarget(morphTargetNames.mouthSmileRight, amount);
+  } else if (expression === "neutral") {
+    clearMorphTarget(morphTargetNames.mouthSmile);
+    clearMorphTarget(morphTargetNames.mouthSmileLeft);
+    clearMorphTarget(morphTargetNames.mouthSmileRight);
+  }
 };
 
 const startAmplitudeTracking = () => {
@@ -139,6 +235,17 @@ const loadAvatarFromManifest = async (manifestUrl, selectedAvatarId) => {
   const modelUrl = new URL(modelName, manifestUrl).toString();
   viewer.src = "";
   viewer.src = modelUrl;
+  viewer.addEventListener("error", () => {
+    setFallback("The avatar model could not be rendered by the local WebView2 runtime.");
+  }, { once: true });
+  morphTargetNames = manifest.morphTargets || {};
+  const animationNames = Object.values(manifest.animationNames || {});
+  if (animationNames.length > 0) {
+    viewer.animationName = animationNames[0];
+  }
+  viewer.addEventListener("load", () => {
+    scheduleBlink();
+  }, { once: true });
   nameEl.textContent = String(manifest.displayName || selectedAvatarId || "Jarvis Avatar").toUpperCase();
   attributionEl.textContent = manifest.attribution ? `Attribution: ${manifest.attribution}` : "";
   metaEl.textContent = `Model format: ${format}`;
@@ -146,7 +253,7 @@ const loadAvatarFromManifest = async (manifestUrl, selectedAvatarId) => {
 
   postMessageToHost("avatar.ready", {
     avatarId: selectedAvatarId || manifest.id || "unknown",
-    animations: Object.values(manifest.animationNames || {}),
+    animations: animationNames,
     morphTargets: Object.values(manifest.morphTargets || {})
   });
   applyState("ready", "Avatar loaded");
@@ -178,6 +285,7 @@ const handleEnvelope = async (envelope) => {
       case "avatar.expression": {
         const expression = payload.expression || "neutral";
         const intensity = Number(payload.intensity || 1);
+        applyExpression(expression, intensity);
         metaEl.textContent = `Expression: ${expression} (${intensity.toFixed(2)})`;
         break;
       }
@@ -197,6 +305,7 @@ const handleEnvelope = async (envelope) => {
         source.connect(currentAnalyser);
         currentAnalyser.connect(currentAudioContext.destination);
         startAmplitudeTracking();
+        startSpeakingMotion();
         currentAudio.onended = () => {
           stopSpeech();
           viewer.style.filter = "none";

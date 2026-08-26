@@ -8,15 +8,15 @@ Jarvis now has the first architecture slice of this specification implemented in
 - Versioned C# to JavaScript avatar message protocol for load, state, expression, speech start, and speech stop.
 - JavaScript to C# ready/error messages with native fallback when the runtime or assets are unavailable.
 - Avatar metadata contract using `avatar.json`, with legacy `manifest.json` fallback.
-- Male/female placeholder avatar metadata under `desktop/Jarvis.Desktop/Assets/Avatars/`.
+- Male/female avatar metadata under `desktop/Jarvis.Desktop/Assets/Avatars/`.
 - Centralized `AvatarService` and persisted avatar/voice/lip-sync settings.
 - Kokoro local speech client scaffolding with graceful failure when the runtime is not running.
 - Asset validation script for metadata, licensing flags, supported formats, and model file presence.
 - Pinned local `model-viewer.min.js` 4.0.0 runtime for GLB preview, with no runtime CDN dependency.
 
-Current avatar authoring note: the development avatars are being created in Blender 5.2 from ActorCore FBX downloads. The expected first exports are `jarvis-male.glb` and `jarvis-female.glb` unless the matching `avatar.json` files are updated. The male export has been inspected and contains 121 facial morph targets, including ARKit-style controls; the current female download is an incomplete 132-byte empty-scene GLB and must be replaced.
+Current avatar authoring note: the development avatars are being created in Blender 5.2 from ActorCore FBX downloads. The integrated exports are `jarvis-male.glb` and `jarvis-female.glb`. Both have been inspected and contain 121 facial morph targets, including ARKit-style controls; the female export also contains one animation clip named `Default`, while the male export currently contains no animation clips.
 
-Known remaining blockers: real male/female GLB or VRM files are not yet present, placeholder metadata still sets `redistributionAllowed` to `false`, `model-viewer.min.js` is not yet vendored locally, the Kokoro runtime/sidecar is not yet packaged, and full VRM/viseme lip-sync still needs the renderer adapter.
+Known remaining blockers: ActorCore account/free-content terms still need final verification before redistribution, `redistributionAllowed` remains false for both profiles, the Kokoro runtime/sidecar is not yet packaged, full VRM/viseme lip-sync still needs the renderer adapter, and the male export needs animation clips if non-morph body motion is required.
 
 ## Instructions for GitHub Copilot in Visual Studio 2022
 

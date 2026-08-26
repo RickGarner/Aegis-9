@@ -10,17 +10,17 @@
   "cameraTarget": [0.0, 1.55, 0.0],
   "cameraOrbit": "0deg 82deg 1.6m",
   "animationNames": {
-    "idle": "Idle",
-    "greeting": "Greeting",
-    "thinking": "Thinking",
-    "speaking": "Speaking"
+    "idle": "Default"
   },
   "morphTargets": {
-    "blinkLeft": "eyeBlinkLeft",
-    "blinkRight": "eyeBlinkRight",
-    "jawOpen": "jawOpen",
-    "mouthSmileLeft": "mouthSmileLeft",
-    "mouthSmileRight": "mouthSmileRight"
+    "blink": "Eyes_Blink",
+    "blinkLeft": "A14_Eye_Blink_Left",
+    "blinkRight": "A15_Eye_Blink_Right",
+    "jawOpen": "A25_Jaw_Open",
+    "mouthSmileLeft": "A38_Mouth_Smile_Left",
+    "mouthSmileRight": "A39_Mouth_Smile_Right",
+    "mouthOpen": "Mouth_Open",
+    "mouthSmile": "Mouth_Smile"
   },
   "visemeMap": {
     "sil": "viseme_sil",
