@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.IO;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Media;
 
 namespace Jarvis.Desktop;
@@ -14,6 +15,7 @@ public partial class SettingsWindow : Window
     {
         _preferences = preferences;
         InitializeComponent();
+        Loaded += SettingsWindow_Loaded;
         EnterSendsMessageCheckBox.IsChecked = _preferences.EnterSendsMessage;
         AvatarNameInput.Text = _preferences.AvatarName;
         AvatarThemeInput.SelectedValue = _preferences.AvatarTheme;
@@ -23,6 +25,20 @@ public partial class SettingsWindow : Window
         FemaleVoiceInput.Text = _preferences.FemaleVoiceId;
         UseThreeDAvatarCheckBox.IsChecked = _preferences.UseThreeDimensionalAvatar;
         EnableLipSyncCheckBox.IsChecked = _preferences.EnableLipSync;
+    }
+
+    private void SettingsWindow_Loaded(object sender, RoutedEventArgs e)
+    {
+        foreach (var comboBox in new[] { AvatarThemeInput, AvatarChoiceInput, AvatarProfileInput })
+        {
+            comboBox.ApplyTemplate();
+            if (comboBox.Template.FindName("PART_EditableTextBox", comboBox) is TextBox editableTextBox)
+            {
+                editableTextBox.Foreground = Brushes.Black;
+                editableTextBox.Background = Brushes.White;
+                editableTextBox.BorderThickness = new Thickness(0);
+            }
+        }
     }
 
     private void OpenServerListButton_Click(object sender, RoutedEventArgs e)
@@ -63,7 +79,22 @@ public partial class SettingsWindow : Window
         if (path != null) Process.Start(new ProcessStartInfo("notepad.exe", $"\"{path}\"") { UseShellExecute = false });
     }
 
-    private void CloseButton_Click(object sender, RoutedEventArgs e) => Close();
+    private void SaveButton_Click(object sender, RoutedEventArgs e)
+    {
+        ApplyPreferences();
+        _preferences.Save();
+        DialogResult = true;
+    }
+
+    private void CancelButton_Click(object sender, RoutedEventArgs e)
+    {
+        DialogResult = false;
+    }
+
+    private void CloseButton_Click(object sender, RoutedEventArgs e)
+    {
+        DialogResult = false;
+    }
 
     private async void PreviewVoiceButton_Click(object sender, RoutedEventArgs e)
     {
@@ -92,7 +123,7 @@ public partial class SettingsWindow : Window
         StatusText.Text = $"Playing preview voice '{voice}'.";
     }
 
-    protected override void OnClosed(EventArgs e)
+    private void ApplyPreferences()
     {
         _preferences.EnterSendsMessage = EnterSendsMessageCheckBox.IsChecked == true;
         _preferences.AvatarName = string.IsNullOrWhiteSpace(AvatarNameInput.Text) ? "Jarvis" : AvatarNameInput.Text.Trim();
@@ -103,7 +134,10 @@ public partial class SettingsWindow : Window
         _preferences.FemaleVoiceId = string.IsNullOrWhiteSpace(FemaleVoiceInput.Text) ? "af_heart" : FemaleVoiceInput.Text.Trim();
         _preferences.UseThreeDimensionalAvatar = UseThreeDAvatarCheckBox.IsChecked == true;
         _preferences.EnableLipSync = EnableLipSyncCheckBox.IsChecked == true;
-        _preferences.Save();
+    }
+
+    protected override void OnClosed(EventArgs e)
+    {
         base.OnClosed(e);
     }
 }
