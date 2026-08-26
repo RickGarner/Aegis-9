@@ -277,6 +277,7 @@ const handleEnvelope = async (envelope) => {
       case "avatar.load": {
         const manifestUrl = payload.manifestUrl;
         const selectedAvatarId = payload.selectedAvatarId;
+        document.body.classList.toggle("compact", payload.compact === true);
         if (!manifestUrl) {
           throw new Error("avatar.load payload is missing manifestUrl.");
         }

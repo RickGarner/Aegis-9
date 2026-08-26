@@ -213,6 +213,7 @@ public partial class MainWindow : Window
         {
             manifestUrl,
             selectedAvatarId = activeAvatar.Id,
+            compact = true,
             lipSyncEnabled = _preferences.EnableLipSync,
             voiceId = activeAvatar.VoiceId,
         }));
