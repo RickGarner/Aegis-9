@@ -15,6 +15,7 @@ let amplitudeTimer = null;
 let blinkTimer = null;
 let speakingTimer = null;
 let morphTargetNames = {};
+let animationNames = {};
 
 nameEl.textContent = "JARVIS AVATAR";
 metaEl.textContent = "Runtime initialized";
@@ -42,6 +43,7 @@ const applyState = (state, detail) => {
     unavailable: { label: "OFFLINE", text: "Unavailable", badge: "state-unavailable" }
   };
   const resolved = map[normalized] || map.ready;
+  playAnimation(resolved.animation || animationNames[normalized] || animationNames.idle, normalized === "thinking" || normalized === "speaking");
   stateBadgeEl.textContent = resolved.label;
   stateEl.textContent = resolved.text;
   setBadgeClass(resolved.badge);
@@ -52,6 +54,17 @@ const applyState = (state, detail) => {
   }
   if (detail && typeof detail === "string" && detail.trim().length > 0) {
     metaEl.textContent = detail;
+  }
+};
+
+const playAnimation = (name, loop = false) => {
+  if (!name || !viewer || !viewer.animationName) {
+    return;
+  }
+  viewer.animationName = name;
+  viewer.currentTime = 0;
+  if (typeof viewer.play === "function") {
+    viewer.play({ repetitions: loop ? Infinity : 1 });
   }
 };
 
@@ -245,9 +258,10 @@ const loadAvatarFromManifest = async (manifestUrl, selectedAvatarId) => {
     setFallback("The avatar model could not be rendered by the local WebView2 runtime.");
   }, { once: true });
   morphTargetNames = manifest.morphTargets || {};
-  const animationNames = Object.values(manifest.animationNames || {});
-  if (animationNames.length > 0) {
-    viewer.animationName = animationNames[0];
+  animationNames = manifest.animationNames || {};
+  const availableAnimations = Object.values(animationNames);
+  if (availableAnimations.length > 0) {
+    viewer.animationName = availableAnimations[0];
   }
   viewer.addEventListener("load", () => {
     scheduleBlink();
@@ -259,7 +273,7 @@ const loadAvatarFromManifest = async (manifestUrl, selectedAvatarId) => {
 
   postMessageToHost("avatar.ready", {
     avatarId: selectedAvatarId || manifest.id || "unknown",
-    animations: animationNames,
+    animations: availableAnimations,
     morphTargets: Object.values(manifest.morphTargets || {})
   });
   applyState("ready", "Avatar loaded");

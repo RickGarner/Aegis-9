@@ -34,6 +34,7 @@ If you need the web dashboard, use `D:\Jarvis_Web` instead. The two folders do n
 - Native human-like avatar presence with persisted display-name/theme preferences and interaction states
 - Local 3D avatar host window with avatar.json/manifest-based male/female profile loading, WebView2 local virtual-host mapping, and automatic fallback to the native avatar
 - Saved avatar selection loads automatically into the main command-center avatar panel at startup and remains the default until changed in Settings; the native drawing remains the fallback
+- Wolforge Jarvis avatar is temporarily installed for both male and female profile choices, with local Idle/Blink/Listening/Thinking/Speaking/Success/Warning/Error clips
 - Local avatar/voice configuration scaffolding for MakeHuman/MPFB avatars, Blender 5.2 authoring, Kokoro voice IDs, lip-sync preference, and speech cancellation
 - Bounded local artifact generation for recognized script/file requests; the first implemented path creates a PowerShell add-two-numbers script under local generated storage
 - SQLite persistence for chat, activity logs, staged-file metadata, approvals, and workflow state

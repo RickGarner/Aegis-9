@@ -18,6 +18,12 @@ Implemented in this repository:
 
 If model files are missing or not licensed for redistribution, Jarvis automatically falls back to the native WPF avatar.
 
+## Temporary Wolforge profile
+
+The supplied Wolforge package is currently used for both the male and female profile choices. The local GLB is installed as `wolforge_jarvis_avatar.glb` in each profile directory. It contains the nine named clips `Idle`, `Blink`, `JawOpen`, `Speaking`, `Listening`, `Thinking`, `Success`, `Warning`, and `Error`, plus named `Jaw`, eye, ear, head, muzzle, and circuit nodes. This is a temporary profile substitution until separate male/female assets are selected.
+
+The Wolforge asset is marked `localUseAllowed: true` and `redistributionAllowed: false` pending final project licensing confirmation.
+
 ## Direction
 
 Jarvis will use licensed local 3D male and female humanoid avatars. The current development avatars are being authored in Blender 5.2 using MakeHuman/MPFB as the intended free local creation path. The application must not redistribute the reference image used during design discussion or depend on a remote avatar/image service at runtime.
@@ -66,6 +72,7 @@ Current host notes:
 - Development assets may use `localUseAllowed: true` while `redistributionAllowed` remains false; this keeps account-restricted ActorCore content local and prevents accidental packaging.
 - C# sends versioned JSON messages to the runtime for avatar load, state, expression, speech start, and speech stop; JavaScript reports ready/error states back to WebView2.
 - Kokoro speech output is scaffolded through a local HTTP endpoint and remains graceful when the service is unavailable.
+- The supplied Wolforge GLB is currently installed for both male and female profile choices as a temporary replacement. It provides nine named state clips and is local-use-only pending licensing confirmation.
 
 ## Required states
 

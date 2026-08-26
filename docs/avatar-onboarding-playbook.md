@@ -72,6 +72,7 @@ Current state:
 - VRM requires a local runtime module (not bundled yet).
 - Avatar state and speech messages are already routed through the C# avatar service and WebView2 message protocol.
 - Kokoro voice client scaffolding exists, but the local runtime/sidecar still needs to be installed or packaged.
+- The supplied Wolforge GLB is currently installed for both male and female profile choices as a temporary replacement. It provides nine named state clips and is local-use-only pending licensing confirmation.
 
 Recommended completion:
 

@@ -1,29 +1,32 @@
 {
   "id": "jarvis-male-dev",
-  "displayName": "Male Development Avatar",
+  "displayName": "Wolforge Jarvis Avatar",
   "version": 1,
   "profile": "male",
   "format": "glb",
-  "model": "jarvis-male.glb",
+  "model": "wolforge_jarvis_avatar.glb",
   "voiceId": "am_fenrir",
   "scale": 1.0,
-  "cameraTarget": [0.0, 1.65, 0.0],
-  "cameraOrbit": "0deg 82deg 1.1m",
+  "cameraTarget": [0.0, 1.45, 0.0],
+  "cameraOrbit": "0deg 82deg 7.2m",
   "animationNames": {
     "idle": "Idle",
-    "greeting": "Greeting",
+    "blink": "Blink",
+    "jawOpen": "JawOpen",
+    "speaking": "Speaking",
+    "listening": "Listening",
     "thinking": "Thinking",
-    "speaking": "Speaking"
+    "success": "Success",
+    "warning": "Warning",
+    "error": "Error"
   },
   "morphTargets": {
-    "blink": "Eyes_Blink",
-    "blinkLeft": "A14_Eye_Blink_Left",
-    "blinkRight": "A15_Eye_Blink_Right",
-    "jawOpen": "A25_Jaw_Open",
-    "mouthSmileLeft": "A38_Mouth_Smile_Left",
-    "mouthSmileRight": "A39_Mouth_Smile_Right",
-    "mouthOpen": "Mouth_Open",
-    "mouthSmile": "Mouth_Smile"
+    "jaw": "Jaw",
+    "head": "Head",
+    "eyeLeft": "Eye.L",
+    "eyeRight": "Eye.R",
+    "earLeft": "Ear.L",
+    "earRight": "Ear.R"
   },
   "visemeMap": {
     "sil": "viseme_sil",
@@ -42,9 +45,9 @@
     "O": "viseme_O",
     "U": "viseme_U"
   },
-  "licenseName": "ActorCore free content license - verify account terms",
-  "licenseUrl": "https://actorcore.reallusion.com/",
+  "licenseName": "Wolforge original local asset - verify project terms",
+  "licenseUrl": "https://github.com/RickGarner/Jarvis-Desktop",
   "redistributionAllowed": false,
   "localUseAllowed": true,
-  "attribution": "ActorCore / Reallusion. Confirm the applicable account and free-content terms before packaging or redistributing."
+  "attribution": "Original Wolforge asset derived from the supplied project artwork. Local-use integration asset."
 }
