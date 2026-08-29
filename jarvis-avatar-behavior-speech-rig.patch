@@ -1,0 +1,662 @@
+diff --git a/desktop/Jarvis.Desktop/IAvatarService.cs b/desktop/Jarvis.Desktop/IAvatarService.cs
+index a4549ec..757bbdc 100644
+--- a/desktop/Jarvis.Desktop/IAvatarService.cs
++++ b/desktop/Jarvis.Desktop/IAvatarService.cs
+@@ -12,6 +12,7 @@ public interface IAvatarService
+     Task SpeakAsync(SpeechPlaybackData speech, CancellationToken cancellationToken = default);
+     Task StopSpeakingAsync(CancellationToken cancellationToken = default);
+     Task<SpeechResult> SpeakTextAsync(string text, CancellationToken cancellationToken = default);
++    void AttachPrimaryHost(Func<string, CancellationToken, Task<bool>> messageSender);
+     void AttachHostWindow(AvatarWindow window);
+ }
+ 
+diff --git a/desktop/Jarvis.Desktop/AvatarService.cs b/desktop/Jarvis.Desktop/AvatarService.cs
+index d04d200..3bb47dd 100644
+--- a/desktop/Jarvis.Desktop/AvatarService.cs
++++ b/desktop/Jarvis.Desktop/AvatarService.cs
+@@ -10,6 +10,7 @@ public sealed class AvatarService : IAvatarService
+     private readonly AvatarAssetCatalog _catalog;
+     private readonly ISpeechService _speechService;
+     private AvatarWindow? _host;
++    private Func<string, CancellationToken, Task<bool>>? _primaryHostSender;
+     private CancellationTokenSource? _speechCancellation;
+ 
+     public AvatarService(UserPreferences preferences, JarvisDesktopOptions options, AvatarAssetCatalog catalog, ISpeechService speechService)
+@@ -73,41 +74,26 @@ public sealed class AvatarService : IAvatarService
+ 
+     public async Task SetStateAsync(AvatarVisualState state, CancellationToken cancellationToken = default)
+     {
+-        if (_host is null)
+-        {
+-            return;
+-        }
+-
+         var wireState = state.ToString().ToLowerInvariant();
+         var payload = new
+         {
+             state = wireState,
+         };
+-        await _host.SendMessageAsync(AvatarProtocol.Build("avatar.state", payload), cancellationToken);
++        await SendRuntimeMessageAsync(AvatarProtocol.Build("avatar.state", payload), cancellationToken);
+     }
+ 
+     public Task SetExpressionAsync(string expression, double intensity = 1.0, CancellationToken cancellationToken = default)
+     {
+-        if (_host is null)
+-        {
+-            return Task.CompletedTask;
+-        }
+-
+         var payload = new
+         {
+             expression,
+             intensity,
+         };
+-        return _host.SendMessageAsync(AvatarProtocol.Build("avatar.expression", payload), cancellationToken);
++        return SendRuntimeMessageAsync(AvatarProtocol.Build("avatar.expression", payload), cancellationToken);
+     }
+ 
+     public async Task SpeakAsync(SpeechPlaybackData speech, CancellationToken cancellationToken = default)
+     {
+-        if (_host is null)
+-        {
+-            return;
+-        }
+-
+         _speechCancellation?.Cancel();
+         _speechCancellation?.Dispose();
+         _speechCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+@@ -118,7 +104,7 @@ public sealed class AvatarService : IAvatarService
+             durationMs = speech.DurationMs,
+             cues = speech.Cues,
+         };
+-        await _host.SendMessageAsync(AvatarProtocol.Build("avatar.speech.start", payload), _speechCancellation.Token);
++        await SendRuntimeMessageAsync(AvatarProtocol.Build("avatar.speech.start", payload), _speechCancellation.Token);
+     }
+ 
+     public Task StopSpeakingAsync(CancellationToken cancellationToken = default)
+@@ -127,14 +113,12 @@ public sealed class AvatarService : IAvatarService
+         _speechCancellation?.Dispose();
+         _speechCancellation = null;
+ 
+-        if (_host is null)
+-        {
+-            return Task.CompletedTask;
+-        }
+-
+-        return _host.SendMessageAsync(AvatarProtocol.Build("avatar.speech.stop", new { }), cancellationToken);
++        return SendRuntimeMessageAsync(AvatarProtocol.Build("avatar.speech.stop", new { }), cancellationToken);
+     }
+ 
++    public void AttachPrimaryHost(Func<string, CancellationToken, Task<bool>> messageSender) =>
++        _primaryHostSender = messageSender;
++
+     public void AttachHostWindow(AvatarWindow window)
+     {
+         _host = window;
+@@ -144,6 +128,19 @@ public sealed class AvatarService : IAvatarService
+         }
+     }
+ 
++    private async Task SendRuntimeMessageAsync(string message, CancellationToken cancellationToken)
++    {
++        if (_primaryHostSender is not null && await _primaryHostSender(message, cancellationToken))
++        {
++            return;
++        }
++
++        if (_host is not null)
++        {
++            await _host.SendMessageAsync(message, cancellationToken);
++        }
++    }
++
+     public async Task<SpeechResult> SpeakTextAsync(string text, CancellationToken cancellationToken = default)
+     {
+         var voice = _preferences.AvatarProfile.Equals("female", StringComparison.OrdinalIgnoreCase)
+@@ -181,7 +178,7 @@ public sealed class AvatarService : IAvatarService
+ 
+         await SpeakAsync(new SpeechPlaybackData
+         {
+-            AudioUrl = new Uri(audioPath).AbsoluteUri,
++            AudioUrl = await BuildAudioDataUrlAsync(audioPath, cancellationToken),
+             DurationMs = result.DurationMs,
+             Cues = BuildDevelopmentCues(text, result.DurationMs),
+         }, cancellationToken);
+@@ -189,6 +186,19 @@ public sealed class AvatarService : IAvatarService
+         return result;
+     }
+ 
++    private static async Task<string> BuildAudioDataUrlAsync(string audioPath, CancellationToken cancellationToken)
++    {
++        var mediaType = Path.GetExtension(audioPath).ToLowerInvariant() switch
++        {
++            ".mp3" => "audio/mpeg",
++            ".ogg" => "audio/ogg",
++            ".flac" => "audio/flac",
++            _ => "audio/wav",
++        };
++        var bytes = await File.ReadAllBytesAsync(audioPath, cancellationToken);
++        return $"data:{mediaType};base64,{Convert.ToBase64String(bytes)}";
++    }
++
+     private static List<SpeechCue> BuildDevelopmentCues(string text, int durationMs)
+     {
+         var cues = new List<SpeechCue>();
+diff --git a/desktop/Jarvis.Desktop/MainWindow.xaml b/desktop/Jarvis.Desktop/MainWindow.xaml
+index 851627c..1620481 100644
+--- a/desktop/Jarvis.Desktop/MainWindow.xaml
++++ b/desktop/Jarvis.Desktop/MainWindow.xaml
+@@ -7,7 +7,7 @@
+   <Style TargetType="TextBox"><Setter Property="Foreground" Value="{StaticResource Text}"/><Setter Property="Background" Value="#D0051119"/><Setter Property="BorderBrush" Value="{StaticResource Line}"/><Setter Property="CaretBrush" Value="{StaticResource Cyan}"/></Style>
+   <Style TargetType="ListBox"><Setter Property="Background" Value="Transparent"/><Setter Property="BorderThickness" Value="0"/><Setter Property="Foreground" Value="{StaticResource Text}"/></Style>
+   <Style x:Key="PanelStyle" TargetType="Border"><Setter Property="Background" Value="{StaticResource Panel}"/><Setter Property="BorderBrush" Value="{StaticResource Line}"/><Setter Property="BorderThickness" Value="1"/><Setter Property="Padding" Value="13"/><Setter Property="CornerRadius" Value="2"/></Style>
+-  <Style x:Key="LabelStyle" TargetType="TextBlock"><Setter Property="Foreground" Value="{StaticResource Cyan}"/><Setter Property="FontSize" Value="9"/><Setter Property="FontWeight" Value="Bold"/><Setter Property="CharacterSpacing" Value="180"/></Style>
++  <Style x:Key="LabelStyle" TargetType="TextBlock"><Setter Property="Foreground" Value="{StaticResource Cyan}"/><Setter Property="FontSize" Value="9"/><Setter Property="FontWeight" Value="Bold"/></Style>
+   <Style x:Key="HealthStatusStyle" TargetType="TextBlock"><Setter Property="Foreground" Value="{StaticResource Cyan}"/><Style.Triggers><DataTrigger Binding="{Binding Available}" Value="False"><Setter Property="Foreground" Value="#FF625F"/></DataTrigger></Style.Triggers></Style>
+   <Storyboard x:Key="AvatarPulse" RepeatBehavior="Forever" AutoReverse="True"><DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)" To="1.04" Duration="0:0:1.8"/><DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)" To="1.04" Duration="0:0:1.8"/></Storyboard>
+  </Window.Resources>
+@@ -17,7 +17,7 @@
+    <Grid.RowDefinitions><RowDefinition Height="70"/><RowDefinition Height="*"/><RowDefinition Height="35"/></Grid.RowDefinitions>
+    <Grid>
+     <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+-    <StackPanel VerticalAlignment="Center"><TextBlock Text="J.A.R.V.I.S." Foreground="{StaticResource Cyan}" FontSize="25" FontWeight="Light" CharacterSpacing="250"/><TextBlock Text="LOCAL INTELLIGENCE · OPERATIONS COMMAND" Style="{StaticResource LabelStyle}" Margin="2,5,0,0"/></StackPanel>
++    <StackPanel VerticalAlignment="Center"><TextBlock Text="J · A · R · V · I · S" Foreground="{StaticResource Cyan}" FontSize="25" FontWeight="Light"/><TextBlock Text="LOCAL INTELLIGENCE · OPERATIONS COMMAND" Style="{StaticResource LabelStyle}" Margin="2,5,0,0"/></StackPanel>
+     <Border Grid.Column="1" BorderBrush="{StaticResource Cyan}" BorderThickness="1" CornerRadius="12" Padding="11,4" Background="#1828B9D5" VerticalAlignment="Center"><TextBlock Text="●  SYSTEM ONLINE" Foreground="{StaticResource Cyan}" FontSize="10" FontWeight="Bold"/></Border>
+     <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center"><Button Content="NEW CHANNEL" Click="NewConversationButton_Click"/><Button Content="AVATAR" Click="OpenAvatarHostButton_Click"/><Button Content="CONFIGURE" Click="SettingsButton_Click" Margin="0"/></StackPanel>
+    </Grid>
+@@ -32,12 +32,12 @@
+     <Grid Grid.Column="2"><Grid.RowDefinitions><RowDefinition Height="300"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+      <Grid><Ellipse Width="280" Height="280" Stroke="#384DE7FF" StrokeThickness="1" StrokeDashArray="3 9"/><Ellipse Width="225" Height="225" Stroke="#744DE7FF" StrokeThickness="1" StrokeDashArray="18 5"/><Ellipse Width="190" Height="190" Fill="#151FD8F5" Stroke="#A54DE7FF"/>
+       <Border x:Name="AvatarPresence" Width="174" Height="174" Background="#08121A" BorderBrush="#A04DE7FF" BorderThickness="1" CornerRadius="87" ClipToBounds="True" MouseEnter="AvatarPresence_MouseEnter" MouseLeave="AvatarPresence_MouseLeave" MouseLeftButtonUp="AvatarPresence_MouseLeftButtonUp"><Grid><Canvas Width="150" Height="150"><Path x:Name="AvatarAccent" Data="M 22,144 C 32,106 118,106 128,144 Z" Fill="#168EBC" Stroke="#8CF2FF"/><Ellipse x:Name="AvatarCore" Width="78" Height="88" Canvas.Left="36" Canvas.Top="23" Fill="#6B9EAC" Stroke="#BFF8FF" StrokeThickness="1.5" RenderTransformOrigin=".5,.5"><Ellipse.RenderTransform><ScaleTransform/></Ellipse.RenderTransform><Ellipse.Triggers><EventTrigger RoutedEvent="FrameworkElement.Loaded"><BeginStoryboard Storyboard="{StaticResource AvatarPulse}"/></EventTrigger></Ellipse.Triggers></Ellipse><Path Data="M 33,57 C 25,21 43,9 75,13 C 107,9 126,31 116,58 C 104,39 92,34 75,35 C 57,34 45,42 33,57 Z" Fill="#102A35"/><Ellipse Width="6" Height="8" Canvas.Left="55" Canvas.Top="60" Fill="#4DE7FF"/><Ellipse Width="6" Height="8" Canvas.Left="90" Canvas.Top="60" Fill="#4DE7FF"/></Canvas></Grid></Border>
+-      <StackPanel VerticalAlignment="Bottom" HorizontalAlignment="Center"><TextBlock x:Name="AvatarNameText" Text="JARVIS PRESENCE" Foreground="{StaticResource Dim}" FontSize="9" FontWeight="Bold" CharacterSpacing="180" HorizontalAlignment="Center"/><TextBlock x:Name="AvatarStatusText" Text="READY FOR COMMANDS" Foreground="{StaticResource Cyan}" FontSize="15" FontWeight="SemiBold" Margin="0,4,0,0" HorizontalAlignment="Center"/></StackPanel>
++      <StackPanel VerticalAlignment="Bottom" HorizontalAlignment="Center"><TextBlock x:Name="AvatarNameText" Text="JARVIS PRESENCE" Foreground="{StaticResource Dim}" FontSize="9" FontWeight="Bold" HorizontalAlignment="Center"/><TextBlock x:Name="AvatarStatusText" Text="READY FOR COMMANDS" Foreground="{StaticResource Cyan}" FontSize="15" FontWeight="SemiBold" Margin="0,4,0,0" HorizontalAlignment="Center"/></StackPanel>
+      </Grid>
+      <Border Grid.Row="1" Style="{StaticResource PanelStyle}" Padding="0" Margin="0,10,0,0"><Grid><Grid.RowDefinitions><RowDefinition Height="38"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+       <DockPanel Background="#90112733" Margin="1" LastChildFill="False"><TextBlock Text="COMMAND CHANNEL  /  ENCRYPTED LOCAL SESSION" Style="{StaticResource LabelStyle}" Margin="12,0" VerticalAlignment="Center"/><TextBlock Text="● READY" Foreground="{StaticResource Cyan}" FontSize="9" FontWeight="Bold" DockPanel.Dock="Right" Margin="0,0,12,0" VerticalAlignment="Center"/></DockPanel>
+       <ListBox x:Name="ConversationList" Grid.Row="1" Margin="10,6"><ListBox.ItemTemplate><DataTemplate><Border BorderBrush="#2838C9EA" BorderThickness="0,0,0,1" Padding="4,7"><TextBox Text="{Binding Mode=OneWay}" IsReadOnly="True" IsTabStop="True" AcceptsReturn="True" TextWrapping="Wrap" Background="Transparent" BorderThickness="0" FontSize="13"/></Border></DataTemplate></ListBox.ItemTemplate></ListBox>
+-      <Grid Grid.Row="2" Margin="10,2,10,9"><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><Border BorderBrush="#914DE7FF" BorderThickness="1"><Grid><TextBox x:Name="CommandInput" MinHeight="65" Padding="11,9,96,9" AcceptsReturn="True" TextWrapping="Wrap" BorderThickness="0" FontSize="13" PreviewKeyDown="CommandInput_PreviewKeyDown"/><Button Content="EXECUTE" Width="80" Height="36" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,7,7" Click="IssueCommandButton_Click"/></Grid></Border><TextBlock x:Name="ComposerHintText" Grid.Row="1" Text="Enter to send · Shift+Enter for a new line" Foreground="{StaticResource Dim}" FontSize="9" Margin="2,4,0,0"/></Grid>
++      <Grid Grid.Row="2" Margin="10,2,10,9"><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><Border BorderBrush="#914DE7FF" BorderThickness="1"><Grid><TextBox x:Name="CommandInput" MinHeight="65" Padding="11,9,96,9" AcceptsReturn="True" TextWrapping="Wrap" BorderThickness="0" FontSize="13" PreviewKeyDown="CommandInput_PreviewKeyDown" GotKeyboardFocus="CommandInput_GotKeyboardFocus" LostKeyboardFocus="CommandInput_LostKeyboardFocus"/><Button Content="EXECUTE" Width="80" Height="36" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,7,7" Click="IssueCommandButton_Click"/></Grid></Border><TextBlock x:Name="ComposerHintText" Grid.Row="1" Text="Enter to send · Shift+Enter for a new line" Foreground="{StaticResource Dim}" FontSize="9" Margin="2,4,0,0"/></Grid>
+      </Grid></Border>
+     </Grid>
+     <ScrollViewer Grid.Column="4" VerticalScrollBarVisibility="Auto"><StackPanel>
+diff --git a/desktop/Jarvis.Desktop/MainWindow.xaml.cs b/desktop/Jarvis.Desktop/MainWindow.xaml.cs
+index 32e2f5a..798dee0 100644
+--- a/desktop/Jarvis.Desktop/MainWindow.xaml.cs
++++ b/desktop/Jarvis.Desktop/MainWindow.xaml.cs
+@@ -24,6 +24,8 @@ public partial class MainWindow : Window
+     private UIElement? _nativeAvatarVisual;
+     private WebView2? _inlineAvatarWebView;
+     private bool _inlineAvatarReady;
++    private CancellationTokenSource? _speechUiCancellation;
++    private bool _commandInProgress;
+ 
+     public MainWindow()
+     {
+@@ -34,6 +36,7 @@ public partial class MainWindow : Window
+             new KokoroSpeechService(_desktopOptions.Speech));
+ 
+         InitializeComponent();
++        _avatarService.AttachPrimaryHost(SendInlineAvatarMessageAsync);
+         ApplyAvatarPreferences();
+         ConversationList.Items.Add("Jarvis is ready. Issue a command or ask a question.");
+         ConversationList.Items.Add("Monitoring and workflow surfaces are available from the workspace rail.");
+@@ -64,12 +67,14 @@ public partial class MainWindow : Window
+     {
+         var command = CommandInput.Text.Trim();
+         if (command.Length == 0) return;
++        _commandInProgress = true;
++        CancelSpeechCompletion();
++        await _avatarService.StopSpeakingAsync();
+         _messages.Add(new ChatMessage { Role = "user", Content = command });
+         ConversationList.Items.Add($"Operator  ·  {command}");
+         CommandInput.IsEnabled = false;
+         AvatarStatusText.Text = "THINKING";
+         await _avatarService.SetStateAsync(AvatarVisualState.Thinking);
+-        await SetInlineAvatarStateAsync("thinking", "Thinking");
+         try
+         {
+             var response = await _client.ChatAsync(_messages, _attachedFileIds, CancellationToken.None);
+@@ -78,38 +83,96 @@ public partial class MainWindow : Window
+             ConnectionText.Text = $"Local command center · {response.Model}";
+             AvatarStatusText.Text = "SPEAKING";
+             await _avatarService.SetStateAsync(AvatarVisualState.Speaking);
+-            await SetInlineAvatarStateAsync("speaking", "Speaking");
+ 
+             var speechResult = await _avatarService.SpeakTextAsync(response.Content, CancellationToken.None);
+             if (!speechResult.Success)
+             {
+                 ConnectionText.Text = $"Speech unavailable · {speechResult.Detail}";
++                AvatarStatusText.Text = "READY FOR COMMANDS";
++                await _avatarService.SetStateAsync(AvatarVisualState.Idle);
++            }
++            else
++            {
++                BeginSpeechCompletion(speechResult.DurationMs);
+             }
+         }
+         catch (Exception error)
+         {
+             ConversationList.Items.Add($"Jarvis  ·  The local assistant service is unavailable: {error.Message}");
+             ConnectionText.Text = "Local command center · backend unavailable";
++            AvatarStatusText.Text = "SYSTEM LINK OFFLINE";
+             await _avatarService.SetStateAsync(AvatarVisualState.Offline);
+         }
+         finally
+         {
+             CommandInput.IsEnabled = true;
+-            AvatarStatusText.Text = "READY FOR COMMANDS";
+-            await _avatarService.SetStateAsync(AvatarVisualState.Idle);
+-            await SetInlineAvatarStateAsync("ready", "Ready for commands");
++            _commandInProgress = false;
+         }
+         ConversationList.ScrollIntoView(ConversationList.Items[^1]);
+         CommandInput.Clear();
+     }
+ 
+-    private void NewConversationButton_Click(object sender, RoutedEventArgs e)
++    private async void NewConversationButton_Click(object sender, RoutedEventArgs e)
+     {
++        CancelSpeechCompletion();
++        await _avatarService.StopSpeakingAsync();
+         ConversationList.Items.Clear();
+         ConversationList.Items.Add("New command channel ready.");
+         _messages.Clear();
+         ConnectionText.Text = "Local command center · new conversation";
+         AvatarStatusText.Text = "READY FOR COMMANDS";
++        await _avatarService.SetStateAsync(AvatarVisualState.Idle);
++    }
++
++    private async void CommandInput_GotKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
++    {
++        if (_commandInProgress || _speechUiCancellation is not null) return;
++        AvatarStatusText.Text = "LISTENING";
++        await _avatarService.SetStateAsync(AvatarVisualState.Listening);
++    }
++
++    private async void CommandInput_LostKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
++    {
++        if (_commandInProgress || _speechUiCancellation is not null) return;
++        AvatarStatusText.Text = "READY FOR COMMANDS";
++        await _avatarService.SetStateAsync(AvatarVisualState.Idle);
++    }
++
++    private void BeginSpeechCompletion(int durationMs)
++    {
++        CancelSpeechCompletion();
++        _speechUiCancellation = new CancellationTokenSource();
++        _ = CompleteSpeechUiAsync(Math.Max(250, durationMs), _speechUiCancellation.Token);
++    }
++
++    private async Task CompleteSpeechUiAsync(int durationMs, CancellationToken cancellationToken)
++    {
++        try
++        {
++            await Task.Delay(durationMs + 150, cancellationToken);
++            AvatarStatusText.Text = CommandInput.IsKeyboardFocusWithin ? "LISTENING" : "READY FOR COMMANDS";
++            await _avatarService.SetStateAsync(CommandInput.IsKeyboardFocusWithin
++                ? AvatarVisualState.Listening
++                : AvatarVisualState.Idle, cancellationToken);
++        }
++        catch (OperationCanceledException)
++        {
++        }
++        finally
++        {
++            if (!cancellationToken.IsCancellationRequested)
++            {
++                _speechUiCancellation?.Dispose();
++                _speechUiCancellation = null;
++            }
++        }
++    }
++
++    private void CancelSpeechCompletion()
++    {
++        _speechUiCancellation?.Cancel();
++        _speechUiCancellation?.Dispose();
++        _speechUiCancellation = null;
+     }
+ 
+     private async void SettingsButton_Click(object sender, RoutedEventArgs e)
+@@ -160,6 +223,7 @@ public partial class MainWindow : Window
+                 {
+                     HorizontalAlignment = HorizontalAlignment.Stretch,
+                     VerticalAlignment = VerticalAlignment.Stretch,
++                    DefaultBackgroundColor = System.Drawing.Color.Transparent,
+                 };
+                 AvatarPresence.Child = _inlineAvatarWebView;
+             }
+@@ -233,18 +297,16 @@ public partial class MainWindow : Window
+         }
+     }
+ 
+-    private Task SetInlineAvatarStateAsync(string state, string detail) =>
+-        SendInlineAvatarMessageAsync(AvatarProtocol.Build("avatar.state", new { state, detail }));
+-
+-    private Task SendInlineAvatarMessageAsync(string message)
++    private Task<bool> SendInlineAvatarMessageAsync(string message, CancellationToken cancellationToken = default)
+     {
+         if (!_inlineAvatarReady || _inlineAvatarWebView?.CoreWebView2 is null)
+         {
+-            return Task.CompletedTask;
++            return Task.FromResult(false);
+         }
+ 
++        cancellationToken.ThrowIfCancellationRequested();
+         _inlineAvatarWebView.CoreWebView2.PostWebMessageAsJson(message);
+-        return Task.CompletedTask;
++        return Task.FromResult(true);
+     }
+ 
+     private void RestoreNativeAvatar()
+diff --git a/desktop/Jarvis.Desktop/Assets/AvatarHost/avatar-host.js b/desktop/Jarvis.Desktop/Assets/AvatarHost/avatar-host.js
+index a6f7d2f..5974644 100644
+--- a/desktop/Jarvis.Desktop/Assets/AvatarHost/avatar-host.js
++++ b/desktop/Jarvis.Desktop/Assets/AvatarHost/avatar-host.js
+@@ -14,6 +14,7 @@ let currentAnalyser = null;
+ let amplitudeTimer = null;
+ let blinkTimer = null;
+ let speakingTimer = null;
++let speechCueTimers = [];
+ let morphTargetNames = {};
+ let animationNames = {};
+ 
+@@ -33,16 +34,30 @@ const setBadgeClass = (name) => {
+   stateBadgeEl.classList.add(name);
+ };
+ 
++const setRuntimeStateClass = (state) => {
++  for (const className of Array.from(document.body.classList)) {
++    if (className.startsWith("runtime-")) {
++      document.body.classList.remove(className);
++    }
++  }
++  document.body.classList.add(`runtime-${state}`);
++};
++
+ const applyState = (state, detail) => {
+   const normalized = (state || "ready").toString().toLowerCase();
+   const map = {
+     loading: { label: "LOADING", text: "Loading", badge: "state-thinking" },
+     thinking: { label: "THINKING", text: "Thinking", badge: "state-thinking" },
+     speaking: { label: "SPEAKING", text: "Speaking", badge: "state-speaking" },
++    listening: { label: "LISTENING", text: "Listening", badge: "state-ready" },
++    idle: { label: "READY", text: "Ready for commands", badge: "state-ready" },
++    error: { label: "FAULT", text: "Attention required", badge: "state-unavailable" },
++    offline: { label: "OFFLINE", text: "System link offline", badge: "state-unavailable" },
+     ready: { label: "READY", text: "Ready for commands", badge: "state-ready" },
+     unavailable: { label: "OFFLINE", text: "Unavailable", badge: "state-unavailable" }
+   };
+   const resolved = map[normalized] || map.ready;
++  setRuntimeStateClass(normalized);
+   playAnimation(resolved.animation || animationNames[normalized] || animationNames.idle, normalized === "thinking" || normalized === "speaking");
+   stateBadgeEl.textContent = resolved.label;
+   stateEl.textContent = resolved.text;
+@@ -105,9 +120,26 @@ const stopSpeech = () => {
+     currentAudioContext = null;
+   }
+   currentAnalyser = null;
++  for (const timer of speechCueTimers) {
++    clearTimeout(timer);
++  }
++  speechCueTimers = [];
++  document.documentElement.style.setProperty("--speech-energy", "0");
+   stopSpeakingMotion();
+ };
+ 
++const scheduleSpeechCues = (cues) => {
++  if (!Array.isArray(cues)) {
++    return;
++  }
++  for (const cue of cues) {
++    const target = morphTargetNames[cue.viseme] || cue.viseme;
++    const delay = Math.max(0, Number(cue.timeMs) || 0);
++    const weight = Math.max(0, Math.min(1, Number(cue.weight) || 0));
++    speechCueTimers.push(setTimeout(() => setMorphTarget(target, weight), delay));
++  }
++};
++
+ const forEachMorphMesh = (callback) => {
+   const scene = viewer?.model?.scene;
+   if (!scene || typeof scene.traverse !== "function") {
+@@ -215,7 +247,7 @@ const startAmplitudeTracking = () => {
+     const intensity = Math.min(1, Math.max(0, amplitude * 3));
+     const modelViewer = viewer;
+     if (modelViewer) {
+-      modelViewer.style.filter = `brightness(${1 + intensity * 0.18})`;
++      document.documentElement.style.setProperty("--speech-energy", intensity.toFixed(3));
+     }
+   }, 60);
+ };
+@@ -341,9 +373,9 @@ const handleEnvelope = async (envelope) => {
+         currentAnalyser.connect(currentAudioContext.destination);
+         startAmplitudeTracking();
+         startSpeakingMotion();
++        scheduleSpeechCues(payload.cues);
+         currentAudio.onended = () => {
+           stopSpeech();
+-          viewer?.style.setProperty("filter", "none");
+           applyState("ready", "Speech playback complete");
+         };
+         await currentAudio.play();
+@@ -351,7 +383,6 @@ const handleEnvelope = async (envelope) => {
+       }
+       case "avatar.speech.stop": {
+         stopSpeech();
+-        viewer?.style.setProperty("filter", "none");
+         applyState("ready", "Speech cancelled");
+         break;
+       }
+diff --git a/desktop/Jarvis.Desktop/Assets/AvatarHost/avatar-host.css b/desktop/Jarvis.Desktop/Assets/AvatarHost/avatar-host.css
+index 1548bec..aceeb1d 100644
+--- a/desktop/Jarvis.Desktop/Assets/AvatarHost/avatar-host.css
++++ b/desktop/Jarvis.Desktop/Assets/AvatarHost/avatar-host.css
+@@ -1,5 +1,5 @@
+ * { box-sizing: border-box; }
+-:root { --cyan:#4de7ff; --cyan-soft:#168ebc; --text:#d9f7ff; --dim:#6a9ba9; }
++:root { --cyan:#4de7ff; --cyan-soft:#168ebc; --text:#d9f7ff; --dim:#6a9ba9; --speech-energy:0; }
+ html, body { margin:0; width:100%; height:100%; overflow:hidden; font-family:"Segoe UI",sans-serif; color:var(--text); background:radial-gradient(circle at 50% 42%,#173343 0,#07141d 48%,#02070b 100%); }
+ .ambient { position:fixed; inset:-20%; background:conic-gradient(from 20deg at 50% 50%,transparent,rgba(77,231,255,.08),transparent 25%,rgba(22,142,188,.07),transparent 55%); animation:drift 18s linear infinite; pointer-events:none; }
+ .scanlines { position:fixed; inset:0; opacity:.12; background:repeating-linear-gradient(0deg,transparent 0 3px,rgba(77,231,255,.2) 4px); pointer-events:none; }
+@@ -33,5 +33,14 @@ body.compact .core { width:100%; height:100%; border:0; border-radius:50%; clip-
+ body.compact .ring-one { width:88%; height:88%; margin:0; transform:translate(-50%,-50%); }
+ body.compact .ring-two { width:72%; height:72%; margin:0; transform:translate(-50%,-50%); }
+ body.compact #viewer { width:100%; height:100%; background:transparent; }
++body.compact.runtime-ready #viewer,body.compact.runtime-idle #viewer { animation:avatar-idle 5.8s ease-in-out infinite; }
++body.compact.runtime-listening #viewer { animation:avatar-listening 1.7s ease-in-out infinite; filter:drop-shadow(0 0 18px rgba(77,231,255,.4)); }
++body.compact.runtime-thinking #viewer { animation:avatar-thinking 3.2s ease-in-out infinite; filter:drop-shadow(0 0 18px rgba(255,184,77,.26)); }
++body.compact.runtime-speaking #viewer { animation:avatar-speaking .42s ease-in-out infinite alternate; filter:brightness(calc(1 + var(--speech-energy) * .12)) drop-shadow(0 0 calc(14px + var(--speech-energy) * 9px) rgba(77,231,255,.42)); }
++body.compact.runtime-error #viewer,body.compact.runtime-offline #viewer { filter:saturate(.55) brightness(.72); }
++@keyframes avatar-idle { 0%,100% { transform:translateY(0) scale(1); } 50% { transform:translateY(-.7%) scale(1.006); } }
++@keyframes avatar-listening { 0%,100% { transform:translateY(0) rotate(0); } 50% { transform:translateY(-.5%) rotate(.35deg); } }
++@keyframes avatar-thinking { 0%,100% { transform:translateX(-.35%) rotate(-.25deg); } 50% { transform:translateX(.35%) rotate(.25deg); } }
++@keyframes avatar-speaking { from { transform:translateY(0) scale(1); } to { transform:translateY(-.25%) scale(calc(1 + var(--speech-energy) * .006)); } }
+ @keyframes drift { to { transform:rotate(360deg); } } @keyframes spin { to { transform:rotate(360deg); } } @keyframes pulse { to { box-shadow:0 0 16px currentColor; } }
+-@media (prefers-reduced-motion:reduce) { .ambient,.ring,.state-thinking,.state-speaking { animation:none; } }
++@media (prefers-reduced-motion:reduce) { .ambient,.ring,.state-thinking,.state-speaking,body.compact #viewer { animation:none; } }
+diff --git ascripts/rig-cyber-lupine-head.py b/scripts/rig-cyber-lupine-head.py
+new file mode 100644
+index 0000000..ae12735
+--- /dev/null
++++ b/scripts/rig-cyber-lupine-head.py
+@@ -0,0 +1,147 @@
++"""Create a lightweight, no-cost control rig for the Cyber Lupine head.
++
++Run with Blender 5.2 or newer:
++  blender --background --python scripts/rig-cyber-lupine-head.py -- \
++    desktop/Jarvis.Desktop/Assets/Avatars/shared/cyber_lupine_head.glb \
++    desktop/Jarvis.Desktop/Assets/Avatars/shared/cyber_lupine_head_rigged.glb
++
++The generated file is intentionally not selected by avatar.json automatically.
++Inspect the deformation in Blender before promoting it to the application.
++"""
++
++from __future__ import annotations
++
++import math
++import sys
++from pathlib import Path
++
++import bpy
++from mathutils import Vector
++
++
++def arguments() -> tuple[Path, Path]:
++    args = sys.argv[sys.argv.index("--") + 1 :] if "--" in sys.argv else []
++    if len(args) != 2:
++        raise SystemExit("Expected input.glb and output.glb after --")
++    return Path(args[0]).resolve(), Path(args[1]).resolve()
++
++
++def reset_scene() -> None:
++    bpy.ops.object.select_all(action="SELECT")
++    bpy.ops.object.delete(use_global=False)
++
++
++def mesh_bounds(meshes: list[bpy.types.Object]) -> tuple[Vector, Vector]:
++    points = [obj.matrix_world @ Vector(corner) for obj in meshes for corner in obj.bound_box]
++    return Vector(map(min, zip(*points))), Vector(map(max, zip(*points)))
++
++
++def add_bone(armature, name: str, head: Vector, tail: Vector, parent=None):
++    bone = armature.edit_bones.new(name)
++    bone.head = head
++    bone.tail = tail
++    bone.parent = parent
++    return bone
++
++
++def make_armature(minimum: Vector, maximum: Vector) -> bpy.types.Object:
++    center = (minimum + maximum) * 0.5
++    height = maximum.z - minimum.z
++    width = maximum.x - minimum.x
++    depth = maximum.y - minimum.y
++    data = bpy.data.armatures.new("JarvisCyberLupineRig")
++    rig = bpy.data.objects.new("JarvisCyberLupineRig", data)
++    bpy.context.collection.objects.link(rig)
++    bpy.context.view_layer.objects.active = rig
++    rig.select_set(True)
++    bpy.ops.object.mode_set(mode="EDIT")
++    neck = add_bone(data, "Neck", Vector((center.x, center.y, minimum.z)), Vector((center.x, center.y, center.z)))
++    head = add_bone(data, "Head", Vector((center.x, center.y, center.z)), Vector((center.x, center.y, maximum.z - height * 0.12)), neck)
++    add_bone(data, "Jaw", Vector((center.x, minimum.y + depth * 0.18, center.z)), Vector((center.x, minimum.y - depth * 0.08, center.z - height * 0.15)), head)
++    add_bone(data, "Ear.L", Vector((center.x + width * 0.20, center.y, maximum.z - height * 0.33)), Vector((center.x + width * 0.31, center.y, maximum.z)), head)
++    add_bone(data, "Ear.R", Vector((center.x - width * 0.20, center.y, maximum.z - height * 0.33)), Vector((center.x - width * 0.31, center.y, maximum.z)), head)
++    bpy.ops.object.mode_set(mode="OBJECT")
++    rig.show_in_front = True
++    return rig
++
++
++def weight_mesh(obj: bpy.types.Object, rig: bpy.types.Object, minimum: Vector, maximum: Vector) -> None:
++    inverse = obj.matrix_world.inverted()
++    height = maximum.z - minimum.z
++    width = maximum.x - minimum.x
++    depth = maximum.y - minimum.y
++    center = (minimum + maximum) * 0.5
++    groups = {name: obj.vertex_groups.new(name=name) for name in ("Neck", "Head", "Jaw", "Ear.L", "Ear.R")}
++    for vertex in obj.data.vertices:
++        world = obj.matrix_world @ vertex.co
++        weights = {"Head": 1.0}
++        if world.z < minimum.z + height * 0.25:
++            neck_weight = min(1.0, (minimum.z + height * 0.25 - world.z) / (height * 0.18))
++            weights = {"Head": 1.0 - neck_weight, "Neck": neck_weight}
++        if world.z < center.z and world.y < minimum.y + depth * 0.43:
++            weights = {"Head": 0.15, "Jaw": 0.85}
++        if world.z > maximum.z - height * 0.38 and abs(world.x - center.x) > width * 0.14:
++            ear = "Ear.L" if world.x > center.x else "Ear.R"
++            weights = {"Head": 0.08, ear: 0.92}
++        for name, weight in weights.items():
++            if weight > 0:
++                groups[name].add([vertex.index], weight, "REPLACE")
++    modifier = obj.modifiers.new("Jarvis Cyber Lupine Rig", "ARMATURE")
++    modifier.object = rig
++    obj.parent = rig
++    obj.matrix_parent_inverse = rig.matrix_world.inverted()
++
++
++def action(rig: bpy.types.Object, name: str, bone_name: str, axis: str, degrees: float, frame: int = 12) -> None:
++    created = bpy.data.actions.new(name)
++    slot = created.slots.new(id_type="OBJECT", name=rig.name)
++    rig.animation_data_create()
++    rig.animation_data.action = created
++    rig.animation_data.action_slot = slot
++    pose_bone = rig.pose.bones[bone_name]
++    pose_bone.rotation_mode = "XYZ"
++    index = "XYZ".index(axis)
++    pose_bone.rotation_euler[index] = 0
++    pose_bone.keyframe_insert("rotation_euler", index=index, frame=1)
++    pose_bone.rotation_euler[index] = math.radians(degrees)
++    pose_bone.keyframe_insert("rotation_euler", index=index, frame=frame)
++    pose_bone.rotation_euler[index] = 0
++    pose_bone.keyframe_insert("rotation_euler", index=index, frame=frame * 2)
++    created.use_fake_user = True
++
++
++def main() -> None:
++    source, destination = arguments()
++    if not source.is_file():
++        raise SystemExit(f"Input model does not exist: {source}")
++    reset_scene()
++    bpy.ops.import_scene.gltf(filepath=str(source))
++    meshes = [obj for obj in bpy.context.scene.objects if obj.type == "MESH"]
++    if not meshes:
++        raise SystemExit("The GLB contains no mesh objects")
++    minimum, maximum = mesh_bounds(meshes)
++    rig = make_armature(minimum, maximum)
++    for mesh in meshes:
++        weight_mesh(mesh, rig, minimum, maximum)
++    action(rig, "Jarvis_Idle", "Head", "X", 0.6, 48)
++    action(rig, "Jarvis_Listening", "Head", "Z", 1.2, 22)
++    action(rig, "Jarvis_Thinking", "Head", "Y", 1.4, 30)
++    action(rig, "Jarvis_Speaking", "Jaw", "X", 9.0, 5)
++    action(rig, "Jarvis_EarAlert_L", "Ear.L", "Y", -3.0, 9)
++    action(rig, "Jarvis_EarAlert_R", "Ear.R", "Y", 3.0, 9)
++    rig.animation_data.action = None
++    destination.parent.mkdir(parents=True, exist_ok=True)
++    bpy.ops.object.select_all(action="SELECT")
++    bpy.ops.export_scene.gltf(
++        filepath=str(destination),
++        export_format="GLB",
++        use_selection=True,
++        export_animations=True,
++        export_skins=True,
++        export_morph=True,
++    )
++    print(f"Created review candidate: {destination}")
++
++
++if __name__ == "__main__":
++    main()
+diff --git adocs/CYBER-LUPINE-RIGGING.md b/docs/CYBER-LUPINE-RIGGING.md
+new file mode 100644
+index 0000000..de6fdba
+--- /dev/null
++++ b/docs/CYBER-LUPINE-RIGGING.md
+@@ -0,0 +1,25 @@
++# Cyber Lupine avatar refinement
++
++The command center does not require Blender at runtime. Its current avatar uses subtle CSS motion and audio amplitude, so the accepted head model and framing remain intact.
++
++## Optional Blender 5.2 rig
++
++Install Blender at no cost, then run this command from the repository root:
++
++```powershell
++blender --background --python .\scripts\rig-cyber-lupine-head.py -- `
++  .\desktop\Jarvis.Desktop\Assets\Avatars\shared\cyber_lupine_head.glb `
++  .\desktop\Jarvis.Desktop\Assets\Avatars\shared\cyber_lupine_head_rigged.glb
++```
++
++The script creates Head, Neck, Jaw, Ear.L, and Ear.R controls plus small idle, listening, thinking, speaking, and ear-alert actions. It deliberately writes a separate review candidate and does not modify `avatar.json`.
++
++## Review checklist
++
++1. Open `cyber_lupine_head_rigged.glb` in Blender and inspect every action from front and three-quarter views.
++2. Correct the automatically generated Jaw and Ear vertex groups with Weight Paint. Hard-surface panels should normally stay with Head.
++3. Keep head movement below two degrees. Larger movement reads as cartoon animation in the compact command-center crop.
++4. Add eyelid geometry or shape keys manually if true blinking is required. The source model has no eyelid morph targets, so a credible blink cannot be inferred automatically.
++5. Export GLB with skinning, animations, and morph targets enabled. Only then update both avatar manifests to select the reviewed file and map its animation names.
++
++The generated weights are a starting point, not a production approval. Keep the current static head as the fallback until the deformation review passes.
+

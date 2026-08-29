@@ -1,0 +1,10 @@
+diff --git a/desktop/Jarvis.Desktop/Assets/AvatarHost/avatar-host.css b/desktop/Jarvis.Desktop/Assets/AvatarHost/avatar-host.css
+--- a/desktop/Jarvis.Desktop/Assets/AvatarHost/avatar-host.css
++++ b/desktop/Jarvis.Desktop/Assets/AvatarHost/avatar-host.css
+@@ -23,5 +23,6 @@ h1 { margin:0; color:var(--cyan); font-size:21px; font-weight:400; letter-spacing
+ #fallback { position:absolute; z-index:5; inset:18%; display:flex; flex-direction:column; justify-content:center; padding:18px; border:1px solid #ff625f; background:rgba(15,8,10,.92); }
+ #fallback.hidden { display:none; } #fallback h2 { margin:0 0 7px; color:#ffb84d; font-size:16px; } #fallbackText { color:#d7aead; font-size:11px; }
++html { background:transparent; }
+ body.compact { background:transparent; }
+ body.compact .shell { display:block; padding:0; }
+ body.compact header,body.compact .state-row,body.compact #meta,body.compact #attribution,body.compact #fallback,body.compact .scanlines { display:none; }
