@@ -1,0 +1,21 @@
+{
+  "avatarId": "wolforge-jarvis",
+  "version": "1.0.0",
+  "defaultAnimation": "Idle",
+  "clips": {
+    "idle": "Idle",
+    "blink": "Blink",
+    "jawOpen": "JawOpen",
+    "speaking": "Speaking",
+    "listening": "Listening",
+    "thinking": "Thinking",
+    "success": "Success",
+    "warning": "Warning",
+    "error": "Error"
+  },
+  "speech": {
+    "mode": "audio-envelope-jaw",
+    "preferredVoice": "am_fenrir",
+    "futureVisemes": ["rest", "MBP", "FV", "A", "E", "I", "O", "U", "L", "SZ"]
+  }
+}

@@ -1,0 +1,72 @@
+{
+  "schemaVersion": 1,
+  "voiceId": "wolforge",
+  "displayName": "Wolforge",
+  "language": "en-us",
+  "engine": "kokoro",
+  "kokoroVoice": "am_fenrir",
+  "kokoroSpeed": 0.94,
+  "ffmpegPath": "ffmpeg.exe",
+  "outputSampleRate": 24000,
+  "defaultProfile": "normal",
+  "profiles": {
+    "normal": {
+      "pitchSemitones": -2.0,
+      "tempo": 0.97,
+      "bassGainDb": 2.5,
+      "presenceGainDb": 1.0,
+      "drive": 1.06,
+      "compressorThresholdDb": -20.0,
+      "compressorRatio": 3.0,
+      "targetPeakDb": -1.0
+    },
+    "warning": {
+      "pitchSemitones": -2.4,
+      "tempo": 0.94,
+      "bassGainDb": 3.5,
+      "presenceGainDb": 1.5,
+      "drive": 1.10,
+      "compressorThresholdDb": -22.0,
+      "compressorRatio": 4.0,
+      "targetPeakDb": -0.8
+    },
+    "urgent": {
+      "pitchSemitones": -1.6,
+      "tempo": 1.04,
+      "bassGainDb": 2.0,
+      "presenceGainDb": 2.2,
+      "drive": 1.08,
+      "compressorThresholdDb": -22.0,
+      "compressorRatio": 4.2,
+      "targetPeakDb": -0.8
+    },
+    "success": {
+      "pitchSemitones": -1.7,
+      "tempo": 0.99,
+      "bassGainDb": 2.0,
+      "presenceGainDb": 1.4,
+      "drive": 1.04,
+      "compressorThresholdDb": -19.0,
+      "compressorRatio": 2.6,
+      "targetPeakDb": -1.0
+    },
+    "error": {
+      "pitchSemitones": -2.5,
+      "tempo": 0.93,
+      "bassGainDb": 3.2,
+      "presenceGainDb": 0.7,
+      "drive": 1.08,
+      "compressorThresholdDb": -21.0,
+      "compressorRatio": 3.8,
+      "targetPeakDb": -1.0
+    }
+  },
+  "jawEnvelope": {
+    "frameMilliseconds": 20,
+    "noiseFloorDb": -48.0,
+    "openThresholdDb": -31.0,
+    "maximumDb": -9.0,
+    "attack": 0.58,
+    "release": 0.24
+  }
+}
