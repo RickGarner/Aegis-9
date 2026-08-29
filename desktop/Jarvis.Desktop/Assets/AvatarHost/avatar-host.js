@@ -109,7 +109,7 @@ const stopSpeech = () => {
 };
 
 const forEachMorphMesh = (callback) => {
-  const scene = viewer()?.model?.scene;
+  const scene = viewer?.model?.scene;
   if (!scene || typeof scene.traverse !== "function") {
     return;
   }
@@ -213,7 +213,7 @@ const startAmplitudeTracking = () => {
     }
     const amplitude = sum / bins.length;
     const intensity = Math.min(1, Math.max(0, amplitude * 3));
-    const modelViewer = viewer();
+    const modelViewer = viewer;
     if (modelViewer) {
       modelViewer.style.filter = `brightness(${1 + intensity * 0.18})`;
     }
@@ -227,7 +227,7 @@ const ensureModelViewerRuntime = async () => {
   await loadLocalScript("./vendor/model-viewer.min.js");
 };
 
-const loadAvatarFromManifest = async (manifestUrl, selectedAvatarId) => {
+const loadAvatarFromManifest = async (manifestUrl, selectedAvatarId, compact = false) => {
   const response = await fetch(manifestUrl, { cache: "no-store" });
   if (!response.ok) {
     throw new Error(`Avatar manifest request failed: ${response.status}`);
@@ -250,18 +250,23 @@ const loadAvatarFromManifest = async (manifestUrl, selectedAvatarId) => {
   await ensureModelViewerRuntime();
 
   const modelUrl = new URL(modelName, manifestUrl).toString();
-  const modelViewer = viewer();
+  const modelViewer = viewer;
   if (!modelViewer) {
     throw new Error("Wolforge model viewer element is unavailable.");
   }
   modelViewer.src = "";
   modelViewer.src = modelUrl;
+  modelViewer.fieldOfView = compact ? "24deg" : "28deg";
+  modelViewer.minFieldOfView = "16deg";
+  modelViewer.maxFieldOfView = "36deg";
+  modelViewer.exposure = 0.82;
+  modelViewer.shadowIntensity = 0.18;
   if (Array.isArray(manifest.cameraTarget) && manifest.cameraTarget.length === 3) {
-    const target = payload.compact ? [0, 0.35, 0] : manifest.cameraTarget;
+    const target = manifest.cameraTarget;
     modelViewer.cameraTarget = target.map((value) => `${Number(value) || 0}m`).join(" ");
   }
   if (manifest.cameraOrbit) {
-    modelViewer.cameraOrbit = payload.compact ? "0deg 82deg 4.8m" : String(manifest.cameraOrbit);
+    modelViewer.cameraOrbit = String(manifest.cameraOrbit);
   }
   modelViewer.addEventListener("error", () => {
     setFallback("The avatar model could not be rendered by the local WebView2 runtime.");
@@ -305,7 +310,7 @@ const handleEnvelope = async (envelope) => {
           throw new Error("avatar.load payload is missing manifestUrl.");
         }
         applyState("loading", "Loading avatar manifest");
-        await loadAvatarFromManifest(manifestUrl, selectedAvatarId);
+        await loadAvatarFromManifest(manifestUrl, selectedAvatarId, payload.compact === true);
         break;
       }
       case "avatar.state": {
@@ -338,7 +343,7 @@ const handleEnvelope = async (envelope) => {
         startSpeakingMotion();
         currentAudio.onended = () => {
           stopSpeech();
-          viewer()?.style.setProperty("filter", "none");
+          viewer?.style.setProperty("filter", "none");
           applyState("ready", "Speech playback complete");
         };
         await currentAudio.play();
@@ -346,7 +351,7 @@ const handleEnvelope = async (envelope) => {
       }
       case "avatar.speech.stop": {
         stopSpeech();
-        viewer()?.style.setProperty("filter", "none");
+        viewer?.style.setProperty("filter", "none");
         applyState("ready", "Speech cancelled");
         break;
       }

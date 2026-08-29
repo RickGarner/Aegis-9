@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
@@ -65,7 +65,7 @@ public partial class MainWindow : Window
         var command = CommandInput.Text.Trim();
         if (command.Length == 0) return;
         _messages.Add(new ChatMessage { Role = "user", Content = command });
-        ConversationList.Items.Add($"Operator  ·  {command}");
+        ConversationList.Items.Add($"Operator  Â·  {command}");
         CommandInput.IsEnabled = false;
         AvatarStatusText.Text = "THINKING";
         await _avatarService.SetStateAsync(AvatarVisualState.Thinking);
@@ -74,8 +74,8 @@ public partial class MainWindow : Window
         {
             var response = await _client.ChatAsync(_messages, _attachedFileIds, CancellationToken.None);
             _messages.Add(new ChatMessage { Role = "assistant", Content = response.Content });
-            ConversationList.Items.Add($"Jarvis  ·  {response.Content}");
-            ConnectionText.Text = $"Local command center · {response.Model}";
+            ConversationList.Items.Add($"Jarvis  Â·  {response.Content}");
+            ConnectionText.Text = $"Local command center Â· {response.Model}";
             AvatarStatusText.Text = "SPEAKING";
             await _avatarService.SetStateAsync(AvatarVisualState.Speaking);
             await SetInlineAvatarStateAsync("speaking", "Speaking");
@@ -83,13 +83,13 @@ public partial class MainWindow : Window
             var speechResult = await _avatarService.SpeakTextAsync(response.Content, CancellationToken.None);
             if (!speechResult.Success)
             {
-                ConnectionText.Text = $"Speech unavailable · {speechResult.Detail}";
+                ConnectionText.Text = $"Speech unavailable Â· {speechResult.Detail}";
             }
         }
         catch (Exception error)
         {
-            ConversationList.Items.Add($"Jarvis  ·  The local assistant service is unavailable: {error.Message}");
-            ConnectionText.Text = "Local command center · backend unavailable";
+            ConversationList.Items.Add($"Jarvis  Â·  The local assistant service is unavailable: {error.Message}");
+            ConnectionText.Text = "Local command center Â· backend unavailable";
             await _avatarService.SetStateAsync(AvatarVisualState.Offline);
         }
         finally
@@ -108,7 +108,7 @@ public partial class MainWindow : Window
         ConversationList.Items.Clear();
         ConversationList.Items.Add("New command channel ready.");
         _messages.Clear();
-        ConnectionText.Text = "Local command center · new conversation";
+        ConnectionText.Text = "Local command center Â· new conversation";
         AvatarStatusText.Text = "READY FOR COMMANDS";
     }
 
@@ -117,15 +117,15 @@ public partial class MainWindow : Window
         var settings = new SettingsWindow(_preferences) { Owner = this };
         var saved = settings.ShowDialog() == true;
         ApplyAvatarPreferences();
-        ComposerHintText.Text = _preferences.EnterSendsMessage ? "Enter to send · Shift+Enter for a new line" : "Enter for a new line · use Issue command to send";
+        ComposerHintText.Text = _preferences.EnterSendsMessage ? "Enter to send Â· Shift+Enter for a new line" : "Enter for a new line Â· use Issue command to send";
         if (saved)
         {
             await InitializeInlineAvatarAsync();
-            ConnectionText.Text = "Settings saved · selected avatar applied";
+            ConnectionText.Text = "Settings saved Â· selected avatar applied";
         }
         else
         {
-            ConnectionText.Text = "Settings closed · changes discarded";
+            ConnectionText.Text = "Settings closed Â· changes discarded";
         }
     }
 
@@ -158,6 +158,7 @@ public partial class MainWindow : Window
             {
                 _inlineAvatarWebView = new WebView2
                 {
+                    DefaultBackgroundColor = System.Drawing.Color.Transparent,
                     Width = 150,
                     Height = 136,
                     HorizontalAlignment = HorizontalAlignment.Center,
@@ -187,7 +188,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex) when (ex is InvalidOperationException or WebView2RuntimeNotFoundException)
         {
-            ConnectionText.Text = $"3D avatar unavailable · {ex.Message}";
+            ConnectionText.Text = $"3D avatar unavailable Â· {ex.Message}";
             RestoreNativeAvatar();
         }
     }
@@ -226,11 +227,16 @@ public partial class MainWindow : Window
             var message = JsonSerializer.Deserialize<AvatarMessage>(e.WebMessageAsJson);
             if (message?.Type == "avatar.error")
             {
+                var detail = message.Payload.TryGetProperty("message", out var messageProperty)
+                    ? messageProperty.GetString()
+                    : "The local avatar runtime reported an unknown error.";
+                ConnectionText.Text = $"3D avatar unavailable Â· {detail}";
                 RestoreNativeAvatar();
             }
         }
         catch (JsonException)
         {
+            ConnectionText.Text = "3D avatar unavailable Â· invalid runtime message";
             RestoreNativeAvatar();
         }
     }
@@ -295,7 +301,7 @@ public partial class MainWindow : Window
         AvatarCore.Stroke = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#F1C8A8"));
         AvatarPresence.BorderBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(border));
         AvatarStatusText.Text = _preferences.UseThreeDimensionalAvatar
-            ? "READY FOR COMMANDS · USE AVATAR HOST BUTTON"
+            ? "READY FOR COMMANDS Â· USE AVATAR HOST BUTTON"
             : "READY FOR COMMANDS";
     }
 
@@ -369,11 +375,11 @@ public partial class MainWindow : Window
                 _attachedFileIds.Add(file.Id);
                 _stagedFiles.Add(file);
                 RefreshStagedFiles();
-                ConnectionText.Text = $"Attached context · {file.Name}";
+                ConnectionText.Text = $"Attached context Â· {file.Name}";
             }
             catch (Exception error)
             {
-                ConnectionText.Text = $"File intake failed · {error.Message}";
+                ConnectionText.Text = $"File intake failed Â· {error.Message}";
             }
         }
     }
@@ -398,7 +404,7 @@ public partial class MainWindow : Window
             _attachedFileIds.Remove(file.Id);
             _stagedFiles.RemoveAll(entry => entry.Id == file.Id);
             RefreshStagedFiles();
-            ConnectionText.Text = $"Removed context · {file.Name}";
+            ConnectionText.Text = $"Removed context Â· {file.Name}";
         }
         catch (Exception error) { ConnectionText.Text = $"File removal failed: {error.Message}"; }
     }
@@ -466,7 +472,7 @@ public partial class MainWindow : Window
                 ConversationList.Items.Clear();
                 foreach (var message in _messages)
                 {
-                    ConversationList.Items.Add($"{(message.Role == "assistant" ? "Jarvis" : "Operator")}  ·  {message.Content}");
+                    ConversationList.Items.Add($"{(message.Role == "assistant" ? "Jarvis" : "Operator")}  Â·  {message.Content}");
                 }
             }
             _attachedFileIds.Clear();
@@ -476,7 +482,7 @@ public partial class MainWindow : Window
             _attachedFileIds.AddRange(session.Files.Where(file => file.Id > 0).Select(file => file.Id));
             ActivityList.ItemsSource = session.Activity;
         }
-        catch (Exception error) { ConnectionText.Text = $"Local command center · session unavailable: {error.Message}"; }
+        catch (Exception error) { ConnectionText.Text = $"Local command center Â· session unavailable: {error.Message}"; }
     }
 
     private async Task LoadMonitoringAsync()
@@ -486,7 +492,7 @@ public partial class MainWindow : Window
             var dashboard = await _client.GetDashboardAsync(CancellationToken.None);
             AlertList.ItemsSource = dashboard.Alerts;
         }
-        catch (Exception error) { ConnectionText.Text = $"Local command center · monitoring unavailable: {error.Message}"; }
+        catch (Exception error) { ConnectionText.Text = $"Local command center Â· monitoring unavailable: {error.Message}"; }
     }
 
     private async void ResolveAlertButton_Click(object sender, RoutedEventArgs e)
@@ -496,7 +502,7 @@ public partial class MainWindow : Window
         {
             var dashboard = await _client.ResolveAlertAsync(alert.Id, CancellationToken.None);
             AlertList.ItemsSource = dashboard.Alerts;
-            ConnectionText.Text = $"Resolved alert · {alert.Title}";
+            ConnectionText.Text = $"Resolved alert Â· {alert.Title}";
         }
         catch (Exception error) { ConnectionText.Text = $"Alert resolution failed: {error.Message}"; }
     }
@@ -506,9 +512,9 @@ public partial class MainWindow : Window
         try
         {
             var health = await _client.GetProviderHealthAsync(CancellationToken.None);
-            ConnectionText.Text = health.Available ? $"Local command center · {health.Provider} · {health.Model}" : $"Local command center · provider unavailable · {health.Detail}";
+            ConnectionText.Text = health.Available ? $"Local command center Â· {health.Provider} Â· {health.Model}" : $"Local command center Â· provider unavailable Â· {health.Detail}";
         }
-        catch (Exception error) { ConnectionText.Text = $"Local command center · provider health unavailable: {error.Message}"; }
+        catch (Exception error) { ConnectionText.Text = $"Local command center Â· provider health unavailable: {error.Message}"; }
     }
 
     private async Task LoadSystemHealthAsync()
@@ -530,3 +536,4 @@ public partial class MainWindow : Window
         catch (Exception error) { ConnectionText.Text = $"Workflow supervisor unavailable: {error.Message}"; }
     }
 }
+

@@ -1,0 +1,18 @@
+Cyber Lupine Warrior
+
+Source:
+https://sketchfab.com/3d-models/cyber-lupine-warrior-728c44b7520b43ffa77c3a61b1e463c7
+
+Author:
+MAROUANE
+https://sketchfab.com/MAROUANE03
+
+License:
+Creative Commons Attribution 4.0 International
+https://creativecommons.org/licenses/by/4.0/
+
+Required attribution:
+This work is based on "Cyber Lupine Warrior" by MAROUANE, licensed under
+CC BY 4.0. The Jarvis integration extracts a portrait-oriented head and
+upper-bust derivative, repackages the supplied glTF resources as a
+self-contained GLB, and adjusts runtime presentation.

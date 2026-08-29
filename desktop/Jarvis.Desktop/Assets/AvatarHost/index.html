@@ -8,14 +8,21 @@
 </head>
 <body>
   <div class="ambient"></div>
+  <div class="scanlines"></div>
   <main class="shell">
-    <h1 id="name">JARVIS AVATAR</h1>
+    <header>
+      <p class="eyebrow">BIOMETRIC PRESENCE / LOCAL RENDER CORE</p>
+      <h1 id="name">JARVIS AVATAR</h1>
+    </header>
     <div class="state-row">
       <span id="stateBadge" class="state-badge state-ready">READY</span>
       <p id="state">Local avatar renderer host</p>
     </div>
     <p id="meta"></p>
-    <model-viewer id="viewer" camera-controls autoplay disable-zoom interaction-prompt="none"></model-viewer>
+    <div class="core">
+      <div class="ring ring-one"></div><div class="ring ring-two"></div>
+      <model-viewer id="viewer" camera-controls autoplay disable-zoom interaction-prompt="none"></model-viewer>
+    </div>
     <section id="fallback" class="hidden">
       <h2>Model preview unavailable</h2>
       <p id="fallbackText"></p>
