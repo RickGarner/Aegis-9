@@ -414,10 +414,10 @@ class MonitoringCollector:
 
     def _send_alert_email(self, title: str, detail: str) -> None:
         message = EmailMessage()
-        message["Subject"] = f"[Jarvis Alert] {title}"
+        message["Subject"] = f"[A.E.G.I.S.-9 Alert] {title}"
         message["From"] = self.settings.alert_email_from
         message["To"] = self.settings.alert_email_to
-        message.set_content(f"Jarvis monitoring alert\n\n{title}\n\n{detail}\n\nDetected: {utc_now()}")
+        message.set_content(f"A.E.G.I.S.-9 guardian monitoring alert\n\n{title}\n\n{detail}\n\nDetected: {utc_now()}")
         try:
             smtp = smtplib.SMTP_SSL(self.settings.alert_smtp_server, self.settings.alert_smtp_port, timeout=10) if self.settings.alert_email_ssl else smtplib.SMTP(self.settings.alert_smtp_server, self.settings.alert_smtp_port, timeout=10)
             with smtp:
@@ -434,7 +434,7 @@ class MonitoringCollector:
         local_row = ServerInventory(
             name=local,
             address="127.0.0.1",
-            role="Jarvis monitoring host",
+            role="A.E.G.I.S.-9 monitoring host",
             status="Needs Attention" if server.status == "warning" else "Good",
             total_disk=server.total_disk,
             free_disk=server.free_disk,

@@ -59,7 +59,7 @@ public partial class MonitorWindow : Window
         {
             ConnectionText.Text = "UNAVAILABLE";
             ConnectionText.Foreground = (TryFindResource("AmberBrush") as Brush) ?? Brushes.Orange;
-            DetailText.Text = $"The Jarvis monitoring backend could not be reached: {error.Message}";
+            DetailText.Text = $"The A.E.G.I.S.-9 monitoring backend could not be reached: {error.Message}";
         }
         finally { _refreshing = false; _timer.Start(); }
     }
@@ -74,7 +74,7 @@ public partial class MonitorWindow : Window
     private void UpdateServer(MonitoringDashboard dashboard)
     {
         var server = dashboard.Server;
-        DetailText.Text = $"{server.Detail} Live metrics are currently collected from the Jarvis host; remote agent feeds will populate the starter hosts when connected.";
+        DetailText.Text = $"{server.Detail} Live metrics are currently collected from the A.E.G.I.S.-9 host; remote agent feeds will populate the starter hosts when connected.";
         ServersList.ItemsSource = server.Servers;
     }
 

@@ -33,5 +33,6 @@ body.compact .core { width:100%; height:100%; border:0; border-radius:50%; clip-
 body.compact .ring-one { width:88%; height:88%; margin:0; transform:translate(-50%,-50%); }
 body.compact .ring-two { width:72%; height:72%; margin:0; transform:translate(-50%,-50%); }
 body.compact #viewer { width:100%; height:100%; background:transparent; }
+body.compact #viewer { pointer-events:none; touch-action:none; }
 @keyframes drift { to { transform:rotate(360deg); } } @keyframes spin { to { transform:rotate(360deg); } } @keyframes pulse { to { box-shadow:0 0 16px currentColor; } }
 @media (prefers-reduced-motion:reduce) { .ambient,.ring,.state-thinking,.state-speaking { animation:none; } }

@@ -39,7 +39,7 @@
 
 ## Voice Layer
 - [ ] Add push-to-talk interface
-- [ ] Integrate speech-to-text
+- [x] Integrate Windows-local push-to-talk speech-to-text with optional wake phrase
 - [x] Add local text-to-speech service contract and Kokoro HTTP client scaffold
 - [ ] Package or launch the Kokoro runtime/sidecar
 - [ ] Add voice command routing

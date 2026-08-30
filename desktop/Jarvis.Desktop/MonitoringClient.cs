@@ -68,7 +68,18 @@ public sealed class MonitoringClient
     public async Task<ChatResponse> ChatAsync(IReadOnlyList<ChatMessage> messages, IReadOnlyList<int>? attachmentIds, CancellationToken cancellationToken)
     {
         using var response = await _httpClient.PostAsJsonAsync("api/chat", new ChatRequest { Messages = messages, AttachmentIds = attachmentIds ?? [] }, JsonOptions, cancellationToken);
-        response.EnsureSuccessStatusCode();
+        if (!response.IsSuccessStatusCode)
+        {
+            var payload = await response.Content.ReadAsStringAsync(cancellationToken);
+            var detail = payload;
+            try
+            {
+                using var document = JsonDocument.Parse(payload);
+                if (document.RootElement.TryGetProperty("detail", out var value)) detail = value.GetString() ?? payload;
+            }
+            catch (JsonException) { }
+            throw new HttpRequestException($"Chat provider returned HTTP {(int)response.StatusCode}: {detail}");
+        }
         return await response.Content.ReadFromJsonAsync<ChatResponse>(JsonOptions, cancellationToken)
             ?? throw new InvalidOperationException("Chat API returned an empty response.");
     }
@@ -156,7 +167,10 @@ public sealed class ProviderHealth
     public bool Available { get; set; }
     public string Provider { get; set; } = string.Empty;
     public string Model { get; set; } = string.Empty;
+    public string Location { get; set; } = string.Empty;
+    public string Status { get; set; } = "initializing";
     public string Detail { get; set; } = string.Empty;
+    public string? Recommendation { get; set; }
 }
 
 public sealed class SystemHealth
@@ -191,6 +205,22 @@ public sealed class ChatResponse
 {
     public string Model { get; set; } = string.Empty;
     public string Content { get; set; } = string.Empty;
+    public string Provider { get; set; } = string.Empty;
+    public string Location { get; set; } = string.Empty;
+    public ProviderFailover Failover { get; set; } = new();
+}
+
+public sealed class ProviderFailover
+{
+    public bool Occurred { get; set; }
+    [JsonPropertyName("requires_acknowledgement")] public bool RequiresAcknowledgement { get; set; }
+    [JsonPropertyName("previous_location")] public string PreviousLocation { get; set; } = string.Empty;
+    [JsonPropertyName("previous_provider")] public string PreviousProvider { get; set; } = string.Empty;
+    [JsonPropertyName("previous_model")] public string PreviousModel { get; set; } = string.Empty;
+    [JsonPropertyName("active_location")] public string ActiveLocation { get; set; } = string.Empty;
+    [JsonPropertyName("active_provider")] public string ActiveProvider { get; set; } = string.Empty;
+    [JsonPropertyName("active_model")] public string ActiveModel { get; set; } = string.Empty;
+    public string Reason { get; set; } = string.Empty;
 }
 
 public sealed class SessionState

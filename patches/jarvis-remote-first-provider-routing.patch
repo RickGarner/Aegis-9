@@ -1,0 +1,977 @@
+diff --git a/.env.example b/.env.example
+index fe172cc..bb56160 100644
+--- a/.env.example
++++ b/.env.example
+@@ -9,8 +9,16 @@ JARVIS_PROVIDER=lmstudio
+ # JARVIS_PROVIDER_BASE_URL=http://127.0.0.1:1234/v1
+ JARVIS_MODEL=qwen3-coder-30b-a3b-instruct
+ JARVIS_FALLBACK_MODEL=qwen2.5-coder-7b-instruct
+-JARVIS_PRIMARY_MODEL_TIMEOUT_SECONDS=120
+-JARVIS_REQUEST_TIMEOUT_SECONDS=180
++JARVIS_PRIMARY_MODEL_TIMEOUT_SECONDS=120
++JARVIS_REQUEST_TIMEOUT_SECONDS=180
++JARVIS_PROVIDER_DISCOVERY_ENABLED=true
++JARVIS_REMOTE_PROVIDER_HOST=10.30.75.229
++JARVIS_LOCAL_PROVIDER_HOST=127.0.0.1
++JARVIS_PROVIDER_DISCOVERY_TIMEOUT_SECONDS=2.5
++JARVIS_PROVIDER_RETRY_COUNT=1
++JARVIS_PROVIDER_PREFERENCE=lmstudio,ollama,litellm
++# Required when LiteLLM has a master key. Keep the real value only in .env.
++JARVIS_LITELLM_API_KEY=
+ JARVIS_WHISPER_MODEL=small.en
+ JARVIS_WHISPER_DEVICE=auto
+ JARVIS_WHISPER_COMPUTE_TYPE=auto
+diff --git a/backend/app/config.py b/backend/app/config.py
+index cdf2a5f..11d6fff 100644
+--- a/backend/app/config.py
++++ b/backend/app/config.py
+@@ -1,7 +1,7 @@
+ from functools import lru_cache
+ from pathlib import Path
+ import socket
+-from typing import Literal
++from typing import Literal
+ 
+ from pydantic import Field, model_validator
+ from pydantic_settings import BaseSettings, SettingsConfigDict
+@@ -30,7 +30,7 @@ class Settings(BaseSettings):
+         default="auto",
+         validation_alias="JARVIS_ENVIRONMENT",
+     )
+-    provider: str = Field(default="lmstudio", validation_alias="JARVIS_PROVIDER")
++    provider: str = Field(default="lmstudio", validation_alias="JARVIS_PROVIDER")
+     provider_base_url: str | None = Field(
+         default=None,
+         validation_alias="JARVIS_PROVIDER_BASE_URL",
+@@ -41,7 +41,22 @@ class Settings(BaseSettings):
+     )
+     lmstudio_base_url: str = Field(default="http://127.0.0.1:1234/v1", validation_alias="JARVIS_LMSTUDIO_BASE_URL")
+     ollama_base_url: str = Field(default="http://127.0.0.1:11434", validation_alias="JARVIS_OLLAMA_BASE_URL")
+-    litellm_base_url: str = Field(default="http://127.0.0.1:4000/v1", validation_alias="JARVIS_LITELLM_BASE_URL")
++    litellm_base_url: str = Field(default="http://127.0.0.1:4000/v1", validation_alias="JARVIS_LITELLM_BASE_URL")
++    litellm_api_key: str | None = Field(default=None, validation_alias="JARVIS_LITELLM_API_KEY")
++    remote_provider_host: str = Field(default="10.30.75.229", validation_alias="JARVIS_REMOTE_PROVIDER_HOST")
++    local_provider_host: str = Field(default="127.0.0.1", validation_alias="JARVIS_LOCAL_PROVIDER_HOST")
++    provider_discovery_enabled: bool = Field(default=True, validation_alias="JARVIS_PROVIDER_DISCOVERY_ENABLED")
++    provider_discovery_timeout_seconds: float = Field(
++        default=2.5,
++        ge=0.5,
++        le=15,
++        validation_alias="JARVIS_PROVIDER_DISCOVERY_TIMEOUT_SECONDS",
++    )
++    provider_retry_count: int = Field(default=1, ge=0, le=3, validation_alias="JARVIS_PROVIDER_RETRY_COUNT")
++    provider_preference: str = Field(
++        default="lmstudio,ollama,litellm",
++        validation_alias="JARVIS_PROVIDER_PREFERENCE",
++    )
+     fallback_model: str | None = Field(
+         default="qwen2.5-coder-7b-instruct",
+         validation_alias="JARVIS_FALLBACK_MODEL",
+diff --git a/backend/app/main.py b/backend/app/main.py
+index ee028dd..32ca2f8 100644
+--- a/backend/app/main.py
++++ b/backend/app/main.py
+@@ -28,9 +28,12 @@ class ChatRequest(BaseModel):
+     attachment_ids: list[int] = Field(default_factory=list)
+ 
+ 
+-class ChatResponse(BaseModel):
+-    model: str
+-    content: str
++class ChatResponse(BaseModel):
++    model: str
++    content: str
++    provider: str = "local"
++    location: str = "local"
++    failover: dict = Field(default_factory=dict)
+ 
+ 
+ class TranscriptionResponse(BaseModel):
+@@ -65,7 +68,10 @@ async def lifespan(app: FastAPI):
+         settings.upload_dir,
+         settings,
+     )
+-    app.state.monitoring.collect()
++    app.state.monitoring.collect()
++    app.state.provider = OpenAICompatibleProvider(settings)
++    provider_discovery_task = asyncio.create_task(app.state.provider.discover())
++    app.state.provider_discovery_task = provider_discovery_task
+ 
+     async def monitoring_loop() -> None:
+         while True:
+@@ -74,16 +80,17 @@ async def lifespan(app: FastAPI):
+ 
+     monitoring_task = asyncio.create_task(monitoring_loop())
+     app.state.monitoring_task = monitoring_task
+-    yield
+-    monitoring_task.cancel()
+-    await asyncio.gather(monitoring_task, return_exceptions=True)
++    yield
++    monitoring_task.cancel()
++    provider_discovery_task.cancel()
++    await asyncio.gather(monitoring_task, provider_discovery_task, return_exceptions=True)
+ 
+ 
+ app = FastAPI(title="Jarvis API", version="0.1.0", lifespan=lifespan)
+ 
+ 
+-def get_provider(settings: Settings = Depends(get_settings)) -> OpenAICompatibleProvider:
+-    return OpenAICompatibleProvider(settings)
++def get_provider() -> OpenAICompatibleProvider:
++    return app.state.provider
+ 
+ 
+ @lru_cache
+@@ -364,7 +371,7 @@ async def chat(
+         )
+         assistant_message = ChatMessage(role="assistant", content=content)
+         store.record_chat(latest_user_message, assistant_message)
+-        return ChatResponse(model="local-artifact-generator", content=content)
++        return ChatResponse(model="local-artifact-generator", content=content, provider="jarvis", location="local")
+ 
+     outgoing_messages = list(request.messages)
+     if request.attachment_ids:
+@@ -380,13 +387,20 @@ async def chat(
+             ]
+ 
+     try:
+-        content = await provider.chat(outgoing_messages)
++        routed = await provider.chat(outgoing_messages)
+     except ProviderError as error:
+         raise HTTPException(
+             status_code=status.HTTP_502_BAD_GATEWAY,
+             detail=str(error),
+         ) from error
+ 
+-    assistant_message = ChatMessage(role="assistant", content=content)
+-    store.record_chat(request.messages[-1], assistant_message)
+-    return ChatResponse(model=settings.model, content=content)
++    content = routed.content
++    assistant_message = ChatMessage(role="assistant", content=content)
++    store.record_chat(request.messages[-1], assistant_message)
++    return ChatResponse(
++        model=routed.route.model,
++        content=content,
++        provider=routed.route.provider,
++        location=routed.route.location,
++        failover=routed.failover.model_dump(),
++    )
+diff --git a/backend/app/providers.py b/backend/app/providers.py
+index 15a2a76..34f906a 100644
+--- a/backend/app/providers.py
++++ b/backend/app/providers.py
+@@ -1,137 +1,360 @@
+-import asyncio
+-from collections.abc import Sequence
+-
+-import httpx
+-from pydantic import BaseModel, Field
+-
+-from app.config import Settings
+-
+-
+-class ChatMessage(BaseModel):
+-    role: str = Field(pattern="^(system|user|assistant)$")
+-    content: str = Field(min_length=1)
+-
+-
+-class ProviderHealth(BaseModel):
+-    available: bool
+-    provider: str
+-    model: str
+-    detail: str | None = None
+-
+-
+-class ComponentHealth(BaseModel):
+-    name: str
+-    available: bool
+-    configured: bool = False
+-    detail: str
+-    models: list[str] = []
+-
+-
+-class SystemHealth(BaseModel):
+-    components: list[ComponentHealth]
+-
+-
+-class ProviderError(RuntimeError):
+-    pass
+-
+-
+-class OpenAICompatibleProvider:
+-    def __init__(self, settings: Settings) -> None:
+-        self._settings = settings
+-        self._base_url = str(settings.provider_base_url).rstrip("/")
+-
+-    async def health(self) -> ProviderHealth:
+-        try:
+-            async with httpx.AsyncClient(timeout=self._settings.request_timeout_seconds) as client:
+-                response = await client.get(f"{self._base_url}/models")
+-                response.raise_for_status()
+-                models = response.json().get("data", [])
+-        except (httpx.HTTPError, ValueError) as error:
+-            return ProviderHealth(
+-                available=False,
+-                provider=self._settings.provider,
+-                model=self._settings.model,
+-                detail=str(error),
+-            )
+-
+-        available_models = {item.get("id") for item in models if isinstance(item, dict)}
+-        if self._settings.model not in available_models:
+-            return ProviderHealth(
+-                available=False,
+-                provider=self._settings.provider,
+-                model=self._settings.model,
+-                detail="Configured model was not returned by the provider.",
+-            )
+-
+-        return ProviderHealth(
+-            available=True,
+-            provider=self._settings.provider,
+-            model=self._settings.model,
+-        )
+-
+-    async def chat(self, messages: Sequence[ChatMessage]) -> str:
+-        models = [self._settings.model]
+-        if self._settings.fallback_model and self._settings.fallback_model != self._settings.model:
+-            models.append(self._settings.fallback_model)
+-        errors: list[str] = []
+-        for model in models:
+-            payload = {
+-                "model": model,
+-                "messages": [message.model_dump() for message in messages],
+-                "stream": False,
+-                "max_tokens": self._settings.max_response_tokens,
+-            }
+-            try:
+-                timeout = self._settings.primary_model_timeout_seconds if model == self._settings.model and len(models) > 1 else self._settings.request_timeout_seconds
+-                async with httpx.AsyncClient(timeout=timeout) as client:
+-                    response = await client.post(
+-                        f"{self._base_url}/chat/completions",
+-                        json=payload,
+-                    )
+-                    response.raise_for_status()
+-                    content = response.json()["choices"][0]["message"]["content"]
+-                    break
+-            except (httpx.HTTPError, KeyError, IndexError, TypeError, ValueError) as error:
+-                errors.append(f"{model}: {str(error) or error.__class__.__name__}")
+-        else:
+-            raise ProviderError("The configured model provider did not return a chat response. " + " | ".join(errors))
+-
+-        if not isinstance(content, str) or not content.strip():
+-            raise ProviderError("The configured model provider returned an empty chat response.")
+-        return content
+-
+-
+-async def check_system_health(settings: Settings) -> SystemHealth:
+-    lmstudio_url = settings.provider_base_url if settings.provider == "lmstudio" else settings.lmstudio_base_url
+-    ollama_url = settings.provider_base_url if settings.provider == "ollama" else settings.ollama_base_url
+-    litellm_url = settings.provider_base_url if settings.provider == "litellm" else settings.litellm_base_url
+-    endpoints = [
+-        ("LM Studio", str(lmstudio_url).rstrip("/"), "/models", settings.provider == "lmstudio"),
+-        ("Ollama", str(ollama_url).rstrip("/"), "/api/tags", settings.provider == "ollama"),
+-        ("LiteLLM", str(litellm_url).rstrip("/"), "/models", settings.provider == "litellm"),
+-    ]
+-
+-    async def probe(name: str, base_url: str, path: str, configured: bool) -> ComponentHealth:
+-        try:
+-            async with httpx.AsyncClient(timeout=min(settings.request_timeout_seconds, 3)) as client:
+-                response = await client.get(f"{base_url}{path}")
+-                if name == "LiteLLM" and response.status_code >= 500:
+-                    liveliness = await client.get(f"{base_url.rsplit('/v1', 1)[0]}/health/liveliness")
+-                    liveliness.raise_for_status()
+-                    return ComponentHealth(name=name, available=True, configured=configured, detail=f"Service is alive; model catalog returned HTTP {response.status_code}")
+-                response.raise_for_status()
+-                payload = response.json()
+-        except (httpx.HTTPError, ValueError) as error:
+-            detail = str(error) or error.__class__.__name__.replace("ConnectTimeout", "connection timeout").replace("ConnectError", "connection failed")
+-            return ComponentHealth(name=name, available=False, configured=configured, detail=detail)
+-
+-        if path == "/api/tags":
+-            models = [item.get("name", "") for item in payload.get("models", []) if isinstance(item, dict) and item.get("name")]
+-        else:
+-            models = [item.get("id", "") for item in payload.get("data", []) if isinstance(item, dict) and item.get("id")]
+-        model_detail = f"{len(models)} model(s) reported"
+-        if configured and settings.model not in models:
+-            model_detail += f"; configured model '{settings.model}' not found"
+-        return ComponentHealth(name=name, available=True, configured=configured, detail=model_detail, models=models)
+-
+-    return SystemHealth(components=list(await asyncio.gather(*(probe(*endpoint) for endpoint in endpoints))))
++import asyncio
++import re
++import subprocess
++from collections.abc import Sequence
++from dataclasses import dataclass
++
++import httpx
++import psutil
++from pydantic import BaseModel, Field
++
++from app.config import Settings
++
++
++class ChatMessage(BaseModel):
++    role: str = Field(pattern="^(system|user|assistant)$")
++    content: str = Field(min_length=1)
++
++
++class ProviderFailover(BaseModel):
++    occurred: bool = False
++    requires_acknowledgement: bool = False
++    previous_location: str = ""
++    previous_provider: str = ""
++    previous_model: str = ""
++    active_location: str = ""
++    active_provider: str = ""
++    active_model: str = ""
++    reason: str = ""
++
++
++class ProviderHealth(BaseModel):
++    available: bool
++    provider: str = ""
++    model: str = ""
++    location: str = ""
++    status: str = "initializing"
++    detail: str | None = None
++    recommendation: str | None = None
++
++
++class ComponentHealth(BaseModel):
++    name: str
++    available: bool
++    configured: bool = False
++    detail: str
++    models: list[str] = []
++
++
++class SystemHealth(BaseModel):
++    components: list[ComponentHealth]
++
++
++class ProviderError(RuntimeError):
++    pass
++
++
++@dataclass(frozen=True)
++class ProviderEndpoint:
++    location: str
++    provider: str
++    catalog_url: str
++    chat_url: str
++    api_key: str | None = None
++
++
++@dataclass(frozen=True)
++class ProviderRoute:
++    location: str
++    provider: str
++    model: str
++    chat_url: str
++    api_key: str | None = None
++    size_bytes: int = 0
++
++
++@dataclass(frozen=True)
++class RoutedChatResult:
++    content: str
++    route: ProviderRoute
++    failover: ProviderFailover
++
++
++class OpenAICompatibleProvider:
++    """Remote-first provider discovery and task-aware runtime routing."""
++
++    def __init__(self, settings: Settings) -> None:
++        self._settings = settings
++        self._lock = asyncio.Lock()
++        self._candidates: list[ProviderRoute] = []
++        self._active: ProviderRoute | None = None
++        self._status = "initializing"
++        self._detail = "Preparing AI provider discovery."
++        self._recommendation: str | None = None
++        self._location = ""
++        self._ram_bytes = psutil.virtual_memory().total
++        self._gpu_name, self._gpu_vram_mb = self._detect_gpu()
++
++    async def discover(self, force: bool = False) -> ProviderHealth:
++        async with self._lock:
++            if self._candidates and not force:
++                return self._health()
++
++            self._candidates = []
++            self._active = None
++            if not self._settings.provider_discovery_enabled:
++                self._status = "scanning_configured"
++                self._detail = "Checking the explicitly configured provider."
++                self._candidates = await self._scan_configured_provider()
++            else:
++                self._status = "scanning_remote"
++                self._detail = f"Scanning remote AI services on {self._settings.remote_provider_host}."
++                self._candidates = await self._scan_location("remote")
++                if not self._candidates:
++                    self._status = "scanning_local"
++                    self._detail = "Remote AI services are unavailable. Scanning providers on this computer."
++                    self._candidates = await self._scan_location("local")
++
++            if not self._candidates:
++                self._status = "unavailable"
++                self._detail = "No usable remote or local chat model was discovered."
++                self._recommendation = self._build_recommendation([])
++                return self._health()
++
++            self._candidates.sort(key=lambda route: self._score(route, "general"), reverse=True)
++            self._active = self._candidates[0]
++            self._location = self._active.location
++            self._status = "ready"
++            self._detail = (
++                f"Selected {self._active.location} {self._active.provider} model "
++                f"'{self._active.model}' from {len(self._candidates)} compatible route(s)."
++            )
++            self._recommendation = self._build_recommendation(self._candidates)
++            return self._health()
++
++    async def health(self) -> ProviderHealth:
++        if self._status == "initializing":
++            await self.discover()
++        return self._health()
++
++    async def chat(self, messages: Sequence[ChatMessage]) -> RoutedChatResult:
++        if not self._candidates:
++            await self.discover()
++        if not self._candidates:
++            raise ProviderError(self._detail)
++
++        task = self._classify_task(messages)
++        initial = self._active
++        errors: list[str] = []
++        result = await self._try_routes(self._ranked_candidates(task), messages, errors)
++
++        if result is None and self._location == "remote":
++            self._status = "scanning_local"
++            self._detail = "The remote provider stopped responding. Scanning local fallback providers."
++            local_candidates = await self._scan_location("local")
++            if local_candidates:
++                self._candidates = local_candidates
++                self._location = "local"
++                result = await self._try_routes(self._ranked_candidates(task), messages, errors)
++
++        if result is None:
++            self._status = "unavailable"
++            self._detail = "All discovered provider routes failed. " + " | ".join(errors)
++            raise ProviderError(self._detail)
++
++        content, route = result
++        self._active = route
++        self._status = "ready"
++        self._detail = f"Active route: {route.location} {route.provider} · {route.model}."
++        location_changed = initial is not None and initial.location == "remote" and route.location == "local"
++        route_changed = initial is not None and initial != route
++        failover = ProviderFailover(
++            occurred=route_changed,
++            requires_acknowledgement=location_changed,
++            previous_location=initial.location if initial else "",
++            previous_provider=initial.provider if initial else "",
++            previous_model=initial.model if initial else "",
++            active_location=route.location,
++            active_provider=route.provider,
++            active_model=route.model,
++            reason="The remote route did not complete the request. " + " | ".join(errors) if location_changed else "",
++        )
++        return RoutedChatResult(content=content, route=route, failover=failover)
++
++    def _health(self) -> ProviderHealth:
++        return ProviderHealth(
++            available=self._active is not None and self._status == "ready",
++            provider=self._active.provider if self._active else "",
++            model=self._active.model if self._active else "",
++            location=self._active.location if self._active else self._location,
++            status=self._status,
++            detail=self._detail,
++            recommendation=self._recommendation,
++        )
++
++    def _endpoints(self, location: str) -> list[ProviderEndpoint]:
++        host = self._settings.remote_provider_host if location == "remote" else self._settings.local_provider_host
++        return [
++            ProviderEndpoint(location, "lmstudio", f"http://{host}:1234/v1/models", f"http://{host}:1234/v1/chat/completions"),
++            ProviderEndpoint(location, "ollama", f"http://{host}:11434/api/tags", f"http://{host}:11434/v1/chat/completions"),
++            ProviderEndpoint(location, "litellm", f"http://{host}:4000/v1/models", f"http://{host}:4000/v1/chat/completions", self._settings.litellm_api_key),
++        ]
++
++    async def _scan_location(self, location: str) -> list[ProviderRoute]:
++        results = await asyncio.gather(*(self._probe(endpoint) for endpoint in self._endpoints(location)))
++        return [route for routes in results for route in routes if not self._is_embedding(route.model)]
++
++    async def _scan_configured_provider(self) -> list[ProviderRoute]:
++        base = str(self._settings.provider_base_url).rstrip("/")
++        if not base:
++            return []
++        endpoint = ProviderEndpoint("configured", self._settings.provider, f"{base}/models", f"{base}/chat/completions", self._settings.litellm_api_key if self._settings.provider == "litellm" else None)
++        return await self._probe(endpoint)
++
++    async def _probe(self, endpoint: ProviderEndpoint) -> list[ProviderRoute]:
++        try:
++            async with httpx.AsyncClient(timeout=self._settings.provider_discovery_timeout_seconds) as client:
++                response = await client.get(endpoint.catalog_url, headers=self._headers(endpoint.api_key))
++                response.raise_for_status()
++                payload = response.json()
++        except (httpx.HTTPError, ValueError):
++            return []
++
++        raw_models = payload.get("models", []) if endpoint.provider == "ollama" else payload.get("data", [])
++        routes: list[ProviderRoute] = []
++        for item in raw_models:
++            if not isinstance(item, dict):
++                continue
++            model = item.get("name") if endpoint.provider == "ollama" else item.get("id")
++            if not isinstance(model, str) or not model.strip():
++                continue
++            routes.append(ProviderRoute(endpoint.location, endpoint.provider, model.strip(), endpoint.chat_url, endpoint.api_key, int(item.get("size") or 0)))
++        return routes
++
++    async def _try_routes(self, routes: list[ProviderRoute], messages: Sequence[ChatMessage], errors: list[str]) -> tuple[str, ProviderRoute] | None:
++        for route in routes:
++            payload = {"model": route.model, "messages": [message.model_dump() for message in messages], "stream": False, "max_tokens": self._settings.max_response_tokens}
++            for attempt in range(self._settings.provider_retry_count + 1):
++                try:
++                    async with httpx.AsyncClient(timeout=self._settings.request_timeout_seconds) as client:
++                        response = await client.post(route.chat_url, json=payload, headers=self._headers(route.api_key))
++                        response.raise_for_status()
++                        content = response.json()["choices"][0]["message"]["content"]
++                    if isinstance(content, str) and content.strip():
++                        return content.strip(), route
++                    raise ValueError("empty response")
++                except (httpx.HTTPError, KeyError, IndexError, TypeError, ValueError) as error:
++                    if attempt == self._settings.provider_retry_count:
++                        errors.append(f"{route.location}/{route.provider}/{route.model}: {str(error) or error.__class__.__name__}")
++        return None
++
++    def _ranked_candidates(self, task: str) -> list[ProviderRoute]:
++        ranked = sorted(self._candidates, key=lambda route: self._score(route, task), reverse=True)
++        best_per_provider: list[ProviderRoute] = []
++        selected_providers: set[str] = set()
++        for route in ranked:
++            if route.provider in selected_providers:
++                continue
++            best_per_provider.append(route)
++            selected_providers.add(route.provider)
++        return best_per_provider
++
++    def _score(self, route: ProviderRoute, task: str) -> float:
++        name = route.model.lower()
++        preference = [item.strip().lower() for item in self._settings.provider_preference.split(",") if item.strip()]
++        provider_score = max(0, 8 - (preference.index(route.provider) * 2)) if route.provider in preference else 0
++        match = re.search(r"(?<![\d.])(\d+(?:\.\d+)?)b(?![a-z])", name)
++        parameter_score = min(float(match.group(1)), 40) if match else 4
++        role_score = 0
++        role_tokens = {
++            "code": (("coder", "code", "devstral"), 60),
++            "vision": (("vl", "vision"), 70),
++            "reasoning": (("reason", "deepseek-r1", "gpt-oss"), 55),
++            "fast": (("fast", "0.8b", "1b", "3b", "4b"), 45),
++            "general": (("general", "instruct", "gemma", "llama", "gpt-oss"), 35),
++        }
++        tokens, bonus = role_tokens[task]
++        if any(token in name for token in tokens):
++            role_score += bonus
++        if task != "vision" and any(token in name for token in ("vl", "vision")):
++            role_score -= 15
++        if route.model == self._settings.model:
++            role_score += 25
++        hardware_score = 0
++        if route.location == "local" and route.size_bytes > 0:
++            if self._gpu_vram_mb > 0 and route.size_bytes <= self._gpu_vram_mb * 1024 * 1024 * 0.90:
++                hardware_score += 12
++            elif route.size_bytes <= self._ram_bytes * 0.45:
++                hardware_score += 4
++            else:
++                hardware_score -= 30
++        return role_score + parameter_score + provider_score + hardware_score
++
++    @staticmethod
++    def _classify_task(messages: Sequence[ChatMessage]) -> str:
++        text = messages[-1].content.lower()
++        if any(token in text for token in ("image", "screenshot", "picture", "diagram", "what do you see")):
++            return "vision"
++        if any(token in text for token in ("code", "compile", "debug", "refactor", "function", "class ", ".cs", ".py", "powershell", "repository")):
++            return "code"
++        if any(token in text for token in ("reason step", "analyze", "root cause", "compare", "investigate", "why does")):
++            return "reasoning"
++        if len(text) < 80 and any(token in text for token in ("status", "ping", "hello", "good morning", "time", "date")):
++            return "fast"
++        return "general"
++
++    @staticmethod
++    def _headers(api_key: str | None) -> dict[str, str]:
++        return {"Authorization": f"Bearer {api_key}"} if api_key else {}
++
++    @staticmethod
++    def _is_embedding(model: str) -> bool:
++        lowered = model.lower()
++        return "embed" in lowered or "rerank" in lowered
++
++    def _build_recommendation(self, routes: list[ProviderRoute]) -> str:
++        names = [route.model.lower() for route in routes]
++        missing: list[str] = []
++        if not any(any(token in name for token in ("instruct", "general", "gemma", "llama", "gpt-oss")) for name in names):
++            missing.append("a general instruction model")
++        if not any(any(token in name for token in ("coder", "code", "devstral")) for name in names):
++            missing.append("a coding model")
++        if not any(any(token in name for token in ("vl", "vision")) for name in names):
++            missing.append("a vision-language model")
++        if missing:
++            return "Recommended download: " + ", ".join(missing) + "."
++
++        ram_gb = round(self._ram_bytes / (1024**3))
++        gpu = f"{self._gpu_name}, {self._gpu_vram_mb} MiB" if self._gpu_vram_mb else "GPU unavailable"
++        return f"Model coverage is complete for this system ({ram_gb} GB RAM; {gpu})."
++
++    @staticmethod
++    def _detect_gpu() -> tuple[str, int]:
++        try:
++            result = subprocess.run(["nvidia-smi", "--query-gpu=name,memory.total", "--format=csv,noheader"], capture_output=True, text=True, timeout=2, check=False)
++            if result.returncode == 0 and result.stdout.strip():
++                line = result.stdout.strip().splitlines()[0]
++                name, memory = [value.strip() for value in line.rsplit(",", 1)]
++                match = re.search(r"(\d+)", memory)
++                return name, int(match.group(1)) if match else 0
++        except (OSError, subprocess.SubprocessError):
++            pass
++        return "", 0
++
++
++async def check_system_health(settings: Settings) -> SystemHealth:
++    provider = OpenAICompatibleProvider(settings)
++
++    async def probe(endpoint: ProviderEndpoint) -> ComponentHealth:
++        routes = await provider._probe(endpoint)
++        models = [route.model for route in routes]
++        return ComponentHealth(
++            name=f"{endpoint.location.title()} {endpoint.provider.title()}",
++            available=bool(models),
++            configured=False,
++            detail=f"{len(models)} model(s) reported" if models else "Unavailable or no accessible models",
++            models=models,
++        )
++
++    endpoints = [*provider._endpoints("remote"), *provider._endpoints("local")]
++    return SystemHealth(components=list(await asyncio.gather(*(probe(endpoint) for endpoint in endpoints))))
+diff --git a/backend/tests/test_provider_router.py b/backend/tests/test_provider_router.py
+new file mode 100644
+index 0000000..56e385d
+--- /dev/null
++++ b/backend/tests/test_provider_router.py
+@@ -0,0 +1,74 @@
++import types
++import unittest
++
++from app.config import Settings
++from app.providers import ChatMessage, OpenAICompatibleProvider, ProviderRoute
++
++
++def settings() -> Settings:
++    return Settings(
++        JARVIS_PROVIDER_BASE_URL="http://127.0.0.1:1234/v1",
++        JARVIS_PROVIDER_DISCOVERY_ENABLED=True,
++        JARVIS_LITELLM_API_KEY="sk-test",
++    )
++
++
++class ProviderDiscoveryTests(unittest.IsolatedAsyncioTestCase):
++    async def test_remote_routes_are_preferred_without_scanning_local(self) -> None:
++        router = OpenAICompatibleProvider(settings())
++        locations: list[str] = []
++
++        async def scan(_self, location: str):
++            locations.append(location)
++            return [ProviderRoute(location, "ollama", "gpt-oss:20b", "http://chat")]
++
++        router._scan_location = types.MethodType(scan, router)
++        health = await router.discover()
++
++        self.assertTrue(health.available)
++        self.assertEqual("remote", health.location)
++        self.assertEqual(["remote"], locations)
++
++    async def test_local_routes_are_scanned_when_remote_is_unavailable(self) -> None:
++        router = OpenAICompatibleProvider(settings())
++
++        async def scan(_self, location: str):
++            if location == "remote":
++                return []
++            return [ProviderRoute("local", "lmstudio", "gemma-4-e4b-it-qat", "http://chat")]
++
++        router._scan_location = types.MethodType(scan, router)
++        health = await router.discover()
++
++        self.assertTrue(health.available)
++        self.assertEqual("local", health.location)
++
++    async def test_remote_request_failure_recovers_locally_and_requires_acknowledgement(self) -> None:
++        router = OpenAICompatibleProvider(settings())
++        remote = ProviderRoute("remote", "lmstudio", "remote-model", "http://remote/chat")
++        local = ProviderRoute("local", "ollama", "local-model", "http://local/chat")
++        router._candidates = [remote]
++        router._active = remote
++        router._location = "remote"
++        router._status = "ready"
++
++        async def scan(_self, location: str):
++            return [local] if location == "local" else [remote]
++
++        async def try_routes(_self, routes, _messages, errors):
++            if routes[0].location == "remote":
++                errors.append("remote unavailable")
++                return None
++            return "recovered", routes[0]
++
++        router._scan_location = types.MethodType(scan, router)
++        router._try_routes = types.MethodType(try_routes, router)
++        result = await router.chat([ChatMessage(role="user", content="hello")])
++
++        self.assertEqual("recovered", result.content)
++        self.assertEqual("local", result.route.location)
++        self.assertTrue(result.failover.requires_acknowledgement)
++
++
++if __name__ == "__main__":
++    unittest.main()
+diff --git a/desktop/Jarvis.Desktop/MainWindow.xaml b/desktop/Jarvis.Desktop/MainWindow.xaml
+index b39c8ed..050e87b 100644
+--- a/desktop/Jarvis.Desktop/MainWindow.xaml
++++ b/desktop/Jarvis.Desktop/MainWindow.xaml
+@@ -47,7 +47,22 @@
+     </StackPanel></ScrollViewer>
+    </Grid>
+    <StatusBar Grid.Row="2" Background="Transparent" Foreground="{StaticResource Dim}" BorderBrush="#3438C9EA" BorderThickness="0,1,0,0"><StatusBarItem><TextBlock x:Name="ConnectionText" Text="Local command center Â· backend ready" FontSize="9"/></StatusBarItem><Separator/><StatusBarItem><TextBlock Text="CORE: LOCAL  Â·  VOICE: STANDBY" FontSize="9"/></StatusBarItem><StatusBarItem HorizontalContentAlignment="Right"><TextBlock Text="OPERATOR AUTHORITY CONFIRMED" Foreground="{StaticResource Cyan}" FontSize="9" FontWeight="Bold"/></StatusBarItem></StatusBar>
+-  </Grid>
+- </Grid>
+-</Window>
++  </Grid>
++  <Border x:Name="ProviderTransitionOverlay" Grid.RowSpan="3" Panel.ZIndex="200" Background="#E8030A0F" Visibility="Collapsed">
++   <Grid>
++    <Border Width="610" Padding="28" HorizontalAlignment="Center" VerticalAlignment="Center" Background="#F20A1821" BorderBrush="#FFB84D" BorderThickness="1" CornerRadius="3">
++     <StackPanel>
++      <TextBlock Text="REMOTE AI PROVIDER LOST" Foreground="#FFB84D" FontSize="11" FontWeight="Bold"/>
++      <TextBlock Text="PROVIDER FAILOVER ACTIVATED" Foreground="{StaticResource Cyan}" FontSize="24" FontWeight="Light" Margin="0,10,0,14"/>
++      <TextBlock x:Name="ProviderTransitionText" Foreground="{StaticResource Text}" FontSize="13" TextWrapping="Wrap" LineHeight="21"/>
++      <Border BorderBrush="#6658DDF5" BorderThickness="1,0,0,0" Padding="12,4" Margin="0,18,0,18">
++       <TextBlock Text="The command interface is paused until the operator acknowledges this provider transition." Foreground="{StaticResource Dim}" FontSize="10" TextWrapping="Wrap"/>
++      </Border>
++      <Button Content="ACKNOWLEDGE AND CONTINUE" Click="AcknowledgeProviderTransitionButton_Click" HorizontalAlignment="Right" Margin="0" Padding="18,9"/>
++     </StackPanel>
++    </Border>
++   </Grid>
++  </Border>
++ </Grid>
++</Window>
+ 
+diff --git a/desktop/Jarvis.Desktop/MainWindow.xaml.cs b/desktop/Jarvis.Desktop/MainWindow.xaml.cs
+index 3823fe3..d537219 100644
+--- a/desktop/Jarvis.Desktop/MainWindow.xaml.cs
++++ b/desktop/Jarvis.Desktop/MainWindow.xaml.cs
+@@ -25,8 +25,9 @@ public partial class MainWindow : Window
+     private UIElement? _nativeAvatarVisual;
+     private WebView2? _inlineAvatarWebView;
+     private bool _inlineAvatarReady;
+-    private bool _commandInProgress;
+-    private CancellationTokenSource? _voiceCaptureCancellation;
++    private bool _commandInProgress;
++    private CancellationTokenSource? _voiceCaptureCancellation;
++    private TaskCompletionSource<bool>? _providerTransitionAcknowledgement;
+ 
+     public MainWindow()
+     {
+@@ -46,7 +47,7 @@ public partial class MainWindow : Window
+         {
+             await _avatarService.InitializeAsync();
+             await InitializeInlineAvatarAsync();
+-            await LoadProviderHealthAsync();
++            await WaitForProviderReadyAsync();
+             await LoadSystemHealthAsync();
+             await LoadSessionAsync();
+             await LoadMonitoringAsync();
+@@ -80,7 +81,8 @@ public partial class MainWindow : Window
+     {
+         var command = CommandInput.Text.Trim();
+         if (command.Length == 0 || _commandInProgress) return;
+-        _commandInProgress = true;
++        _commandInProgress = true;
++        var commandInterfaceAvailable = true;
+         await _speechRecognition.StopWakePhraseAsync();
+         var speechDurationMs = 0;
+         _messages.Add(new ChatMessage { Role = "user", Content = command });
+@@ -91,10 +93,14 @@ public partial class MainWindow : Window
+         await SetInlineAvatarStateAsync("thinking", "Thinking");
+         try
+         {
+-            var response = await _client.ChatAsync(_messages, _attachedFileIds, CancellationToken.None);
+-            _messages.Add(new ChatMessage { Role = "assistant", Content = response.Content });
+-            ConversationList.Items.Add($"Jarvis  Â·  {response.Content}");
+-            ConnectionText.Text = $"Local command center Â· {response.Model}";
++            var response = await _client.ChatAsync(_messages, _attachedFileIds, CancellationToken.None);
++            if (response.Failover.RequiresAcknowledgement)
++            {
++                await ShowProviderTransitionAsync(response.Failover);
++            }
++            _messages.Add(new ChatMessage { Role = "assistant", Content = response.Content });
++            ConversationList.Items.Add($"Jarvis  Â·  {response.Content}");
++            ConnectionText.Text = $"{response.Location.ToUpperInvariant()} command center Â· {response.Provider} Â· {response.Model}";
+             AvatarStatusText.Text = "SPEAKING";
+             await _avatarService.SetStateAsync(AvatarVisualState.Speaking);
+             await SetInlineAvatarStateAsync("speaking", "Speaking");
+@@ -110,15 +116,17 @@ public partial class MainWindow : Window
+                 await PlayInlineSpeechAsync(speechResult);
+             }
+         }
+-        catch (Exception error)
+-        {
+-            ConversationList.Items.Add($"Jarvis  Â·  The local assistant service is unavailable: {error.Message}");
++        catch (Exception error)
++        {
++            commandInterfaceAvailable = false;
++            ConversationList.Items.Add($"Jarvis  Â·  The local assistant service is unavailable: {error.Message}");
+             ConnectionText.Text = "Local command center Â· backend unavailable";
+             await _avatarService.SetStateAsync(AvatarVisualState.Offline);
+         }
+         finally
+         {
+-            CommandInput.IsEnabled = true;
++            CommandInput.IsEnabled = commandInterfaceAvailable;
++            VoiceInputButton.IsEnabled = commandInterfaceAvailable;
+             AvatarStatusText.Text = "READY FOR COMMANDS";
+             await _avatarService.SetStateAsync(AvatarVisualState.Idle);
+             await SetInlineAvatarStateAsync("ready", "Ready for commands");
+@@ -655,7 +663,7 @@ public partial class MainWindow : Window
+         catch (Exception error) { ConnectionText.Text = $"Alert resolution failed: {error.Message}"; }
+     }
+ 
+-    private async Task LoadProviderHealthAsync()
++    private async Task LoadProviderHealthAsync()
+     {
+         try
+         {
+@@ -663,7 +671,61 @@ public partial class MainWindow : Window
+             ConnectionText.Text = health.Available ? $"Local command center Â· {health.Provider} Â· {health.Model}" : $"Local command center Â· provider unavailable Â· {health.Detail}";
+         }
+         catch (Exception error) { ConnectionText.Text = $"Local command center Â· provider health unavailable: {error.Message}"; }
+-    }
++    }
++
++    private async Task WaitForProviderReadyAsync()
++    {
++        CommandInput.IsEnabled = false;
++        VoiceInputButton.IsEnabled = false;
++        AvatarStatusText.Text = "SCANNING AI PROVIDERS";
++        for (var attempt = 0; attempt < 90; attempt++)
++        {
++            try
++            {
++                var health = await _client.GetProviderHealthAsync(CancellationToken.None);
++                ConnectionText.Text = health.Detail.Length > 0 ? health.Detail : "Scanning AI providers...";
++                if (health.Status == "ready" && health.Available)
++                {
++                    ConnectionText.Text = $"{health.Location.ToUpperInvariant()} command center Â· {health.Provider} Â· {health.Model}";
++                    if (!string.IsNullOrWhiteSpace(health.Recommendation))
++                    {
++                        ConversationList.Items.Add($"Provider analysis  Â·  {health.Recommendation}");
++                    }
++                    CommandInput.IsEnabled = true;
++                    VoiceInputButton.IsEnabled = true;
++                    AvatarStatusText.Text = "READY FOR COMMANDS";
++                    return;
++                }
++                if (health.Status == "unavailable") break;
++            }
++            catch (Exception error)
++            {
++                ConnectionText.Text = $"Waiting for provider discovery Â· {error.Message}";
++            }
++            await Task.Delay(500);
++        }
++        ConnectionText.Text = "AI providers unavailable Â· check local services and diagnostics";
++        AvatarStatusText.Text = "PROVIDER OFFLINE";
++    }
++
++    private async Task ShowProviderTransitionAsync(ProviderFailover failover)
++    {
++        _providerTransitionAcknowledgement = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
++        ProviderTransitionText.Text =
++            $"Previous route: {failover.PreviousLocation.ToUpperInvariant()} Â· {failover.PreviousProvider} Â· {failover.PreviousModel}\n\n" +
++            $"Active fallback: {failover.ActiveLocation.ToUpperInvariant()} Â· {failover.ActiveProvider} Â· {failover.ActiveModel}\n\n" +
++            failover.Reason;
++        ProviderTransitionOverlay.Visibility = Visibility.Visible;
++        ProviderTransitionOverlay.Focus();
++        await _providerTransitionAcknowledgement.Task;
++    }
++
++    private void AcknowledgeProviderTransitionButton_Click(object sender, RoutedEventArgs e)
++    {
++        ProviderTransitionOverlay.Visibility = Visibility.Collapsed;
++        _providerTransitionAcknowledgement?.TrySetResult(true);
++        _providerTransitionAcknowledgement = null;
++    }
+ 
+     private async Task LoadSystemHealthAsync()
+     {
+diff --git a/desktop/Jarvis.Desktop/MonitoringClient.cs b/desktop/Jarvis.Desktop/MonitoringClient.cs
+index b50fe62..c439f94 100644
+--- a/desktop/Jarvis.Desktop/MonitoringClient.cs
++++ b/desktop/Jarvis.Desktop/MonitoringClient.cs
+@@ -162,12 +162,15 @@ public sealed class ChatRequest
+     [JsonPropertyName("attachment_ids")] public IReadOnlyList<int> AttachmentIds { get; set; } = [];
+ }
+ 
+-public sealed class ProviderHealth
+-{
+-    public bool Available { get; set; }
+-    public string Provider { get; set; } = string.Empty;
+-    public string Model { get; set; } = string.Empty;
+-    public string Detail { get; set; } = string.Empty;
++public sealed class ProviderHealth
++{
++    public bool Available { get; set; }
++    public string Provider { get; set; } = string.Empty;
++    public string Model { get; set; } = string.Empty;
++    public string Location { get; set; } = string.Empty;
++    public string Status { get; set; } = "initializing";
++    public string Detail { get; set; } = string.Empty;
++    public string? Recommendation { get; set; }
+ }
+ 
+ public sealed class SystemHealth
+@@ -198,11 +201,27 @@ public sealed class FileContent
+     public string? Content { get; set; }
+ }
+ 
+-public sealed class ChatResponse
+-{
+-    public string Model { get; set; } = string.Empty;
+-    public string Content { get; set; } = string.Empty;
+-}
++public sealed class ChatResponse
++{
++    public string Model { get; set; } = string.Empty;
++    public string Content { get; set; } = string.Empty;
++    public string Provider { get; set; } = string.Empty;
++    public string Location { get; set; } = string.Empty;
++    public ProviderFailover Failover { get; set; } = new();
++}
++
++public sealed class ProviderFailover
++{
++    public bool Occurred { get; set; }
++    [JsonPropertyName("requires_acknowledgement")] public bool RequiresAcknowledgement { get; set; }
++    [JsonPropertyName("previous_location")] public string PreviousLocation { get; set; } = string.Empty;
++    [JsonPropertyName("previous_provider")] public string PreviousProvider { get; set; } = string.Empty;
++    [JsonPropertyName("previous_model")] public string PreviousModel { get; set; } = string.Empty;
++    [JsonPropertyName("active_location")] public string ActiveLocation { get; set; } = string.Empty;
++    [JsonPropertyName("active_provider")] public string ActiveProvider { get; set; } = string.Empty;
++    [JsonPropertyName("active_model")] public string ActiveModel { get; set; } = string.Empty;
++    public string Reason { get; set; } = string.Empty;
++}
+ 
+ public sealed class SessionState
+ {

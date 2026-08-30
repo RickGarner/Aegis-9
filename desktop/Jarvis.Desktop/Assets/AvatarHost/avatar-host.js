@@ -14,10 +14,12 @@ let currentAnalyser = null;
 let amplitudeTimer = null;
 let blinkTimer = null;
 let speakingTimer = null;
+let eyePulseTimer = null;
+let speechCueTimers = [];
 let morphTargetNames = {};
 let animationNames = {};
 
-nameEl.textContent = "JARVIS AVATAR";
+nameEl.textContent = "A.E.G.I.S.-9";
 metaEl.textContent = "Runtime initialized";
 attributionEl.textContent = "";
 
@@ -33,24 +35,40 @@ const setBadgeClass = (name) => {
   stateBadgeEl.classList.add(name);
 };
 
+const setRuntimeStateClass = (state) => {
+  for (const className of Array.from(document.body.classList)) {
+    if (className.startsWith("runtime-")) {
+      document.body.classList.remove(className);
+    }
+  }
+  document.body.classList.add(`runtime-${state}`);
+};
+
 const applyState = (state, detail) => {
   const normalized = (state || "ready").toString().toLowerCase();
   const map = {
     loading: { label: "LOADING", text: "Loading", badge: "state-thinking" },
     thinking: { label: "THINKING", text: "Thinking", badge: "state-thinking" },
     speaking: { label: "SPEAKING", text: "Speaking", badge: "state-speaking" },
+    listening: { label: "LISTENING", text: "Listening", badge: "state-ready" },
+    idle: { label: "READY", text: "Ready for commands", badge: "state-ready" },
+    error: { label: "FAULT", text: "Attention required", badge: "state-unavailable" },
+    offline: { label: "OFFLINE", text: "System link offline", badge: "state-unavailable" },
     ready: { label: "READY", text: "Ready for commands", badge: "state-ready" },
     unavailable: { label: "OFFLINE", text: "Unavailable", badge: "state-unavailable" }
   };
   const resolved = map[normalized] || map.ready;
+  setRuntimeStateClass(normalized);
   playAnimation(resolved.animation || animationNames[normalized] || animationNames.idle, normalized === "thinking" || normalized === "speaking");
   stateBadgeEl.textContent = resolved.label;
   stateEl.textContent = resolved.text;
   setBadgeClass(resolved.badge);
   if (normalized === "speaking") {
     startSpeakingMotion();
+    startEyePulse();
   } else if (normalized !== "loading") {
     stopSpeakingMotion();
+    stopEyePulse();
   }
   if (detail && typeof detail === "string" && detail.trim().length > 0) {
     metaEl.textContent = detail;
@@ -105,7 +123,25 @@ const stopSpeech = () => {
     currentAudioContext = null;
   }
   currentAnalyser = null;
+  for (const timer of speechCueTimers) {
+    clearTimeout(timer);
+  }
+  speechCueTimers = [];
+  document.documentElement.style.setProperty("--speech-energy", "0");
   stopSpeakingMotion();
+  stopEyePulse();
+};
+
+const scheduleSpeechCues = (cues) => {
+  if (!Array.isArray(cues)) {
+    return;
+  }
+  for (const cue of cues) {
+    const target = morphTargetNames[cue.viseme] || cue.viseme;
+    const delay = Math.max(0, Number(cue.timeMs) || 0);
+    const weight = Math.max(0, Math.min(1, Number(cue.weight) || 0));
+    speechCueTimers.push(setTimeout(() => setMorphTarget(target, weight), delay));
+  }
 };
 
 const forEachMorphMesh = (callback) => {
@@ -182,6 +218,45 @@ const startSpeakingMotion = () => {
   }, 90);
 };
 
+const setEyeEmission = (red, green, blue) => {
+  const isEyeMaterial = (material) => String(material?.name || "").toLowerCase().includes("jarvis_eyes");
+  for (const material of Array.from(viewer?.model?.materials || []).filter(isEyeMaterial)) {
+    if (typeof material.setEmissiveFactor === "function") {
+      material.setEmissiveFactor([red, green, blue]);
+    }
+  }
+
+  const scene = viewer?.model?.scene;
+  if (!scene || typeof scene.traverse !== "function") return;
+  scene.traverse((node) => {
+    const materials = Array.isArray(node.material) ? node.material : [node.material];
+    for (const material of materials.filter(isEyeMaterial)) {
+      if (material?.emissive?.setRGB) {
+        material.emissive.setRGB(red, green, blue);
+        material.emissiveIntensity = 1.15;
+        material.needsUpdate = true;
+      }
+    }
+  });
+};
+
+const stopEyePulse = () => {
+  if (eyePulseTimer) {
+    clearInterval(eyePulseTimer);
+    eyePulseTimer = null;
+  }
+  setEyeEmission(1.0, 0.55, 0.0);
+};
+
+const startEyePulse = () => {
+  stopEyePulse();
+  const started = performance.now();
+  eyePulseTimer = setInterval(() => {
+    const blend = (Math.sin((performance.now() - started) / 260) + 1) / 2;
+    setEyeEmission(1.0, 0.55 * (1 - blend) + 0.03 * blend, 0.005);
+  }, 45);
+};
+
 const applyExpression = (expression, intensity) => {
   const amount = Math.max(0, Math.min(1, Number(intensity) || 1));
   if (expression === "happy" || expression === "smile") {
@@ -215,7 +290,7 @@ const startAmplitudeTracking = () => {
     const intensity = Math.min(1, Math.max(0, amplitude * 3));
     const modelViewer = viewer;
     if (modelViewer) {
-      modelViewer.style.filter = `brightness(${1 + intensity * 0.18})`;
+      document.documentElement.style.setProperty("--speech-energy", intensity.toFixed(3));
     }
   }, 60);
 };
@@ -256,6 +331,8 @@ const loadAvatarFromManifest = async (manifestUrl, selectedAvatarId, compact = f
   }
   modelViewer.src = "";
   modelViewer.src = modelUrl;
+  modelViewer.cameraControls = !compact;
+  modelViewer.interactionPrompt = compact ? "none" : "auto";
   modelViewer.fieldOfView = compact ? "24deg" : "28deg";
   modelViewer.minFieldOfView = "16deg";
   modelViewer.maxFieldOfView = "36deg";
@@ -280,7 +357,7 @@ const loadAvatarFromManifest = async (manifestUrl, selectedAvatarId, compact = f
   modelViewer.addEventListener("load", () => {
     scheduleBlink();
   }, { once: true });
-  nameEl.textContent = String(manifest.displayName || selectedAvatarId || "Jarvis Avatar").toUpperCase();
+  nameEl.textContent = String(manifest.displayName || selectedAvatarId || "A.E.G.I.S.-9").toUpperCase();
   attributionEl.textContent = manifest.attribution ? `Attribution: ${manifest.attribution}` : "";
   metaEl.textContent = `Model format: ${format}`;
   fallback.classList.add("hidden");
@@ -341,9 +418,9 @@ const handleEnvelope = async (envelope) => {
         currentAnalyser.connect(currentAudioContext.destination);
         startAmplitudeTracking();
         startSpeakingMotion();
+        scheduleSpeechCues(payload.cues);
         currentAudio.onended = () => {
           stopSpeech();
-          viewer?.style.setProperty("filter", "none");
           applyState("ready", "Speech playback complete");
         };
         await currentAudio.play();
@@ -351,7 +428,6 @@ const handleEnvelope = async (envelope) => {
       }
       case "avatar.speech.stop": {
         stopSpeech();
-        viewer?.style.setProperty("filter", "none");
         applyState("ready", "Speech cancelled");
         break;
       }

@@ -42,6 +42,21 @@ class Settings(BaseSettings):
     lmstudio_base_url: str = Field(default="http://127.0.0.1:1234/v1", validation_alias="JARVIS_LMSTUDIO_BASE_URL")
     ollama_base_url: str = Field(default="http://127.0.0.1:11434", validation_alias="JARVIS_OLLAMA_BASE_URL")
     litellm_base_url: str = Field(default="http://127.0.0.1:4000/v1", validation_alias="JARVIS_LITELLM_BASE_URL")
+    litellm_api_key: str | None = Field(default=None, validation_alias="JARVIS_LITELLM_API_KEY")
+    remote_provider_host: str = Field(default="10.30.75.229", validation_alias="JARVIS_REMOTE_PROVIDER_HOST")
+    local_provider_host: str = Field(default="127.0.0.1", validation_alias="JARVIS_LOCAL_PROVIDER_HOST")
+    provider_discovery_enabled: bool = Field(default=True, validation_alias="JARVIS_PROVIDER_DISCOVERY_ENABLED")
+    provider_discovery_timeout_seconds: float = Field(
+        default=2.5,
+        ge=0.5,
+        le=15,
+        validation_alias="JARVIS_PROVIDER_DISCOVERY_TIMEOUT_SECONDS",
+    )
+    provider_retry_count: int = Field(default=1, ge=0, le=3, validation_alias="JARVIS_PROVIDER_RETRY_COUNT")
+    provider_preference: str = Field(
+        default="lmstudio,ollama,litellm",
+        validation_alias="JARVIS_PROVIDER_PREFERENCE",
+    )
     fallback_model: str | None = Field(
         default="qwen2.5-coder-7b-instruct",
         validation_alias="JARVIS_FALLBACK_MODEL",
@@ -62,6 +77,9 @@ class Settings(BaseSettings):
         le=120,
         validation_alias="JARVIS_PRIMARY_MODEL_TIMEOUT_SECONDS",
     )
+    whisper_model: str = Field(default="small.en", validation_alias="JARVIS_WHISPER_MODEL")
+    whisper_device: str = Field(default="auto", validation_alias="JARVIS_WHISPER_DEVICE")
+    whisper_compute_type: str = Field(default="auto", validation_alias="JARVIS_WHISPER_COMPUTE_TYPE")
     database_path: Path = Field(
         default=Path(__file__).resolve().parents[2] / "storage" / "jarvis.db",
         validation_alias="JARVIS_DATABASE_PATH",

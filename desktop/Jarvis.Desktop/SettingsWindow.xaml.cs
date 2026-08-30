@@ -25,6 +25,11 @@ public partial class SettingsWindow : Window
         FemaleVoiceInput.Text = _preferences.FemaleVoiceId;
         UseThreeDAvatarCheckBox.IsChecked = _preferences.UseThreeDimensionalAvatar;
         EnableLipSyncCheckBox.IsChecked = _preferences.EnableLipSync;
+        AutoSubmitVoiceCheckBox.IsChecked = _preferences.AutoSubmitVoiceCommands;
+        EnableWakePhraseCheckBox.IsChecked = _preferences.EnableWakePhrase;
+        WakePhraseInput.Text = _preferences.WakePhrase;
+        EnableStartupNotificationsCheckBox.IsChecked = _preferences.EnableStartupNotifications;
+        EnableVoiceResponsesCheckBox.IsChecked = _preferences.EnableVoiceResponses;
     }
 
     private void SettingsWindow_Loaded(object sender, RoutedEventArgs e)
@@ -106,7 +111,7 @@ public partial class SettingsWindow : Window
         var speechService = new KokoroSpeechService(_options.Speech);
         var result = await speechService.SynthesizeAsync(new SpeechRequest
         {
-            Text = "Jarvis voice preview is ready.",
+            Text = "Aegis 9 voice preview is ready. F.E.R.A.L. neural core synchronized.",
             VoiceId = voice,
             Speed = _options.Speech.Speed,
         }, CancellationToken.None);
@@ -126,7 +131,7 @@ public partial class SettingsWindow : Window
     private void ApplyPreferences()
     {
         _preferences.EnterSendsMessage = EnterSendsMessageCheckBox.IsChecked == true;
-        _preferences.AvatarName = string.IsNullOrWhiteSpace(AvatarNameInput.Text) ? "Jarvis" : AvatarNameInput.Text.Trim();
+        _preferences.AvatarName = string.IsNullOrWhiteSpace(AvatarNameInput.Text) ? "A.E.G.I.S.-9" : AvatarNameInput.Text.Trim();
         _preferences.AvatarTheme = AvatarThemeInput.SelectedValue as string ?? "Emerald";
         _preferences.AvatarProfile = AvatarProfileInput.SelectedValue as string ?? "male";
         _preferences.SelectedAvatarId = AvatarChoiceInput.SelectedValue as string ?? "jarvis-male-dev";
@@ -134,6 +139,11 @@ public partial class SettingsWindow : Window
         _preferences.FemaleVoiceId = string.IsNullOrWhiteSpace(FemaleVoiceInput.Text) ? "af_heart" : FemaleVoiceInput.Text.Trim();
         _preferences.UseThreeDimensionalAvatar = UseThreeDAvatarCheckBox.IsChecked == true;
         _preferences.EnableLipSync = EnableLipSyncCheckBox.IsChecked == true;
+        _preferences.AutoSubmitVoiceCommands = AutoSubmitVoiceCheckBox.IsChecked == true;
+        _preferences.EnableWakePhrase = EnableWakePhraseCheckBox.IsChecked == true;
+        _preferences.WakePhrase = string.IsNullOrWhiteSpace(WakePhraseInput.Text) ? "AEGIS-9" : WakePhraseInput.Text.Trim();
+        _preferences.EnableStartupNotifications = EnableStartupNotificationsCheckBox.IsChecked == true;
+        _preferences.EnableVoiceResponses = EnableVoiceResponsesCheckBox.IsChecked == true;
     }
 
     protected override void OnClosed(EventArgs e)

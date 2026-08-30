@@ -2,6 +2,7 @@ import asyncio
 import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
+from tempfile import gettempdir
 
 from fastapi import Depends, FastAPI, File, HTTPException, UploadFile, status
 from pydantic import BaseModel, Field
@@ -9,7 +10,8 @@ from pydantic import BaseModel, Field
 from app.artifacts import try_create_requested_artifact
 from app.config import Settings, get_settings
 from app.files import UnsupportedFileTypeError, extract_text, is_supported
-from app.providers import ChatMessage, OpenAICompatibleProvider, ProviderError, ProviderHealth, SystemHealth, check_system_health
+from app.providers import ChatMessage, OpenAICompatibleProvider, ProviderError, ProviderFailover, ProviderHealth, SystemHealth, check_system_health
+from app.speech_recognition import LocalWhisperService
 from app.monitoring import (
     MonitoringActionRequest,
     MonitoringActionResult,
@@ -29,6 +31,9 @@ class ChatRequest(BaseModel):
 class ChatResponse(BaseModel):
     model: str
     content: str
+    provider: str = ""
+    location: str = ""
+    failover: ProviderFailover = Field(default_factory=ProviderFailover)
 
 
 class ApprovalRequest(BaseModel):
@@ -45,12 +50,20 @@ class WorkflowActionRequest(BaseModel):
     action: str = Field(pattern="^(pause|resume|stop)$")
 
 
+class SpeechTranscriptionResponse(BaseModel):
+    text: str
+    language: str
+    confidence: float
+    detail: str
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     settings = get_settings()
     app.state.settings = settings
     app.state.store = JarvisStore(settings.database_path)
     app.state.store.initialize()
+    app.state.speech_recognition = LocalWhisperService(settings)
     app.state.monitoring = MonitoringCollector(
         MonitoringStore(app.state.store._connect),
         settings.upload_dir,
@@ -70,7 +83,7 @@ async def lifespan(app: FastAPI):
     await asyncio.gather(monitoring_task, return_exceptions=True)
 
 
-app = FastAPI(title="Jarvis API", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="A.E.G.I.S.-9 API", version="0.1.0", lifespan=lifespan)
 
 
 def get_provider(settings: Settings = Depends(get_settings)) -> OpenAICompatibleProvider:
@@ -83,6 +96,10 @@ def get_store() -> JarvisStore:
 
 def get_monitoring() -> MonitoringCollector:
     return app.state.monitoring
+
+
+def get_speech_recognition() -> LocalWhisperService:
+    return app.state.speech_recognition
 
 
 def get_workflow_capacity_from_settings(
@@ -113,6 +130,50 @@ async def system_health(
 @app.get("/api/session", response_model=SessionState)
 async def session(store: JarvisStore = Depends(get_store)) -> SessionState:
     return store.get_session()
+
+
+@app.post("/api/speech/transcribe", response_model=SpeechTranscriptionResponse)
+async def transcribe_speech(
+    file: UploadFile = File(...),
+    settings: Settings = Depends(get_settings),
+    speech_recognition: LocalWhisperService = Depends(get_speech_recognition),
+) -> SpeechTranscriptionResponse:
+    filename = file.filename or ""
+    if Path(filename).suffix.lower() != ".wav":
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail="Local speech transcription accepts WAV audio only.",
+        )
+
+    contents = await file.read(settings.max_upload_bytes + 1)
+    if not contents:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="The audio recording is empty.")
+    if len(contents) > settings.max_upload_bytes:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="The audio recording exceeds the configured upload size limit.",
+        )
+
+    temporary_directory = Path(gettempdir()) / "Aegis9" / "VoiceInput"
+    temporary_directory.mkdir(parents=True, exist_ok=True)
+    temporary_path = temporary_directory / f"speech-{uuid.uuid4().hex}.wav"
+    try:
+        temporary_path.write_bytes(contents)
+        transcription = await asyncio.to_thread(speech_recognition.transcribe, temporary_path)
+    except (OSError, RuntimeError, ValueError) as error:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Local Whisper transcription is unavailable: {error}",
+        ) from error
+    finally:
+        temporary_path.unlink(missing_ok=True)
+
+    return SpeechTranscriptionResponse(
+        text=transcription.text,
+        language=transcription.language,
+        confidence=transcription.confidence,
+        detail=f"Transcribed locally with Whisper on {transcription.runtime}.",
+    )
 
 
 @app.get("/api/monitoring", response_model=MonitoringDashboard)
@@ -322,7 +383,12 @@ async def chat(
         )
         assistant_message = ChatMessage(role="assistant", content=content)
         store.record_chat(latest_user_message, assistant_message)
-        return ChatResponse(model="local-artifact-generator", content=content)
+        return ChatResponse(
+            model="local-artifact-generator",
+            content=content,
+            provider="aegis9",
+            location="local",
+        )
 
     outgoing_messages = list(request.messages)
     if request.attachment_ids:
@@ -338,13 +404,19 @@ async def chat(
             ]
 
     try:
-        content = await provider.chat(outgoing_messages)
+        routed_result = await provider.chat(outgoing_messages)
     except ProviderError as error:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=str(error),
         ) from error
 
-    assistant_message = ChatMessage(role="assistant", content=content)
+    assistant_message = ChatMessage(role="assistant", content=routed_result.content)
     store.record_chat(request.messages[-1], assistant_message)
-    return ChatResponse(model=settings.model, content=content)
+    return ChatResponse(
+        model=routed_result.route.model,
+        content=routed_result.content,
+        provider=routed_result.route.provider,
+        location=routed_result.route.location,
+        failover=routed_result.failover,
+    )

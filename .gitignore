@@ -28,6 +28,22 @@ logs/
 storage/
 workspace/
 
+# Local migration/install bundles and recovery copies
+/--project
+/.install-backups/
+/.package-install/
+/TestScripts/
+/voice-ui-backup-*/
+/jarvis-routing-*/
+/jarvis-avatar-motion-window-controls/
+/jarvis-fast-eye-rig/
+/jarvis-five-ui-upgrade/
+/jarvis-natural-avatar-motion/
+/*.zip
+/patches/*.zip
+/install-aegis9-*.ps1
+/install-jarvis-natural-avatar-motion.ps1
+
 # Local avatar source downloads
 resources/
 

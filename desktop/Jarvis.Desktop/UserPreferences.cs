@@ -6,7 +6,7 @@ namespace Jarvis.Desktop;
 public sealed class UserPreferences
 {
     public bool EnterSendsMessage { get; set; } = true;
-    public string AvatarName { get; set; } = "Jarvis";
+    public string AvatarName { get; set; } = "A.E.G.I.S.-9";
     public string AvatarTheme { get; set; } = "Emerald";
     public string AvatarProfile { get; set; } = "male";
     public bool UseThreeDimensionalAvatar { get; set; } = true;
@@ -14,6 +14,11 @@ public sealed class UserPreferences
     public string MaleVoiceId { get; set; } = "am_fenrir";
     public string FemaleVoiceId { get; set; } = "af_heart";
     public bool EnableLipSync { get; set; } = true;
+    public bool EnableWakePhrase { get; set; }
+    public bool AutoSubmitVoiceCommands { get; set; } = true;
+    public string WakePhrase { get; set; } = "AEGIS-9";
+    public bool EnableStartupNotifications { get; set; } = true;
+    public bool EnableVoiceResponses { get; set; } = true;
 
     private static string PreferencesPath => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Jarvis", "settings.json");
 
@@ -23,7 +28,10 @@ public sealed class UserPreferences
         {
             if (File.Exists(PreferencesPath))
             {
-                return JsonSerializer.Deserialize<UserPreferences>(File.ReadAllText(PreferencesPath)) ?? new UserPreferences();
+                var preferences = JsonSerializer.Deserialize<UserPreferences>(File.ReadAllText(PreferencesPath)) ?? new UserPreferences();
+                if (preferences.AvatarName.Equals("Jarvis", StringComparison.OrdinalIgnoreCase)) preferences.AvatarName = "A.E.G.I.S.-9";
+                if (preferences.WakePhrase.Equals("Jarvis", StringComparison.OrdinalIgnoreCase)) preferences.WakePhrase = "AEGIS-9";
+                return preferences;
             }
         }
         catch (JsonException) { }

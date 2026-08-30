@@ -10,6 +10,7 @@ public sealed class AvatarService : IAvatarService
     private readonly AvatarAssetCatalog _catalog;
     private readonly ISpeechService _speechService;
     private AvatarWindow? _host;
+    private Func<string, CancellationToken, Task<bool>>? _primaryHostSender;
     private CancellationTokenSource? _speechCancellation;
 
     public AvatarService(UserPreferences preferences, JarvisDesktopOptions options, AvatarAssetCatalog catalog, ISpeechService speechService)
@@ -73,41 +74,26 @@ public sealed class AvatarService : IAvatarService
 
     public async Task SetStateAsync(AvatarVisualState state, CancellationToken cancellationToken = default)
     {
-        if (_host is null)
-        {
-            return;
-        }
-
         var wireState = state.ToString().ToLowerInvariant();
         var payload = new
         {
             state = wireState,
         };
-        await _host.SendMessageAsync(AvatarProtocol.Build("avatar.state", payload), cancellationToken);
+        await SendRuntimeMessageAsync(AvatarProtocol.Build("avatar.state", payload), cancellationToken);
     }
 
     public Task SetExpressionAsync(string expression, double intensity = 1.0, CancellationToken cancellationToken = default)
     {
-        if (_host is null)
-        {
-            return Task.CompletedTask;
-        }
-
         var payload = new
         {
             expression,
             intensity,
         };
-        return _host.SendMessageAsync(AvatarProtocol.Build("avatar.expression", payload), cancellationToken);
+        return SendRuntimeMessageAsync(AvatarProtocol.Build("avatar.expression", payload), cancellationToken);
     }
 
     public async Task SpeakAsync(SpeechPlaybackData speech, CancellationToken cancellationToken = default)
     {
-        if (_host is null)
-        {
-            return;
-        }
-
         _speechCancellation?.Cancel();
         _speechCancellation?.Dispose();
         _speechCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -118,7 +104,7 @@ public sealed class AvatarService : IAvatarService
             durationMs = speech.DurationMs,
             cues = speech.Cues,
         };
-        await _host.SendMessageAsync(AvatarProtocol.Build("avatar.speech.start", payload), _speechCancellation.Token);
+        await SendRuntimeMessageAsync(AvatarProtocol.Build("avatar.speech.start", payload), _speechCancellation.Token);
     }
 
     public Task StopSpeakingAsync(CancellationToken cancellationToken = default)
@@ -127,13 +113,11 @@ public sealed class AvatarService : IAvatarService
         _speechCancellation?.Dispose();
         _speechCancellation = null;
 
-        if (_host is null)
-        {
-            return Task.CompletedTask;
-        }
-
-        return _host.SendMessageAsync(AvatarProtocol.Build("avatar.speech.stop", new { }), cancellationToken);
+        return SendRuntimeMessageAsync(AvatarProtocol.Build("avatar.speech.stop", new { }), cancellationToken);
     }
+
+    public void AttachPrimaryHost(Func<string, CancellationToken, Task<bool>> messageSender) =>
+        _primaryHostSender = messageSender;
 
     public void AttachHostWindow(AvatarWindow window)
     {
@@ -141,6 +125,19 @@ public sealed class AvatarService : IAvatarService
         if (ActiveAvatar is not null)
         {
             _ = _host.LoadAvatarAsync(ActiveAvatar, CancellationToken.None);
+        }
+    }
+
+    private async Task SendRuntimeMessageAsync(string message, CancellationToken cancellationToken)
+    {
+        if (_primaryHostSender is not null)
+        {
+            await _primaryHostSender(message, cancellationToken);
+        }
+
+        if (_host is not null)
+        {
+            await _host.SendMessageAsync(message, cancellationToken);
         }
     }
 
@@ -181,12 +178,25 @@ public sealed class AvatarService : IAvatarService
 
         await SpeakAsync(new SpeechPlaybackData
         {
-            AudioUrl = new Uri(audioPath).AbsoluteUri,
+            AudioUrl = await BuildAudioDataUrlAsync(audioPath, cancellationToken),
             DurationMs = result.DurationMs,
             Cues = BuildDevelopmentCues(text, result.DurationMs),
         }, cancellationToken);
 
         return result;
+    }
+
+    private static async Task<string> BuildAudioDataUrlAsync(string audioPath, CancellationToken cancellationToken)
+    {
+        var mediaType = Path.GetExtension(audioPath).ToLowerInvariant() switch
+        {
+            ".mp3" => "audio/mpeg",
+            ".ogg" => "audio/ogg",
+            ".flac" => "audio/flac",
+            _ => "audio/wav",
+        };
+        var bytes = await File.ReadAllBytesAsync(audioPath, cancellationToken);
+        return $"data:{mediaType};base64,{Convert.ToBase64String(bytes)}";
     }
 
     private static List<SpeechCue> BuildDevelopmentCues(string text, int durationMs)

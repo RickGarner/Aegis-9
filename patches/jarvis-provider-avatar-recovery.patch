@@ -1,0 +1,111 @@
+diff --git a/backend/app/providers.py b/backend/app/providers.py
+index 34f906a..853284f 100644
+--- a/backend/app/providers.py
++++ b/backend/app/providers.py
+@@ -157,6 +157,14 @@ class OpenAICompatibleProvider:
+                 self._location = "local"
+                 result = await self._try_routes(self._ranked_candidates(task), messages, errors)
+ 
++        if result is None and self._location == "local":
++            self._status = "scanning_local"
++            self._detail = "Refreshing the local provider inventory after a failed request."
++            refreshed_candidates = await self._scan_location("local")
++            if refreshed_candidates:
++                self._candidates = refreshed_candidates
++                result = await self._try_routes(self._ranked_candidates(task), messages, errors)
++
+         if result is None:
+             self._status = "unavailable"
+             self._detail = "All discovered provider routes failed. " + " | ".join(errors)
+@@ -284,8 +292,10 @@ class OpenAICompatibleProvider:
+         if route.location == "local" and route.size_bytes > 0:
+             if self._gpu_vram_mb > 0 and route.size_bytes <= self._gpu_vram_mb * 1024 * 1024 * 0.90:
+                 hardware_score += 12
+-            elif route.size_bytes <= self._ram_bytes * 0.45:
+-                hardware_score += 4
++            elif self._gpu_vram_mb > 0 and route.size_bytes <= self._gpu_vram_mb * 1024 * 1024 * 1.75:
++                hardware_score += 5
++            elif route.size_bytes <= self._ram_bytes * 0.35:
++                hardware_score -= 15
+             else:
+                 hardware_score -= 30
+         return role_score + parameter_score + provider_score + hardware_score
+diff --git a/backend/tests/test_provider_router.py b/backend/tests/test_provider_router.py
+index 56e385d..ab4cc5a 100644
+--- a/backend/tests/test_provider_router.py
++++ b/backend/tests/test_provider_router.py
+@@ -14,6 +14,19 @@ def settings() -> Settings:
+ 
+ 
+ class ProviderDiscoveryTests(unittest.IsolatedAsyncioTestCase):
++    async def test_code_routing_prefers_model_that_better_fits_local_gpu(self) -> None:
++        router = OpenAICompatibleProvider(settings())
++        router._gpu_vram_mb = 8151
++        router._ram_bytes = 64 * 1024**3
++        router._candidates = [
++            ProviderRoute("local", "ollama", "qwen3-coder:30b", "http://chat", size_bytes=18_556_700_000),
++            ProviderRoute("local", "ollama", "qwen2.5-coder:14b", "http://chat", size_bytes=8_988_000_000),
++        ]
++
++        ranked = router._ranked_candidates("code")
++
++        self.assertEqual("qwen2.5-coder:14b", ranked[0].model)
++
+     async def test_remote_routes_are_preferred_without_scanning_local(self) -> None:
+         router = OpenAICompatibleProvider(settings())
+         locations: list[str] = []
+diff --git a/desktop/Jarvis.Desktop/Assets/AvatarHost/avatar-host.js b/desktop/Jarvis.Desktop/Assets/AvatarHost/avatar-host.js
+index 8f03be4..96288f8 100644
+--- a/desktop/Jarvis.Desktop/Assets/AvatarHost/avatar-host.js
++++ b/desktop/Jarvis.Desktop/Assets/AvatarHost/avatar-host.js
+@@ -397,6 +397,15 @@ const handleEnvelope = async (envelope) => {
+     }
+   } catch (error) {
+     const message = error instanceof Error ? error.message : "Unknown runtime failure";
++    if (envelope.type === "avatar.speech.start" || envelope.type === "avatar.speech.stop") {
++      stopSpeech();
++      applyState("ready", "Speech playback unavailable; avatar remains online");
++      postMessageToHost("avatar.warning", {
++        code: "SPEECH_PLAYBACK_UNAVAILABLE",
++        message
++      });
++      return;
++    }
+     setFallback(message);
+   }
+ };
+diff --git a/desktop/Jarvis.Desktop/MainWindow.xaml.cs b/desktop/Jarvis.Desktop/MainWindow.xaml.cs
+index d537219..abd8ce9 100644
+--- a/desktop/Jarvis.Desktop/MainWindow.xaml.cs
++++ b/desktop/Jarvis.Desktop/MainWindow.xaml.cs
+@@ -80,9 +80,8 @@ public partial class MainWindow : Window
+     private async Task IssueCommandAsync()
+     {
+         var command = CommandInput.Text.Trim();
+-        if (command.Length == 0 || _commandInProgress) return;
++        if (command.Length == 0 || _commandInProgress) return;
+         _commandInProgress = true;
+-        var commandInterfaceAvailable = true;
+         await _speechRecognition.StopWakePhraseAsync();
+         var speechDurationMs = 0;
+         _messages.Add(new ChatMessage { Role = "user", Content = command });
+@@ -118,15 +117,14 @@ public partial class MainWindow : Window
+         }
+         catch (Exception error)
+         {
+-            commandInterfaceAvailable = false;
+             ConversationList.Items.Add($"Jarvis  Â·  The local assistant service is unavailable: {error.Message}");
+-            ConnectionText.Text = "Local command center Â· backend unavailable";
+-            await _avatarService.SetStateAsync(AvatarVisualState.Offline);
++            ConnectionText.Text = "Provider request failed Â· controls restored for retry";
++            await _avatarService.SetStateAsync(AvatarVisualState.Offline);
+         }
+         finally
+         {
+-            CommandInput.IsEnabled = commandInterfaceAvailable;
+-            VoiceInputButton.IsEnabled = commandInterfaceAvailable;
++            CommandInput.IsEnabled = true;
++            VoiceInputButton.IsEnabled = true;
+             AvatarStatusText.Text = "READY FOR COMMANDS";
+             await _avatarService.SetStateAsync(AvatarVisualState.Idle);
+             await SetInlineAvatarStateAsync("ready", "Ready for commands");

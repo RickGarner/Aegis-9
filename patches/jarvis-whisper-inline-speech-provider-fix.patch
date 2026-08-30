@@ -1,0 +1,647 @@
+diff --git a/desktop/Jarvis.Desktop/Jarvis.Desktop.csproj b/desktop/Jarvis.Desktop/Jarvis.Desktop.csproj
+index 5b0fbab..b7e5a38 100644
+--- a/desktop/Jarvis.Desktop/Jarvis.Desktop.csproj
++++ b/desktop/Jarvis.Desktop/Jarvis.Desktop.csproj
+@@ -10,6 +10,7 @@
+ 
+   <ItemGroup>
+     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.2849.39" />
++    <PackageReference Include="NAudio" Version="2.2.1" />
+     <PackageReference Include="System.Speech" Version="8.0.0" />
+   </ItemGroup>
+ 
+diff --git a/desktop/Jarvis.Desktop/LocalSpeechRecognitionService.cs b/desktop/Jarvis.Desktop/LocalSpeechRecognitionService.cs
+index f66c7bd..5eef98c 100644
+--- a/desktop/Jarvis.Desktop/LocalSpeechRecognitionService.cs
++++ b/desktop/Jarvis.Desktop/LocalSpeechRecognitionService.cs
+@@ -1,127 +1,144 @@
+-using System.Globalization;
+-using System.Speech.Recognition;
++using System.Diagnostics;
++using System.Net.Http;
++using System.Net.Http.Json;
++using NAudio.Wave;
+ 
+ namespace Jarvis.Desktop;
+ 
+ public sealed class LocalSpeechRecognitionService : IDisposable
+ {
+-    private readonly object _gate = new();
+-    private SpeechRecognitionEngine? _wakeRecognizer;
+-    private int _wakeTriggered;
++    private readonly HttpClient _client;
+     private bool _disposed;
+ 
++    public LocalSpeechRecognitionService() : this("http://127.0.0.1:8000") { }
++
++    public LocalSpeechRecognitionService(string backendBaseUrl)
++    {
++        _client = new HttpClient
++        {
++            BaseAddress = new Uri(backendBaseUrl.TrimEnd('/') + "/"),
++            Timeout = TimeSpan.FromMinutes(3),
++        };
++    }
++
+     public event EventHandler<int>? AudioLevelChanged;
+     public event EventHandler? WakePhraseRecognized;
+ 
++    public Task StartWakePhraseAsync(string phrase, CancellationToken cancellationToken = default) =>
++        throw new InvalidOperationException("Wake phrase monitoring is temporarily disabled while Whisper push-to-talk is active.");
++
++    public Task StopWakePhraseAsync() => Task.CompletedTask;
++
+     public async Task<SpeechRecognitionResult> ListenOnceAsync(CancellationToken cancellationToken = default)
+     {
+-        ThrowIfDisposed();
+-        await StopWakePhraseAsync();
+-        SpeechRecognitionEngine? recognizer = null;
++        ObjectDisposedException.ThrowIf(_disposed, this);
++        var directory = Path.Combine(Path.GetTempPath(), "Jarvis", "VoiceInput");
++        Directory.CreateDirectory(directory);
++        var audioPath = Path.Combine(directory, $"voice-{Guid.NewGuid():N}.wav");
+         try
+         {
+-            recognizer = CreateRecognizer();
+-            recognizer.InitialSilenceTimeout = TimeSpan.FromSeconds(8);
+-            recognizer.BabbleTimeout = TimeSpan.FromSeconds(4);
+-            recognizer.EndSilenceTimeout = TimeSpan.FromMilliseconds(850);
+-            recognizer.EndSilenceTimeoutAmbiguous = TimeSpan.FromSeconds(1.4);
+-            recognizer.LoadGrammar(new DictationGrammar());
+-            recognizer.SetInputToDefaultAudioDevice();
+-
+-            var completion = new TaskCompletionSource<SpeechRecognitionResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+-            recognizer.AudioLevelUpdated += (_, e) => AudioLevelChanged?.Invoke(this, Math.Clamp(e.AudioLevel, 0, 100));
+-            recognizer.RecognizeCompleted += (_, e) =>
+-            {
+-                if (e.Cancelled) completion.TrySetCanceled(cancellationToken);
+-                else if (e.Error is not null) completion.TrySetResult(Failure(e.Error.Message));
+-                else if (e.Result is null || string.IsNullOrWhiteSpace(e.Result.Text)) completion.TrySetResult(Failure("No speech was detected."));
+-                else completion.TrySetResult(new SpeechRecognitionResult
+-                {
+-                    Success = true,
+-                    Text = e.Result.Text.Trim(),
+-                    Confidence = e.Result.Confidence,
+-                    Detail = $"Recognized locally with {e.Result.Confidence:P0} confidence.",
+-                });
+-            };
+-            using var registration = cancellationToken.Register(() =>
+-            {
+-                try { recognizer.RecognizeAsyncCancel(); } catch (InvalidOperationException) { }
+-            });
+-            recognizer.RecognizeAsync(RecognizeMode.Single);
+-            return await completion.Task;
++            await CaptureCommandAsync(audioPath, cancellationToken);
++            return await TranscribeAsync(audioPath, cancellationToken);
+         }
+         catch (OperationCanceledException) { throw; }
+-        catch (Exception error) when (error is InvalidOperationException or ArgumentException)
++        catch (Exception error) when (error is InvalidOperationException or HttpRequestException or IOException or MmException)
+         {
+-            return Failure($"Local speech recognition is unavailable: {error.Message}");
++            return new SpeechRecognitionResult { Detail = $"Local Whisper transcription is unavailable: {error.Message}" };
+         }
+         finally
+         {
+             AudioLevelChanged?.Invoke(this, 0);
+-            recognizer?.Dispose();
++            try { File.Delete(audioPath); } catch (IOException) { }
+         }
+     }
+ 
+-    public Task StartWakePhraseAsync(string phrase, CancellationToken cancellationToken = default)
++    private async Task CaptureCommandAsync(string audioPath, CancellationToken cancellationToken)
+     {
+-        ThrowIfDisposed();
+-        if (string.IsNullOrWhiteSpace(phrase)) return Task.CompletedTask;
+-        lock (_gate)
++        using var capture = new WaveInEvent { DeviceNumber = 0, WaveFormat = new WaveFormat(16000, 16, 1), BufferMilliseconds = 50 };
++        using var writer = new WaveFileWriter(audioPath, capture.WaveFormat);
++        var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
++        var stopwatch = Stopwatch.StartNew();
++        var speechStarted = false;
++        var lastSpeechAt = TimeSpan.Zero;
++        var stopRequested = false;
++        capture.DataAvailable += (_, e) =>
+         {
+-            if (_wakeRecognizer is not null) return Task.CompletedTask;
+-            Interlocked.Exchange(ref _wakeTriggered, 0);
+-            cancellationToken.ThrowIfCancellationRequested();
+-            var recognizer = CreateRecognizer();
+-            var builder = new GrammarBuilder(phrase.Trim()) { Culture = recognizer.RecognizerInfo.Culture };
+-            recognizer.LoadGrammar(new Grammar(builder));
+-            recognizer.SetInputToDefaultAudioDevice();
+-            recognizer.SpeechRecognized += WakeRecognizer_SpeechRecognized;
+-            recognizer.RecognizeAsync(RecognizeMode.Multiple);
+-            _wakeRecognizer = recognizer;
+-        }
+-        return Task.CompletedTask;
+-    }
+-
+-    public Task StopWakePhraseAsync()
+-    {
+-        SpeechRecognitionEngine? recognizer;
+-        lock (_gate)
++            writer.Write(e.Buffer, 0, e.BytesRecorded);
++            var sum = 0d;
++            var samples = e.BytesRecorded / 2;
++            for (var offset = 0; offset + 1 < e.BytesRecorded; offset += 2)
++            {
++                var sample = BitConverter.ToInt16(e.Buffer, offset) / 32768d;
++                sum += sample * sample;
++            }
++            var rms = samples == 0 ? 0 : Math.Sqrt(sum / samples);
++            var level = Math.Clamp((int)(rms * 500), 0, 100);
++            AudioLevelChanged?.Invoke(this, level);
++            if (level >= 4) { speechStarted = true; lastSpeechAt = stopwatch.Elapsed; }
++        };
++        capture.RecordingStopped += (_, e) =>
+         {
+-            recognizer = _wakeRecognizer;
+-            _wakeRecognizer = null;
+-        }
+-        if (recognizer is not null)
++            if (e.Exception is not null) completion.TrySetException(e.Exception);
++            else completion.TrySetResult();
++        };
++        using var registration = cancellationToken.Register(() =>
++        {
++            try { capture.StopRecording(); } catch (MmException) { }
++        });
++        capture.StartRecording();
++        while (!completion.Task.IsCompleted)
+         {
+-            recognizer.SpeechRecognized -= WakeRecognizer_SpeechRecognized;
+-            try { recognizer.RecognizeAsyncCancel(); } catch (InvalidOperationException) { }
+-            recognizer.Dispose();
++            cancellationToken.ThrowIfCancellationRequested();
++            await Task.Delay(100, cancellationToken);
++            var elapsed = stopwatch.Elapsed;
++            if (!stopRequested && ((!speechStarted && elapsed >= TimeSpan.FromSeconds(8)) ||
++                (speechStarted && elapsed - lastSpeechAt >= TimeSpan.FromSeconds(1.1)) ||
++                elapsed >= TimeSpan.FromSeconds(20)))
++            {
++                stopRequested = true;
++                capture.StopRecording();
++            }
+         }
+-        return Task.CompletedTask;
+-    }
+-
+-    private void WakeRecognizer_SpeechRecognized(object? sender, SpeechRecognizedEventArgs e)
+-    {
+-        if (e.Result.Confidence >= 0.60f && Interlocked.Exchange(ref _wakeTriggered, 1) == 0)
+-            WakePhraseRecognized?.Invoke(this, EventArgs.Empty);
++        await completion.Task;
++        cancellationToken.ThrowIfCancellationRequested();
++        writer.Flush();
++        if (!speechStarted) throw new InvalidOperationException("No speech was detected.");
+     }
+ 
+-    private static SpeechRecognitionEngine CreateRecognizer()
++    private async Task<SpeechRecognitionResult> TranscribeAsync(string audioPath, CancellationToken cancellationToken)
+     {
+-        var installed = SpeechRecognitionEngine.InstalledRecognizers();
+-        var info = installed.FirstOrDefault(item => item.Culture.Equals(CultureInfo.CurrentUICulture))
+-            ?? installed.FirstOrDefault(item => item.Culture.TwoLetterISOLanguageName.Equals("en", StringComparison.OrdinalIgnoreCase))
+-            ?? installed.FirstOrDefault()
+-            ?? throw new InvalidOperationException("No Windows speech recognition language is installed.");
+-        return new SpeechRecognitionEngine(info);
++        await using var stream = File.OpenRead(audioPath);
++        using var content = new MultipartFormDataContent();
++        using var audio = new StreamContent(stream);
++        audio.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("audio/wav");
++        content.Add(audio, "file", Path.GetFileName(audioPath));
++        using var response = await _client.PostAsync("api/speech/transcribe", content, cancellationToken);
++        var payload = await response.Content.ReadFromJsonAsync<WhisperResponse>(cancellationToken: cancellationToken);
++        if (!response.IsSuccessStatusCode)
++            return new SpeechRecognitionResult { Detail = payload?.Detail ?? $"Whisper returned HTTP {(int)response.StatusCode}." };
++        if (string.IsNullOrWhiteSpace(payload?.Text))
++            return new SpeechRecognitionResult { Detail = "Whisper did not detect a spoken command." };
++        return new SpeechRecognitionResult
++        {
++            Success = true,
++            Text = payload.Text.Trim(),
++            Confidence = payload.Confidence,
++            Detail = $"Transcribed locally with Whisper ({payload.Language}).",
++        };
+     }
+ 
+-    private static SpeechRecognitionResult Failure(string detail) => new() { Detail = detail };
+-    private void ThrowIfDisposed() => ObjectDisposedException.ThrowIf(_disposed, this);
+-
+     public void Dispose()
+     {
+         if (_disposed) return;
+-        StopWakePhraseAsync().GetAwaiter().GetResult();
++        _client.Dispose();
+         _disposed = true;
+     }
++
++    private sealed class WhisperResponse
++    {
++        public string Text { get; set; } = string.Empty;
++        public string Language { get; set; } = "en";
++        public float Confidence { get; set; }
++        public string Detail { get; set; } = string.Empty;
++    }
+ }
+diff --git a/desktop/Jarvis.Desktop/MainWindow.xaml.cs b/desktop/Jarvis.Desktop/MainWindow.xaml.cs
+index 2f971c0..2e2cf55 100644
+--- a/desktop/Jarvis.Desktop/MainWindow.xaml.cs
++++ b/desktop/Jarvis.Desktop/MainWindow.xaml.cs
+@@ -107,6 +107,7 @@ public partial class MainWindow : Window
+             else
+             {
+                 speechDurationMs = speechResult.DurationMs;
++                await PlayInlineSpeechAsync(speechResult);
+             }
+         }
+         catch (Exception error)
+@@ -234,18 +235,37 @@ public partial class MainWindow : Window
+         await ConfigureWakePhraseAsync();
+     }
+ 
+-    private async Task ConfigureWakePhraseAsync()
++    private async Task PlayInlineSpeechAsync(SpeechResult speechResult)
+     {
+-        await _speechRecognition.StopWakePhraseAsync();
+-        if (!_preferences.EnableWakePhrase || _commandInProgress || _voiceCaptureCancellation is not null) return;
+-        try
++        if (!_inlineAvatarReady || string.IsNullOrWhiteSpace(speechResult.AudioPath)) return;
++        var audioPath = speechResult.AudioPath;
++        if (!Path.IsPathFullyQualified(audioPath))
+         {
+-            await _speechRecognition.StartWakePhraseAsync(_preferences.WakePhrase);
++            var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
++            audioPath = Path.GetFullPath(Path.Combine(localAppData, audioPath));
+         }
+-        catch (Exception error) when (error is InvalidOperationException or ArgumentException)
++        if (!File.Exists(audioPath)) return;
++        var mediaType = Path.GetExtension(audioPath).ToLowerInvariant() switch
+         {
+-            ConnectionText.Text = $"Wake phrase unavailable Â· {error.Message}";
+-        }
++            ".mp3" => "audio/mpeg",
++            ".ogg" => "audio/ogg",
++            ".flac" => "audio/flac",
++            _ => "audio/wav",
++        };
++        var bytes = await File.ReadAllBytesAsync(audioPath);
++        var audioUrl = $"data:{mediaType};base64,{Convert.ToBase64String(bytes)}";
++        await SendInlineAvatarMessageAsync(AvatarProtocol.Build("avatar.speech.start", new
++        {
++            audioUrl,
++            durationMs = speechResult.DurationMs,
++            cues = Array.Empty<object>(),
++        }));
++    }
++
++    private async Task ConfigureWakePhraseAsync()
++    {
++        await _speechRecognition.StopWakePhraseAsync();
++        await Task.CompletedTask;
+     }
+ 
+     private void MainWindow_Closed(object? sender, EventArgs e)
+diff --git a/docs/LOCAL-VOICE-INPUT.md b/docs/LOCAL-VOICE-INPUT.md
+index 5329413..15772d0 100644
+--- a/docs/LOCAL-VOICE-INPUT.md
++++ b/docs/LOCAL-VOICE-INPUT.md
+@@ -1,6 +1,6 @@
+ # Local voice input
+ 
+-Jarvis voice input uses the Windows offline speech-recognition engine through `System.Speech`. Recorded microphone audio is processed locally and is not sent to a cloud transcription service.
++Jarvis captures 16 kHz mono WAV audio with NAudio and sends it only to the local Jarvis backend, where Faster-Whisper performs transcription. Audio is not sent to a cloud transcription service.
+ 
+ ## Controls
+ 
+@@ -8,14 +8,13 @@ Jarvis voice input uses the Windows offline speech-recognition engine through `S
+ - Select **STOP** or press **Ctrl+Space** again to cancel.
+ - The cyan meter beneath the composer shows live microphone input.
+ - With automatic submission enabled, recognized text is sent immediately. Otherwise it remains in the command box for review.
+-- The optional wake phrase listens only while Jarvis is open, idle, and not speaking. Say the wake phrase, wait for the listening indication, and then speak the command.
++- Wake-phrase listening is deferred until the streaming Whisper phase. Push-to-talk remains available through MIC and Ctrl+Space.
+ 
+-Voice input and the wake phrase can be configured under **Configure → Voice Input**. Wake-phrase listening is disabled by default.
++Voice input can be configured under **Configure → Voice Input**.
+ 
+ ## Windows prerequisites
+ 
+ 1. Allow desktop applications to access the microphone under **Settings → Privacy & security → Microphone**.
+-2. Install an English speech language under **Settings → Time & language → Language & region → Language options** if Jarvis reports that no recognizer is installed.
+-3. Select the intended default recording device in Windows sound settings.
++2. Select the intended default recording device in Windows sound settings.
+ 
+-The first build restores the free `System.Speech` NuGet package. Once restored, speech recognition works offline.
++The first setup installs Faster-Whisper and downloads the selected model. After the model is cached locally, transcription works offline.
+diff --git a/backend/app/config.py b/backend/app/config.py
+index a59fc0e..c3e901d 100644
+--- a/backend/app/config.py
++++ b/backend/app/config.py
+@@ -62,6 +62,9 @@ class Settings(BaseSettings):
+         le=120,
+         validation_alias="JARVIS_PRIMARY_MODEL_TIMEOUT_SECONDS",
+     )
++    whisper_model: str = Field(default="small.en", validation_alias="JARVIS_WHISPER_MODEL")
++    whisper_device: str = Field(default="auto", validation_alias="JARVIS_WHISPER_DEVICE")
++    whisper_compute_type: str = Field(default="auto", validation_alias="JARVIS_WHISPER_COMPUTE_TYPE")
+     database_path: Path = Field(
+         default=Path(__file__).resolve().parents[2] / "storage" / "jarvis.db",
+         validation_alias="JARVIS_DATABASE_PATH",
+diff --git a/backend/app/main.py b/backend/app/main.py
+index 33925e2..0cc5c4a 100644
+--- a/backend/app/main.py
++++ b/backend/app/main.py
+@@ -1,6 +1,7 @@
+ import asyncio
+ import uuid
+ from contextlib import asynccontextmanager
++from functools import lru_cache
+ from pathlib import Path
+ 
+ from fastapi import Depends, FastAPI, File, HTTPException, UploadFile, status
+@@ -10,6 +11,7 @@ from app.artifacts import try_create_requested_artifact
+ from app.config import Settings, get_settings
+ from app.files import UnsupportedFileTypeError, extract_text, is_supported
+ from app.providers import ChatMessage, OpenAICompatibleProvider, ProviderError, ProviderHealth, SystemHealth, check_system_health
++from app.speech_recognition import LocalWhisperService
+ from app.monitoring import (
+     MonitoringActionRequest,
+     MonitoringActionResult,
+@@ -31,6 +33,13 @@ class ChatResponse(BaseModel):
+     content: str
+ 
+ 
++class TranscriptionResponse(BaseModel):
++    text: str
++    language: str
++    confidence: float
++    detail: str
++
++
+ class ApprovalRequest(BaseModel):
+     decision: str = Field(pattern="^(approved|rejected)$")
+ 
+@@ -77,6 +86,11 @@ def get_provider(settings: Settings = Depends(get_settings)) -> OpenAICompatible
+     return OpenAICompatibleProvider(settings)
+ 
+ 
++@lru_cache
++def get_whisper_service() -> LocalWhisperService:
++    return LocalWhisperService(get_settings())
++
++
+ def get_store() -> JarvisStore:
+     return app.state.store
+ 
+@@ -103,6 +117,34 @@ async def provider_health(
+     return await provider.health()
+ 
+ 
++@app.post("/api/speech/transcribe", response_model=TranscriptionResponse)
++async def transcribe_speech(file: UploadFile = File(...)) -> TranscriptionResponse:
++    suffix = Path(file.filename or "voice.wav").suffix.lower()
++    if suffix not in {".wav", ".wave"}:
++        raise HTTPException(status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, detail="Voice input must be a WAV file.")
++    payload = await file.read()
++    if not payload or len(payload) > 10 * 1024 * 1024:
++        raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="Voice input is empty or exceeds 10 MB.")
++    import tempfile
++    temporary_path: Path | None = None
++    try:
++        with tempfile.NamedTemporaryFile(prefix="jarvis-voice-", suffix=".wav", delete=False) as temporary:
++            temporary.write(payload)
++            temporary_path = Path(temporary.name)
++        result = await asyncio.to_thread(get_whisper_service().transcribe, temporary_path)
++        return TranscriptionResponse(
++            text=result.text,
++            language=result.language,
++            confidence=result.confidence,
++            detail=f"Transcribed locally using faster-whisper on {result.runtime}.",
++        )
++    except (RuntimeError, ValueError) as error:
++        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=f"Local Whisper runtime unavailable: {error}") from error
++    finally:
++        if temporary_path is not None:
++            temporary_path.unlink(missing_ok=True)
++
++
+ @app.get("/api/system/health", response_model=SystemHealth)
+ async def system_health(
+     settings: Settings = Depends(get_settings),
+@@ -347,4 +389,4 @@ async def chat(
+ 
+     assistant_message = ChatMessage(role="assistant", content=content)
+     store.record_chat(request.messages[-1], assistant_message)
+-    return ChatResponse(model=settings.model, content=content)
+\ No newline at end of file
++    return ChatResponse(model=settings.model, content=content)
+diff --git a/backend/app/speech_recognition.py b/backend/app/speech_recognition.py
+new file mode 100644
+index 0000000..7ede256
+--- /dev/null
++++ b/backend/app/speech_recognition.py
+@@ -0,0 +1,70 @@
++from __future__ import annotations
++
++import math
++from dataclasses import dataclass
++from pathlib import Path
++from threading import Lock
++
++from faster_whisper import WhisperModel
++
++from app.config import Settings
++
++
++@dataclass(frozen=True)
++class Transcription:
++    text: str
++    language: str
++    confidence: float
++    runtime: str
++
++
++class LocalWhisperService:
++    def __init__(self, settings: Settings) -> None:
++        self._settings = settings
++        self._model: WhisperModel | None = None
++        self._runtime = "unloaded"
++        self._lock = Lock()
++
++    def transcribe(self, audio_path: Path) -> Transcription:
++        with self._lock:
++            model = self._get_model()
++            segments, info = model.transcribe(
++                str(audio_path),
++                language="en",
++                beam_size=5,
++                vad_filter=True,
++                condition_on_previous_text=False,
++                initial_prompt="Jarvis local assistant. LM Studio, Ollama, LiteLLM, MOVEit Automation, Wolforge.",
++            )
++            collected = list(segments)
++        text = " ".join(segment.text.strip() for segment in collected if segment.text.strip()).strip()
++        log_probabilities = [segment.avg_logprob for segment in collected]
++        confidence = math.exp(sum(log_probabilities) / len(log_probabilities)) if log_probabilities else 0.0
++        return Transcription(
++            text=text,
++            language=info.language or "en",
++            confidence=max(0.0, min(1.0, confidence)),
++            runtime=self._runtime,
++        )
++
++    def _get_model(self) -> WhisperModel:
++        if self._model is not None:
++            return self._model
++        requested_device = self._settings.whisper_device.lower()
++        requested_compute = self._settings.whisper_compute_type.lower()
++        if requested_device == "auto":
++            try:
++                self._model = WhisperModel(
++                    self._settings.whisper_model,
++                    device="cuda",
++                    compute_type="float16" if requested_compute == "auto" else requested_compute,
++                )
++                self._runtime = "cuda"
++                return self._model
++            except (RuntimeError, ValueError):
++                pass
++        device = "cpu" if requested_device == "auto" else requested_device
++        compute_type = "int8" if requested_compute == "auto" and device == "cpu" else requested_compute
++        self._model = WhisperModel(self._settings.whisper_model, device=device, compute_type=compute_type)
++        self._runtime = device
++        return self._model
+diff --git a/backend/requirements.txt b/backend/requirements.txt
+index 9f2a8d1..3460b60 100644
+--- a/backend/requirements.txt
++++ b/backend/requirements.txt
+@@ -6,3 +6,4 @@ python-multipart==0.0.20
+ pypdf==5.1.0
+ python-docx==1.1.2
+ psutil==7.0.0
++faster-whisper==1.2.1
+diff --git a/.env.example b/.env.example
+index e427068..2fb8400 100644
+--- a/.env.example
++++ b/.env.example
+@@ -9,9 +9,12 @@ JARVIS_PROVIDER=lmstudio
+ # JARVIS_PROVIDER_BASE_URL=http://127.0.0.1:1234/v1
+ JARVIS_MODEL=qwen3-coder-30b-a3b-instruct
+ JARVIS_FALLBACK_MODEL=qwen2.5-coder-7b-instruct
+-JARVIS_REQUEST_TIMEOUT_SECONDS=60
++JARVIS_PRIMARY_MODEL_TIMEOUT_SECONDS=120
++JARVIS_REQUEST_TIMEOUT_SECONDS=180
++JARVIS_WHISPER_MODEL=small.en
++JARVIS_WHISPER_DEVICE=auto
++JARVIS_WHISPER_COMPUTE_TYPE=auto
+ JARVIS_MAX_RESPONSE_TOKENS=2048
+-JARVIS_PRIMARY_MODEL_TIMEOUT_SECONDS=20
+ JARVIS_WORKFLOW_WINDOW_LIMIT=6
+ JARVIS_MAX_UPLOAD_BYTES=26214400
+ JARVIS_SERVER_INVENTORY_PATH=config/monitored-servers.json
+diff --git a/desktop/Jarvis.Desktop/MonitoringClient.cs b/desktop/Jarvis.Desktop/MonitoringClient.cs
+index a93ac07..30c645c 100644
+--- a/desktop/Jarvis.Desktop/MonitoringClient.cs
++++ b/desktop/Jarvis.Desktop/MonitoringClient.cs
+@@ -68,7 +68,18 @@ public sealed class MonitoringClient
+     public async Task<ChatResponse> ChatAsync(IReadOnlyList<ChatMessage> messages, IReadOnlyList<int>? attachmentIds, CancellationToken cancellationToken)
+     {
+         using var response = await _httpClient.PostAsJsonAsync("api/chat", new ChatRequest { Messages = messages, AttachmentIds = attachmentIds ?? [] }, JsonOptions, cancellationToken);
+-        response.EnsureSuccessStatusCode();
++        if (!response.IsSuccessStatusCode)
++        {
++            var payload = await response.Content.ReadAsStringAsync(cancellationToken);
++            var detail = payload;
++            try
++            {
++                using var document = JsonDocument.Parse(payload);
++                if (document.RootElement.TryGetProperty("detail", out var value)) detail = value.GetString() ?? payload;
++            }
++            catch (JsonException) { }
++            throw new HttpRequestException($"Chat provider returned HTTP {(int)response.StatusCode}: {detail}");
++        }
+         return await response.Content.ReadFromJsonAsync<ChatResponse>(JsonOptions, cancellationToken)
+             ?? throw new InvalidOperationException("Chat API returned an empty response.");
+     }
+diff --git a/desktop/Jarvis.Desktop/KokoroSpeechService.cs b/desktop/Jarvis.Desktop/KokoroSpeechService.cs
+index f0a1d6d..0baa0d1 100644
+--- a/desktop/Jarvis.Desktop/KokoroSpeechService.cs
++++ b/desktop/Jarvis.Desktop/KokoroSpeechService.cs
+@@ -1,6 +1,8 @@
+ using System.Net.Http;
+ using System.Net.Http.Json;
+ using System.Text.Json;
++using System.Speech.Synthesis;
++using NAudio.Wave;
+ 
+ namespace Jarvis.Desktop;
+ 
+@@ -36,11 +38,7 @@ public sealed class KokoroSpeechService : ISpeechService
+ 
+             if (!response.IsSuccessStatusCode)
+             {
+-                return new SpeechResult
+-                {
+-                    Success = false,
+-                    Detail = $"Kokoro runtime returned HTTP {(int)response.StatusCode}.",
+-                };
++                return await SynthesizeFallbackAsync(request, $"Kokoro returned HTTP {(int)response.StatusCode}.", cancellationToken);
+             }
+ 
+             using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+@@ -70,20 +68,48 @@ public sealed class KokoroSpeechService : ISpeechService
+             };
+         }
+         catch (HttpRequestException ex)
++        {
++            return await SynthesizeFallbackAsync(request, $"Kokoro unavailable: {ex.Message}", cancellationToken);
++        }
++        catch (JsonException ex)
+         {
+             return new SpeechResult
+             {
+                 Success = false,
+-                Detail = $"Kokoro runtime is unavailable: {ex.Message}",
++                Detail = $"Kokoro runtime returned invalid JSON: {ex.Message}",
+             };
+         }
+-        catch (JsonException ex)
++    }
++
++    private static async Task<SpeechResult> SynthesizeFallbackAsync(SpeechRequest request, string reason, CancellationToken cancellationToken)
++    {
++        try
+         {
++            var directory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Jarvis", "SpeechCache");
++            Directory.CreateDirectory(directory);
++            var audioPath = Path.Combine(directory, $"fallback-{Guid.NewGuid():N}.wav");
++            await Task.Run(() =>
++            {
++                cancellationToken.ThrowIfCancellationRequested();
++                using var synthesizer = new SpeechSynthesizer();
++                synthesizer.SelectVoiceByHints(VoiceGender.Male, VoiceAge.Adult);
++                synthesizer.Rate = Math.Clamp((int)Math.Round((request.Speed - 1.0) * 5), -4, 4);
++                synthesizer.SetOutputToWaveFile(audioPath);
++                synthesizer.Speak(request.Text);
++            }, cancellationToken);
++            using var reader = new WaveFileReader(audioPath);
+             return new SpeechResult
+             {
+-                Success = false,
+-                Detail = $"Kokoro runtime returned invalid JSON: {ex.Message}",
++                Success = true,
++                AudioPath = audioPath,
++                DurationMs = (int)reader.TotalTime.TotalMilliseconds,
++                SampleRate = reader.WaveFormat.SampleRate,
++                Detail = $"Used offline Windows voice fallback. {reason}",
+             };
+         }
++        catch (Exception error) when (error is InvalidOperationException or IOException)
++        {
++            return new SpeechResult { Success = false, Detail = $"Speech synthesis unavailable: {error.Message}" };
++        }
+     }
+ }
+

@@ -9,6 +9,7 @@
 | Cyber Lupine Warrior | MAROUANE | https://sketchfab.com/3d-models/cyber-lupine-warrior-728c44b7520b43ffa77c3a61b1e463c7 | Integrated 2026-08-29 | CC BY 4.0 | desktop/Jarvis.Desktop/Assets/Avatars/shared/cyber_lupine_head.glb | Head portrait derivative and local GLB packaging; attribution required |
 | model-viewer | Google | https://github.com/google/model-viewer | 4.0.0, downloaded 2026-08-26 | Apache-2.0 | desktop/Jarvis.Desktop/Assets/AvatarHost/vendor/model-viewer.min.js | Preserve upstream Apache notice if distributed |
 | WebView2 | Microsoft | https://www.nuget.org/packages/Microsoft.Web.WebView2 | 1.0.2849.39 | Microsoft package license | desktop/Jarvis.Desktop runtime dependency | Include package attribution via installer/package notices as required |
+| System.Speech | Microsoft/.NET Foundation | https://www.nuget.org/packages/System.Speech/8.0.0 | 8.0.0 | MIT | Windows-local speech recognition runtime dependency | Preserve the package license in distributed dependency notices |
 
 ## Notes
 

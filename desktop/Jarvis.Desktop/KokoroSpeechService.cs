@@ -1,6 +1,9 @@
+﻿using System.IO;
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Speech.Synthesis;
+using NAudio.Wave;
 
 namespace Jarvis.Desktop;
 
@@ -23,11 +26,12 @@ public sealed class KokoroSpeechService : ISpeechService
 
     public async Task<SpeechResult> SynthesizeAsync(SpeechRequest request, CancellationToken cancellationToken = default)
     {
+        var spokenText = PrepareTextForSpeech(request.Text);
         try
         {
             using var response = await _httpClient.PostAsJsonAsync("synthesize", new
             {
-                text = request.Text,
+                text = spokenText,
                 voiceId = request.VoiceId,
                 speed = request.Speed,
                 outputFormat = request.OutputFormat,
@@ -36,11 +40,7 @@ public sealed class KokoroSpeechService : ISpeechService
 
             if (!response.IsSuccessStatusCode)
             {
-                return new SpeechResult
-                {
-                    Success = false,
-                    Detail = $"Kokoro runtime returned HTTP {(int)response.StatusCode}.",
-                };
+                return await SynthesizeFallbackAsync(request, $"Kokoro returned HTTP {(int)response.StatusCode}.", cancellationToken);
             }
 
             using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
@@ -61,7 +61,7 @@ public sealed class KokoroSpeechService : ISpeechService
                     : "Speech synthesis completed.",
             };
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             return new SpeechResult
             {
@@ -69,21 +69,58 @@ public sealed class KokoroSpeechService : ISpeechService
                 Detail = "Speech synthesis was cancelled.",
             };
         }
+        catch (OperationCanceledException ex)
+        {
+            return await SynthesizeFallbackAsync(request, $"Kokoro timed out: {ex.Message}", cancellationToken);
+        }
         catch (HttpRequestException ex)
         {
-            return new SpeechResult
-            {
-                Success = false,
-                Detail = $"Kokoro runtime is unavailable: {ex.Message}",
-            };
+            return await SynthesizeFallbackAsync(request, $"Kokoro unavailable: {ex.Message}", cancellationToken);
         }
         catch (JsonException ex)
         {
-            return new SpeechResult
-            {
-                Success = false,
-                Detail = $"Kokoro runtime returned invalid JSON: {ex.Message}",
-            };
+            return await SynthesizeFallbackAsync(request, $"Kokoro returned invalid JSON: {ex.Message}", cancellationToken);
         }
     }
+
+    private static async Task<SpeechResult> SynthesizeFallbackAsync(SpeechRequest request, string reason, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var directory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Jarvis", "SpeechCache");
+            Directory.CreateDirectory(directory);
+            var audioPath = Path.Combine(directory, $"fallback-{Guid.NewGuid():N}.wav");
+            await Task.Run(() =>
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                using var synthesizer = new SpeechSynthesizer();
+                synthesizer.SelectVoiceByHints(VoiceGender.Male, VoiceAge.Adult);
+                synthesizer.Rate = Math.Clamp((int)Math.Round((request.Speed - 1.0) * 5), -4, 4);
+                synthesizer.SetOutputToWaveFile(audioPath);
+                synthesizer.Speak(PrepareTextForSpeech(request.Text));
+            }, cancellationToken);
+            using var reader = new WaveFileReader(audioPath);
+            return new SpeechResult
+            {
+                Success = true,
+                AudioPath = audioPath,
+                DurationMs = (int)reader.TotalTime.TotalMilliseconds,
+                SampleRate = reader.WaveFormat.SampleRate,
+                Detail = $"Used offline Windows voice fallback. {reason}",
+            };
+        }
+        catch (Exception error) when (error is InvalidOperationException or IOException)
+        {
+            return new SpeechResult { Success = false, Detail = $"Speech synthesis unavailable: {error.Message}" };
+        }
+    }
+
+    internal static string PrepareTextForSpeech(string text)
+    {
+        return text
+            .Replace("F.E.R.A.L.", "feral", StringComparison.OrdinalIgnoreCase)
+            .Replace("F.E.R.A.L", "feral", StringComparison.OrdinalIgnoreCase)
+            .Replace("FERAL", "feral", StringComparison.OrdinalIgnoreCase);
+    }
 }
+
