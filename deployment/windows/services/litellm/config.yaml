@@ -1,0 +1,34 @@
+model_list:
+  - model_name: jarvis-general
+    litellm_params:
+      model: ollama_chat/llama3.2:latest
+      api_base: http://127.0.0.1:11434
+      keep_alive: 5m
+      timeout: 180
+
+  - model_name: jarvis-code
+    litellm_params:
+      model: ollama_chat/qwen2.5-coder:7b
+      api_base: http://127.0.0.1:11434
+      keep_alive: 10m
+      timeout: 300
+
+  - model_name: jarvis-vision
+    litellm_params:
+      model: ollama_chat/qwen3-vl:4b
+      api_base: http://127.0.0.1:11434
+      keep_alive: 5m
+      timeout: 180
+
+  - model_name: jarvis-embedding
+    litellm_params:
+      model: ollama/nomic-embed-text:latest
+      api_base: http://127.0.0.1:11434
+      timeout: 120
+
+litellm_settings:
+  drop_params: true
+  telemetry: false
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY

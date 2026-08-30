@@ -45,6 +45,12 @@ MoveIT execution-history parsing, remote server agent feeds, workflow execution 
 
 Copy `.env.example` to `.env` if it does not already exist, and adjust provider and monitoring settings as needed.
 
+For a clean Windows computer, use the reproducible workstation bootstrap in
+`deployment/windows/Install-Aegis9Workstation.ps1`. It installs the required
+.NET/Python/WebView2 runtimes and configures Ollama, LiteLLM, LM Studio llmster,
+and Kokoro as auto-start local services. See `deployment/windows/README.md` for
+model profiles, disk requirements, validation, and troubleshooting.
+
 Build and launch the native Windows shell (it starts its own backend automatically):
 
 ```powershell
