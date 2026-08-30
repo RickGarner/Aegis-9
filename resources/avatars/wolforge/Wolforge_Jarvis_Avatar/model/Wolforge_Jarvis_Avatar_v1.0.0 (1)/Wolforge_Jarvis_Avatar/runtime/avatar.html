@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <style>
+    html,body{width:100%;height:100%;margin:0;overflow:hidden;background:transparent}
+    model-viewer{width:100%;height:100%;--poster-color:transparent;background:radial-gradient(circle,#14283c 0,#07111f 65%,transparent 72%)}
+  </style>
+  <!-- Point this at the copy of model-viewer already bundled with Jarvis. -->
+  <script type="module" src="./vendor/model-viewer.min.js"></script>
+</head>
+<body>
+  <model-viewer id="wolforge-avatar" src="../model/wolforge_jarvis_avatar.glb"
+    camera-controls disable-pan interaction-prompt="none" shadow-intensity="1"
+    exposure="1.05" camera-orbit="0deg 82deg 7.2m" field-of-view="28deg"
+    autoplay animation-name="Idle"></model-viewer>
+  <script src="./wolforge-avatar-controller.js"></script>
+</body>
+</html>
