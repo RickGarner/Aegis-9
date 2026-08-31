@@ -343,6 +343,26 @@ class JarvisStore:
             row = connection.execute(f"SELECT {self._workflow_columns()} FROM workflows WHERE id = ?", (workflow_id,)).fetchone()
         return self._workflow_from_row(row) if row else None
 
+    def reset_invalid_workflow_plan(self, workflow_id: int) -> Workflow | None:
+        with self._connect() as connection:
+            current = connection.execute(
+                "SELECT title, state FROM workflows WHERE id = ? AND archived = 0",
+                (workflow_id,),
+            ).fetchone()
+            if current is None or current["state"] not in {"design_review", "needs_clarification", "plan_review"}:
+                return None
+            connection.execute(
+                """UPDATE workflows SET state='draft', approval_stage='draft', plan_text='', plan_provider='', plan_model='',
+                clarification_questions_json='[]', clarification_answers_json='{}', updated_at=CURRENT_TIMESTAMP WHERE id=?""",
+                (workflow_id,),
+            )
+            connection.execute(
+                "INSERT INTO activity_logs (event_type, message, tone) VALUES (?, ?, ?)",
+                ("workflow-ai", f"Empty AI plan rejected for '{current['title']}'; workflow returned to draft.", "warning"),
+            )
+            row = connection.execute(f"SELECT {self._workflow_columns()} FROM workflows WHERE id = ?", (workflow_id,)).fetchone()
+        return self._workflow_from_row(row)
+
     def export_workflow(self, workflow_id: int) -> WorkflowTransferPackage | None:
         with self._connect() as connection:
             row = connection.execute(f"SELECT {self._workflow_columns()} FROM workflows WHERE id = ?", (workflow_id,)).fetchone()

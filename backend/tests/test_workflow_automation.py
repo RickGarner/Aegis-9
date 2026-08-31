@@ -16,6 +16,23 @@ def test_workflow_request_accepts_detailed_operating_instructions() -> None:
     assert len(request.description) == 10_000
 
 
+def test_empty_json_plan_is_rejected_instead_of_becoming_reviewable() -> None:
+    plan, questions = parse_workflow_plan_response('```json\n{"plan":"","questions":[]}\n```')
+    assert plan == ""
+    assert questions == []
+
+
+def test_invalid_saved_plan_can_be_returned_to_draft(tmp_path: Path) -> None:
+    store = make_store(tmp_path)
+    workflow = store.create_workflow("Invalid plan", "Create a real plan", [], "powershell")
+    workflow = store.save_workflow_plan(workflow.id, 'Plan:\n```json\n{"plan":"","questions":[]}\n```', "lmstudio", "model")
+    assert workflow.state == "design_review"
+    repaired = store.reset_invalid_workflow_plan(workflow.id)
+    assert repaired is not None
+    assert repaired.state == "draft"
+    assert repaired.plan_text == ""
+
+
 def test_workflow_requires_test_user_and_supervisor_gates(tmp_path: Path) -> None:
     store = make_store(tmp_path)
     workflow = store.create_workflow("Daily report", "Build the report", [], "powershell")

@@ -14,12 +14,20 @@ public partial class WorkflowDesignReviewWindow : Window
             if (_workflow.State is "draft" or "rejected") { OperationStatusText.Text = "A.E.G.I.S.-9 is selecting a planning model and preparing the review…"; _workflow = await _client.DesignWorkflowPlanAsync(_workflow.Id, CancellationToken.None); }
             Render();
         }
-        catch (Exception error) { OperationStatusText.Text = error.Message; }
+        catch (Exception error) { OperationStatusText.Text = error.Message; Render(); }
     }
     private void Render()
     {
         PlanText.Text = _workflow.PlanText; ModelText.Text = string.IsNullOrWhiteSpace(_workflow.PlanModel) ? "Planning model selection pending" : $"{_workflow.PlanProvider} / {_workflow.PlanModel}";
         QuestionsPanel.Children.Clear(); _questionControls.Clear();
+        if (string.IsNullOrWhiteSpace(_workflow.PlanText))
+        {
+            QuestionsPanel.Children.Add(new TextBlock { Text = "No usable workflow plan was returned. Close this review, reopen the workflow, and retry planning. Approval and final submission remain locked.", Foreground = new SolidColorBrush(Color.FromRgb(255, 184, 77)), TextWrapping = TextWrapping.Wrap });
+            ReviewStatusText.Text = "PLAN GENERATION INCOMPLETE Â· RETRY REQUIRED";
+            UpdateDraftButton.IsEnabled = false;
+            UpdateDraftButton.Content = "FINAL SUBMIT LOCKED";
+            return;
+        }
         if (_workflow.ClarificationQuestions.Count == 0)
         {
             QuestionsPanel.Children.Add(new TextBlock { Text = "No additional questions were identified. Submit this tentative plan for final A.E.G.I.S.-9 refinement before approval or rejection becomes available.", Foreground = new SolidColorBrush(Color.FromRgb(77, 231, 255)), TextWrapping = TextWrapping.Wrap });

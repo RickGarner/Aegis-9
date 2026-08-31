@@ -93,7 +93,9 @@ def parse_workflow_plan_response(content: str) -> tuple[str, list[dict]]:
             "required": bool(raw.get("required", True)),
             "options": options,
         })
-    resolved_plan = plan or content.strip()
+    if not plan:
+        return "", []
+    resolved_plan = plan
     return resolved_plan, questions or infer_unresolved_plan_questions(resolved_plan)
 
 
@@ -144,6 +146,10 @@ async def lifespan(app: FastAPI):
     app.state.store = JarvisStore(settings.database_path)
     app.state.store.initialize()
     for workflow in app.state.store.get_workflows():
+        parsed_plan, _ = parse_workflow_plan_response(workflow.plan_text) if workflow.plan_text else ("", [])
+        if workflow.state in {"design_review", "needs_clarification", "plan_review"} and not parsed_plan:
+            app.state.store.reset_invalid_workflow_plan(workflow.id)
+            continue
         if workflow.state != "plan_review" or not workflow.plan_text:
             continue
         inferred = infer_unresolved_plan_questions(workflow.plan_text)
@@ -510,11 +516,26 @@ async def _generate_workflow_plan(
         ChatMessage(role="system", content="You are the A.E.G.I.S.-9 workflow architect. Design a safe, testable operational workflow plan only; do not generate executable code. Return strict JSON with this shape: {\"plan\": \"complete markdown plan\", \"questions\": [{\"id\": \"stable_key\", \"prompt\": \"question\", \"required\": true, \"options\": [\"optional choice\"]}]}. The plan must cover goal, inputs, assumptions, ordered steps, permissions, risks, test strategy, success criteria, schedule considerations, and stop conditions. Ask only material unresolved questions. Return an empty questions array when the plan is ready for approval."),
         ChatMessage(role="user", content=f"Workflow: {workflow.title}\nRequest: {workflow.description}\nPreferred implementation: {workflow.language}\nAttached material:\n{context or '[none]'}\nPreviously submitted clarification answers:\n{json.dumps(workflow.clarification_answers, indent=2) if workflow.clarification_answers else '[none]'}"),
     ]
-    try:
-        routed = await provider.chat_for_task("reasoning", messages)
-    except ProviderError as error:
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(error)) from error
-    plan, questions = parse_workflow_plan_response(routed.content)
+    routed = None
+    plan = ""
+    questions: list[dict] = []
+    for attempt in range(2):
+        try:
+            routed = await provider.chat_for_task("reasoning", messages)
+        except ProviderError as error:
+            raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(error)) from error
+        plan, questions = parse_workflow_plan_response(routed.content)
+        if plan:
+            break
+        messages.extend([
+            ChatMessage(role="assistant", content=routed.content),
+            ChatMessage(role="user", content="Your response contained an empty plan. Return the requested strict JSON again with a substantive, complete markdown plan. Do not leave the plan field empty."),
+        ])
+    if not plan or routed is None:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="The selected planning model returned an empty workflow plan twice. The draft remains unchanged; retry planning or select another reasoning model.",
+        )
     result = store.save_workflow_plan(workflow_id, plan, routed.route.provider, routed.route.model, questions, finalizing=finalizing)
     if result is None:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Workflow changed before the plan could be saved.")
