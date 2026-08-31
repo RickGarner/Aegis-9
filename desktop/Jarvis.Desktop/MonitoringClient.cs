@@ -151,7 +151,7 @@ public sealed class MonitoringClient
     public async Task<Workflow> CreateWorkflowAsync(string title, string description, IReadOnlyList<int>? attachmentIds, CancellationToken cancellationToken, string language = "powershell")
     {
         using var response = await _httpClient.PostAsJsonAsync("api/workflows", new WorkflowRequest { Title = title, Description = description, AttachmentIds = attachmentIds ?? [], Language = language }, JsonOptions, cancellationToken);
-        response.EnsureSuccessStatusCode();
+        await EnsureSuccessWithDetailAsync(response, "Workflow draft", cancellationToken);
         return await response.Content.ReadFromJsonAsync<Workflow>(JsonOptions, cancellationToken)
             ?? throw new InvalidOperationException("Workflow API returned an empty response.");
     }
@@ -159,7 +159,7 @@ public sealed class MonitoringClient
     public async Task<Workflow> UpdateWorkflowAsync(int workflowId, WorkflowRequest request, CancellationToken cancellationToken)
     {
         using var response = await _httpClient.PutAsJsonAsync($"api/workflows/{workflowId}", request, JsonOptions, cancellationToken);
-        response.EnsureSuccessStatusCode();
+        await EnsureSuccessWithDetailAsync(response, "Workflow update", cancellationToken);
         return await response.Content.ReadFromJsonAsync<Workflow>(JsonOptions, cancellationToken) ?? throw new InvalidOperationException("Workflow update returned an empty response.");
     }
 
@@ -226,6 +226,32 @@ public sealed class MonitoringClient
         response.EnsureSuccessStatusCode();
         return await response.Content.ReadFromJsonAsync<WorkflowTransition>(JsonOptions, cancellationToken)
             ?? throw new InvalidOperationException("Workflow action API returned an empty response.");
+    }
+
+    private static async Task EnsureSuccessWithDetailAsync(HttpResponseMessage response, string operation, CancellationToken cancellationToken)
+    {
+        if (response.IsSuccessStatusCode) return;
+        var payload = await response.Content.ReadAsStringAsync(cancellationToken);
+        var detail = payload;
+        try
+        {
+            using var document = JsonDocument.Parse(payload);
+            if (document.RootElement.TryGetProperty("detail", out var value))
+            {
+                if (value.ValueKind == JsonValueKind.Array)
+                {
+                    detail = string.Join("; ", value.EnumerateArray().Select(item =>
+                    {
+                        var location = item.TryGetProperty("loc", out var loc) ? string.Join(".", loc.EnumerateArray().Select(part => part.ToString())) : "request";
+                        var message = item.TryGetProperty("msg", out var msg) ? msg.GetString() : item.ToString();
+                        return $"{location}: {message}";
+                    }));
+                }
+                else detail = value.ToString();
+            }
+        }
+        catch (JsonException) { }
+        throw new HttpRequestException($"{operation} returned HTTP {(int)response.StatusCode}: {detail}");
     }
 }
 

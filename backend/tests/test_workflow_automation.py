@@ -2,12 +2,18 @@ from pathlib import Path
 
 from app.storage import JarvisStore
 from app.main import parse_workflow_plan_response
+from app.main import WorkflowRequest
 
 
 def make_store(tmp_path: Path) -> JarvisStore:
     store = JarvisStore(tmp_path / "jarvis.db")
     store.initialize()
     return store
+
+
+def test_workflow_request_accepts_detailed_operating_instructions() -> None:
+    request = WorkflowRequest(title="Detailed workflow", description="x" * 10_000)
+    assert len(request.description) == 10_000
 
 
 def test_workflow_requires_test_user_and_supervisor_gates(tmp_path: Path) -> None:

@@ -45,7 +45,7 @@ class ApprovalRequest(BaseModel):
 
 class WorkflowRequest(BaseModel):
     title: str = Field(min_length=1, max_length=120)
-    description: str = Field(default="", max_length=500)
+    description: str = Field(default="", max_length=20_000)
     attachment_ids: list[int] = Field(default_factory=list)
     language: str = Field(default="powershell", pattern="^(powershell|csharp)$")
 
