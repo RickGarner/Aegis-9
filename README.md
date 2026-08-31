@@ -1,5 +1,12 @@
 # Jarvis Desktop
 
+> **Canonical version notice (2026-08-30):** The current A.E.G.I.S.-9
+> application is on `feature/cinematic-jarvis-ui`. The `main` branch still
+> builds the older pre-cinematic interface. New computers and review sessions
+> must fetch and switch to the cinematic branch before building or assessing
+> project status. Start with [`docs/CURRENT-VERSION.md`](docs/CURRENT-VERSION.md)
+> and [`docs/handoff.md`](docs/handoff.md).
+
 Jarvis Desktop is the native Windows Command Center for the Jarvis local-first personal assistant. It is a standalone application: this folder contains everything needed to build and run it, including its own copy of the FastAPI backend.
 
 ## Repository split
@@ -25,6 +32,12 @@ If you need the web dashboard, use `D:\Jarvis_Web` instead. The two folders do n
 
 ## Current status
 
+- Cinematic A.E.G.I.S.-9 WPF command center with a cohesive dark operations layout
+- Cyber-lupine WebView2 avatar runtime with local head, bust, rigged, and warrior GLB assets
+- Adaptive provider discovery and routing across local/remote LM Studio, Ollama, and LiteLLM
+- Local voice input through Faster-Whisper with WPF microphone capture
+- Local Kokoro speech output with offline Windows speech fallback
+- Reproducible Windows workstation bootstrap and validation under `deployment/windows/`
 - FastAPI backend with a local OpenAI-compatible provider client, provider/dependency health checks, and configured model fallback
 - Native .NET 8 WPF command center with automatic backend startup and readiness gating
 - Native session restoration, file intake/preview/removal, activity trail, and alert resolution
@@ -39,7 +52,7 @@ If you need the web dashboard, use `D:\Jarvis_Web` instead. The two folders do n
 - Bounded local artifact generation for recognized script/file requests; the first implemented path creates a PowerShell add-two-numbers script under local generated storage
 - SQLite persistence for chat, activity logs, staged-file metadata, approvals, and workflow state
 
-MoveIT execution-history parsing, remote server agent feeds, workflow execution actions, research tools, packaged Kokoro runtime, licensed avatar asset onboarding, and full VRM/lip-sync rendering remain in progress. See `docs/handoff.md` for the full continuity record.
+MoveIT execution-history parsing, remote server agent feeds, workflow execution actions, research tools, production installer validation, and final end-to-end voice/avatar synchronization validation remain in progress. See `docs/CURRENT-VERSION.md` and `docs/handoff.md` for the full continuity record.
 
 ## Run locally
 
@@ -76,6 +89,7 @@ cd backend
 
 ## Documentation
 
+- `docs/CURRENT-VERSION.md` - canonical branch, current file map, verification state, and multi-computer startup rules
 - `docs/handoff.md` - continuity record and current status
 - `docs/native-desktop.md` - native Windows application architecture and window roles
 - `docs/visual-studio-handoff.md` - Visual Studio 2022 setup and build guidance

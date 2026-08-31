@@ -1,5 +1,10 @@
 # Jarvis Visual Studio 2022 Handoff
 
+> **Branch requirement:** Before opening the solution, run `git fetch origin`
+> and confirm `git branch --show-current` returns
+> `feature/cinematic-jarvis-ui`. `main` contains the older pre-cinematic UI.
+> See `docs/CURRENT-VERSION.md` for the authoritative handoff and file map.
+
 ## Purpose
 
 This document is the handoff for continuing Jarvis Desktop in Visual Studio 2022. The production operator experience is a native Windows WPF application. This folder (`D:\Jarvis_Desktop`) is a standalone, independent checkout: it bundles its own copy of `backend/`, `config/`, and `.venv`. The React dashboard has moved to the separate `D:\Jarvis_Web` folder/repository and is not required to run Jarvis on Windows.
@@ -13,6 +18,11 @@ Open `Jarvis.sln` in Visual Studio 2022. The solution currently contains:
 The project targets `.NET 8` with `net8.0-windows` and enables WPF. Do not retarget it just because a newer Visual Studio or SDK is installed. Retarget only when there is a tested runtime requirement.
 
 The Python backend is intentionally not represented as a .NET project. It remains a separate FastAPI service in `backend/` and is the API boundary for the desktop client.
+
+On a new computer, run the branch-owned bootstrap at
+`deployment/windows/Install-Aegis9Workstation.ps1` before debugging. Do not
+reconstruct Ollama, LiteLLM, Kokoro, LM Studio, or their Windows services from
+older notes. Validate with `deployment/windows/Test-Aegis9Workstation.ps1`.
 
 ## Runtime architecture
 

@@ -1,5 +1,10 @@
 # Native Windows Desktop
 
+> The current native application is the cinematic A.E.G.I.S.-9 build on
+> `feature/cinematic-jarvis-ui`. If this file is read from `main`, that checkout
+> is the older UI. Fetch and switch branches as described in
+> `docs/CURRENT-VERSION.md` before building.
+
 Jarvis is a native Windows operations application. This folder (`D:\Jarvis_Desktop`) contains the native app, its own bundled FastAPI backend, and supporting docs. The React dashboard has moved to the separate `D:\Jarvis_Web` folder/repository and is not required at runtime.
 
 ## Window roles

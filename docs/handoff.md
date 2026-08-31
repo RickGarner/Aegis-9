@@ -1,5 +1,43 @@
 # Jarvis Handoff
 
+## Critical current-version notice — 2026-08-30
+
+The canonical A.E.G.I.S.-9 application is currently developed on
+`feature/cinematic-jarvis-ui`, not `main`. GitHub's default branch and
+`origin/HEAD` may still select `main`, which contains the older WPF interface.
+That older interface is not evidence that the cinematic UI was lost.
+
+Every new computer must begin with:
+
+```powershell
+git fetch origin
+git switch feature/cinematic-jarvis-ui
+git pull --ff-only origin feature/cinematic-jarvis-ui
+```
+
+Read `docs/CURRENT-VERSION.md` for the canonical file map, workstation setup,
+verified state, and remaining work. Use
+`deployment/windows/Install-Aegis9Workstation.ps1` for a clean machine and
+`deployment/windows/Test-Aegis9Workstation.ps1` to validate it.
+
+The cinematic branch contains the August 29 cinematic UI and cyber-lupine
+avatar commits, the August 30 local voice/adaptive provider work, the merge of
+the latest `main`, and the reproducible workstation bootstrap. The primary
+current implementation areas are:
+
+- `desktop/Jarvis.Desktop/MainWindow.xaml` and `.xaml.cs` — cinematic UI
+- `desktop/Jarvis.Desktop/Assets/AvatarHost/` — local avatar renderer
+- `desktop/Jarvis.Desktop/Assets/Avatars/shared/` — cyber-lupine GLB assets
+- `backend/app/providers.py` — adaptive provider routing
+- `backend/app/speech_recognition.py` — local voice-input backend
+- `desktop/Jarvis.Desktop/LocalSpeechRecognitionService.cs` — WPF voice input
+- `deployment/windows/` — authoritative dependency/service bootstrap
+
+The older sections below remain useful implementation history, but statements
+that call `main` the intended branch, describe the avatar as placeholder-only,
+or say local voice/provider routing is only scaffolding are superseded by this
+notice and `docs/CURRENT-VERSION.md`.
+
 ## Session Summary
 
 This document exists to provide continuity between development sessions and between different machines. It captures the project state, environment details, current progress, known issues, and the next actions to continue with.
@@ -7,11 +45,12 @@ This document exists to provide continuity between development sessions and betw
 ## Current Machine / Environment
 
 - Machine: Home workstation
-- Date: 2026-08-25
+- Original handoff date: 2026-08-25; canonical branch update: 2026-08-30
 - Environment: Visual Studio 2022 solution with native WPF shell and live monitoring
 - Project: Jarvis Desktop
-- Local path: `D:\Jarvis_Desktop` (moved from the combined `D:\Jarvis` checkout on 2026-08-25; see "Repository Split" below)
+- Local path: machine-specific; common paths include `D:\Jarvis_Desktop` and `D:\Jarvis-Desktop`
 - Repository: https://github.com/RickGarner/Jarvis-Desktop
+- Current development branch: `feature/cinematic-jarvis-ui`
 
 ## Current Status
 

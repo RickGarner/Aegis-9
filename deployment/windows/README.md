@@ -1,5 +1,11 @@
 # A.E.G.I.S.-9 Windows workstation bootstrap
 
+> This bootstrap belongs to the canonical `feature/cinematic-jarvis-ui`
+> branch. Confirm that branch before running it. The older `main` branch does
+> not contain the current cinematic UI/runtime stack. See
+> [`docs/CURRENT-VERSION.md`](../../docs/CURRENT-VERSION.md) for the
+> cross-computer handoff.
+
 This package reproduces the local provider and speech-service layout used by the development workstation. It is intended for a clean 64-bit Windows 10 22H2 or Windows 11 computer with administrator access and a supported GPU driver.
 
 ## What it installs
