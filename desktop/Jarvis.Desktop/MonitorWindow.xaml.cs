@@ -5,7 +5,7 @@ using System.Windows.Threading;
 
 namespace Jarvis.Desktop;
 
-public enum MonitorWindowKind { MoveIt, ServerStatus }
+public enum MonitorWindowKind { MoveIt, ServerStatus, FreeFlow, Qualys }
 
 public partial class MonitorWindow : Window
 {
@@ -19,7 +19,7 @@ public partial class MonitorWindow : Window
     {
         InitializeComponent();
         _kind = kind;
-        _timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(kind == MonitorWindowKind.MoveIt ? 300 : 60) };
+        _timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(kind is MonitorWindowKind.MoveIt or MonitorWindowKind.Qualys ? 300 : 60) };
         _timer.Tick += async (_, _) => await RefreshAsync();
         Loaded += async (_, _) => await RefreshAsync();
         Closed += (_, _) => { _timer.Stop(); _refreshCancellation?.Cancel(); };
@@ -28,15 +28,12 @@ public partial class MonitorWindow : Window
 
     private void ConfigureView()
     {
-        var moveIt = _kind == MonitorWindowKind.MoveIt;
-        WindowTitleText.Text = moveIt ? "MOVEIT AUTOMATION" : "SERVER STATUS";
-        WindowSubtitleText.Text = moveIt ? "LIVE TASK CATALOG / FIVE MINUTE MONITOR" : "STARTER SERVER INVENTORY / RESOURCE AND SERVICE MONITOR";
-        MoveItView.Visibility = moveIt ? Visibility.Visible : Visibility.Collapsed;
-        ServerView.Visibility = moveIt ? Visibility.Collapsed : Visibility.Visible;
-        if (!moveIt)
-        {
-            ServersList.ItemsSource = new ObservableCollection<ServerInventory>();
-        }
+        WindowTitleText.Text = _kind switch { MonitorWindowKind.MoveIt => "MOVEIT AUTOMATION", MonitorWindowKind.ServerStatus => "SERVER STATUS", MonitorWindowKind.FreeFlow => "XEROX FREEFLOW CORE", _ => "QUALYS VULNERABILITIES" };
+        WindowSubtitleText.Text = _kind switch { MonitorWindowKind.MoveIt => "LIVE TASK CATALOG / FIVE MINUTE MONITOR", MonitorWindowKind.ServerStatus => "STARTER SERVER INVENTORY / RESOURCE AND SERVICE MONITOR", MonitorWindowKind.FreeFlow => "PRIMARY / SECONDARY PORTAL AVAILABILITY", _ => "URGENT AND CRITICAL FINDINGS FIRST" };
+        MoveItView.Visibility = _kind == MonitorWindowKind.MoveIt ? Visibility.Visible : Visibility.Collapsed;
+        ServerView.Visibility = _kind == MonitorWindowKind.ServerStatus ? Visibility.Visible : Visibility.Collapsed;
+        FreeFlowView.Visibility = _kind == MonitorWindowKind.FreeFlow ? Visibility.Visible : Visibility.Collapsed;
+        QualysView.Visibility = _kind == MonitorWindowKind.Qualys ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private async Task RefreshAsync()
@@ -49,7 +46,7 @@ public partial class MonitorWindow : Window
         {
             ConnectionText.Text = "REFRESHING";
             var dashboard = await _client.GetDashboardAsync(_refreshCancellation.Token);
-            if (_kind == MonitorWindowKind.MoveIt) UpdateMoveIt(dashboard); else UpdateServer(dashboard);
+            switch (_kind) { case MonitorWindowKind.MoveIt: UpdateMoveIt(dashboard); break; case MonitorWindowKind.ServerStatus: UpdateServer(dashboard); break; case MonitorWindowKind.FreeFlow: UpdateFreeFlow(dashboard); break; case MonitorWindowKind.Qualys: UpdateQualys(dashboard); break; }
             ConnectionText.Text = "CONNECTED";
             ConnectionText.Foreground = (TryFindResource("GreenBrush") as Brush) ?? Brushes.Green;
             LastUpdatedText.Text = $"Updated {DateTime.Now:HH:mm:ss}";
@@ -76,6 +73,18 @@ public partial class MonitorWindow : Window
         var server = dashboard.Server;
         DetailText.Text = $"{server.Detail} Live metrics are currently collected from the A.E.G.I.S.-9 host; remote agent feeds will populate the starter hosts when connected.";
         ServersList.ItemsSource = server.Servers;
+    }
+
+    private void UpdateFreeFlow(MonitoringDashboard dashboard)
+    {
+        DetailText.Text = dashboard.FreeFlow.Detail;
+        FreeFlowServersList.ItemsSource = dashboard.FreeFlow.Servers;
+    }
+
+    private void UpdateQualys(MonitoringDashboard dashboard)
+    {
+        DetailText.Text = $"{dashboard.Qualys.Detail} Urgent: {dashboard.Qualys.UrgentCount} · Critical: {dashboard.Qualys.CriticalCount} · Serious: {dashboard.Qualys.SeriousCount}";
+        QualysFindingsList.ItemsSource = dashboard.Qualys.Findings;
     }
 
     private async void RefreshButton_Click(object sender, RoutedEventArgs e) => await RefreshAsync();

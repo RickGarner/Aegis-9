@@ -84,13 +84,15 @@ public partial class WorkflowWindow : Window
     private async void RefreshButton_Click(object sender, RoutedEventArgs e) => await RefreshAsync();
     private async void ApproveButton_Click(object sender, RoutedEventArgs e)
     {
-        if (_workflow is null || _workflow.State != "awaiting_approval") return;
-        try
-        {
-            _workflow = await _client.ApproveWorkflowAsync(_workflow.Id, CancellationToken.None);
-            await RefreshAsync();
-        }
-        catch (Exception error) { ResultText.Text = $"Workflow approval was not accepted: {error.Message}"; }
+        if (_workflow is null) return;
+        new WorkflowApprovalWindow(_workflow) { Owner = this }.ShowDialog();
+        await RefreshAsync();
+    }
+    private async void ScheduleButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_workflow is null) return;
+        new WorkflowScheduleWindow(_workflow) { Owner = this }.ShowDialog();
+        await RefreshAsync();
     }
     private async void PauseButton_Click(object sender, RoutedEventArgs e) => await TransitionAsync("pause");
     private async void ResumeButton_Click(object sender, RoutedEventArgs e) => await TransitionAsync("resume");

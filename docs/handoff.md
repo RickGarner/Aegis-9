@@ -1,9 +1,9 @@
 # Jarvis Handoff
 
-## Critical current-version notice — 2026-08-30
+## Critical current-version notice — 2026-08-31
 
 The canonical A.E.G.I.S.-9 application is currently developed on
-`feature/cinematic-jarvis-ui`, not `main`. GitHub's default branch and
+`feature/workflow-automation-monitoring-2026-08-31`, not `main`. GitHub's default branch and
 `origin/HEAD` may still select `main`, which contains the older WPF interface.
 That older interface is not evidence that the cinematic UI was lost.
 
@@ -11,8 +11,8 @@ Every new computer must begin with:
 
 ```powershell
 git fetch origin
-git switch feature/cinematic-jarvis-ui
-git pull --ff-only origin feature/cinematic-jarvis-ui
+git switch feature/workflow-automation-monitoring-2026-08-31
+git pull --ff-only origin feature/workflow-automation-monitoring-2026-08-31
 ```
 
 Read `docs/CURRENT-VERSION.md` for the canonical file map, workstation setup,
@@ -38,6 +38,35 @@ that call `main` the intended branch, describe the avatar as placeholder-only,
 or say local voice/provider routing is only scaffolding are superseded by this
 notice and `docs/CURRENT-VERSION.md`.
 
+## 2026-08-31 continuation summary
+
+This branch preserves the cinematic UI and adds the current workflow automation
+and operational monitoring work. It starts from `feature/cinematic-jarvis-ui`;
+that branch and `main` remain unchanged recovery points.
+
+Completed today:
+
+- Added read-only Xerox FreeFlow Core and Qualys Operations windows and backend
+  collectors. FreeFlow registers `BSOXERALB001` primary and `BSOXERALB002`
+  secondary; exact portal details remain intentionally unconfigured.
+- Rebuilt Workflow Center with recent activity, awaiting-action queue, and
+  create/edit/review/delete/approval/schedule surfaces.
+- Added durable revisions, file attachments, PowerShell/C# selection, separate
+  reasoning/coding model routing, and test/user/supervisor gates.
+- Enforced draft, tentative plan, Design Review, individual answers, Final
+  Submit/Update Draft, AI re-evaluation, final plan approval/rejection,
+  implementation/test-plan generation, final approval, and scheduling order.
+- Added split-pane Design Review with plan and questions visible together. Each
+  question has its own text/choice input and individual submit command.
+- Prevented malformed/truncated model responses and unresolved assumptions from
+  bypassing Design Review.
+- Added durable `workflow-ready` activity events and operator/dashboard
+  notifications when re-evaluation is ready for approval or needs more answers.
+- Verified 18 backend tests and a successful WPF build with zero errors.
+
+Continue by reading `docs/workflow-automation-requirements.md`,
+`docs/operational-monitoring.md`, and `docs/MIGRATION-2026-08-31.md`.
+
 ## Session Summary
 
 This document exists to provide continuity between development sessions and between different machines. It captures the project state, environment details, current progress, known issues, and the next actions to continue with.
@@ -45,12 +74,12 @@ This document exists to provide continuity between development sessions and betw
 ## Current Machine / Environment
 
 - Machine: Home workstation
-- Original handoff date: 2026-08-25; canonical branch update: 2026-08-30
+- Original handoff date: 2026-08-25; canonical branch update: 2026-08-31
 - Environment: Visual Studio 2022 solution with native WPF shell and live monitoring
 - Project: Jarvis Desktop
 - Local path: machine-specific; common paths include `D:\Jarvis_Desktop` and `D:\Jarvis-Desktop`
 - Repository: https://github.com/RickGarner/Jarvis-Desktop
-- Current development branch: `feature/cinematic-jarvis-ui`
+- Current development branch: `feature/workflow-automation-monitoring-2026-08-31`
 
 ## Current Status
 

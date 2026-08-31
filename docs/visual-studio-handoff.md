@@ -2,7 +2,7 @@
 
 > **Branch requirement:** Before opening the solution, run `git fetch origin`
 > and confirm `git branch --show-current` returns
-> `feature/cinematic-jarvis-ui`. `main` contains the older pre-cinematic UI.
+> `feature/workflow-automation-monitoring-2026-08-31`. `main` contains the older pre-cinematic UI.
 > See `docs/CURRENT-VERSION.md` for the authoritative handoff and file map.
 
 ## Purpose
@@ -49,6 +49,12 @@ From the repository root, create or update `.env` from `.env.example`, then run:
 ```
 
 ## Recent handoff updates (migration work completed so far)
+
+- 2026-08-31: continued the cinematic application on
+  `feature/workflow-automation-monitoring-2026-08-31` with FreeFlow/Qualys
+  monitoring and the staged daily-workflow Design Review, model routing,
+  approval, test, and scheduling foundation. See
+  `docs/MIGRATION-2026-08-31.md`.
 
 - Added a lightweight backend launcher and app startup integration so the WPF shell can auto-start a packaged Python FastAPI backend when installed. See desktop/Jarvis.Desktop/BackendLauncher.cs and App.xaml.cs.
 - MonitoringClient now includes a CheckHealthAsync(CancellationToken) helper used by the UI to poll the backend readiness endpoint before updating status.

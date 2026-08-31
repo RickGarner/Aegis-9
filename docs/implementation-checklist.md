@@ -76,6 +76,25 @@
 
 ## Safety and Hardening
 - [ ] Add allowlist/denylist policy
+
+## Daily Workflow Automation
+
+- [x] Add durable basic workflow records and supervisor lifecycle controls
+- [x] Add monitor-aware workflow views and capacity-bounded queueing
+- [x] Add three-recent-workflow and scrollable pending-approval panel
+- [x] Add dedicated create, edit, delete, and approval windows
+- [x] Add AI planning, document analysis, and clarification-answer/re-evaluation loop
+- [x] Route workflow planning and implementation to independently selected models
+- [x] Require plan approval before coding-model implementation generation
+- [x] Require tentative-plan Design Review and individual question submission
+- [x] Prevent malformed/truncated model responses from bypassing review
+- [x] Notify the dashboard/operator when re-evaluation is ready for approval or needs more answers
+- [ ] Add versioned PowerShell and C# workflow generation
+- [ ] Add non-production test profiles and retained test evidence
+- [x] Separate user acceptance from supervisor production approval in the domain model and UI
+- [ ] Add schedules, prerequisites, start/stop conditions, and missed-run policy
+- [ ] Add production runner, live output, history, cancellation, retry, and recovery
+- [x] Add recoverable archive/delete and two-step destructive confirmation
 - [x] Add explicit approval for risky actions
 - [x] Add stop/pause support
 - [x] Add error handling

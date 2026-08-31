@@ -4,6 +4,8 @@ import subprocess
 import sys
 import smtplib
 import ssl
+import time
+import xml.etree.ElementTree as ET
 from email.message import EmailMessage
 from datetime import datetime, timezone
 from pathlib import Path
@@ -95,6 +97,45 @@ class ServerInventory(BaseModel):
     automatic_services: str = "Unavailable"
 
 
+class FreeFlowServer(BaseModel):
+    name: str
+    role: str
+    web_url: str = ""
+    status: MonitorStatus = "unavailable"
+    http_status: int | None = None
+    response_ms: int | None = None
+    detail: str = ""
+    last_checked_at: str
+
+
+class FreeFlowMonitor(BaseModel):
+    status: MonitorStatus
+    last_checked_at: str
+    detail: str
+    servers: list[FreeFlowServer] = Field(default_factory=list)
+
+
+class QualysFinding(BaseModel):
+    qid: str
+    asset: str
+    severity: int
+    severity_label: str
+    status: str
+    title: str = ""
+    first_found_at: str | None = None
+    last_found_at: str | None = None
+
+
+class QualysMonitor(BaseModel):
+    status: MonitorStatus
+    last_checked_at: str
+    detail: str
+    urgent_count: int = 0
+    critical_count: int = 0
+    serious_count: int = 0
+    findings: list[QualysFinding] = Field(default_factory=list)
+
+
 class MonitoringAlert(BaseModel):
     id: int
     source: str
@@ -118,11 +159,13 @@ class MonitoringDashboard(BaseModel):
     generated_at: str
     moveit: MoveItMonitor
     server: ServerMonitor
+    freeflow: FreeFlowMonitor
+    qualys: QualysMonitor
     alerts: list[MonitoringAlert] = Field(default_factory=list)
 
 
 class MonitoringActionRequest(BaseModel):
-    source: Literal["moveit", "server"]
+    source: Literal["moveit", "server", "freeflow", "qualys"]
     issue: str = Field(min_length=1, max_length=120)
 
 
@@ -382,12 +425,90 @@ class LocalServerAdapter:
         ]
 
 
+class FreeFlowAdapter:
+    def __init__(self, settings: Settings) -> None:
+        self._inventory_path = settings.freeflow_inventory_path
+        self._timeout = settings.freeflow_timeout_seconds
+        self._verify_tls = settings.freeflow_verify_tls
+
+    def collect(self, checked_at: str) -> FreeFlowMonitor:
+        try:
+            inventory = json.loads(self._inventory_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as error:
+            return FreeFlowMonitor(status="unavailable", last_checked_at=checked_at, detail=f"FreeFlow inventory could not be loaded: {error}")
+        servers: list[FreeFlowServer] = []
+        for item in inventory if isinstance(inventory, list) else []:
+            if not isinstance(item, dict) or not item.get("enabled", True):
+                continue
+            name, role = str(item.get("name", "Unknown")), str(item.get("role", "FreeFlow Core"))
+            url, expected = str(item.get("webUrl", "")).strip(), str(item.get("expectedText", "")).strip()
+            if not url:
+                servers.append(FreeFlowServer(name=name, role=role, web_url="", status="unavailable", detail="Web URL and port are awaiting configuration.", last_checked_at=checked_at))
+                continue
+            started = time.perf_counter()
+            try:
+                response = httpx.get(url, timeout=self._timeout, verify=self._verify_tls, follow_redirects=True)
+                elapsed = round((time.perf_counter() - started) * 1000)
+                reachable = response.status_code < 500
+                content_matches = not expected or expected.lower() in response.text.lower()
+                status: MonitorStatus = "healthy" if reachable and content_matches else "warning" if reachable else "error"
+                detail = "Portal reachable." if status == "healthy" else "Portal responded but expected FreeFlow content was not confirmed." if reachable else f"Portal returned HTTP {response.status_code}."
+                servers.append(FreeFlowServer(name=name, role=role, web_url=url, status=status, http_status=response.status_code, response_ms=elapsed, detail=detail, last_checked_at=checked_at))
+            except httpx.HTTPError as error:
+                servers.append(FreeFlowServer(name=name, role=role, web_url=url, status="error", response_ms=round((time.perf_counter() - started) * 1000), detail=str(error), last_checked_at=checked_at))
+        configured = [server for server in servers if server.web_url]
+        overall: MonitorStatus = "unavailable" if not configured else "error" if any(server.status == "error" for server in configured) else "warning" if any(server.status == "warning" for server in configured) else "healthy"
+        detail = "FreeFlow server roles are registered; add the exact web URLs and ports to begin active checks." if not configured else f"Checked {len(configured)} configured FreeFlow Core portal(s)."
+        return FreeFlowMonitor(status=overall, last_checked_at=checked_at, detail=detail, servers=servers)
+
+
+class QualysAdapter:
+    SEVERITY_LABELS = {5: "Urgent", 4: "Critical", 3: "Serious", 2: "Medium", 1: "Minimal"}
+
+    def __init__(self, settings: Settings) -> None:
+        self._base_url = (settings.qualys_base_url or "").rstrip("/")
+        self._username = settings.qualys_username
+        self._password = settings.qualys_password
+        self._verify_tls = settings.qualys_verify_tls
+        self._minimum_severity = settings.qualys_minimum_severity
+        self._limit = settings.qualys_max_findings
+
+    def collect(self, checked_at: str) -> QualysMonitor:
+        if not self._base_url or not self._username or not self._password:
+            return QualysMonitor(status="unavailable", last_checked_at=checked_at, detail="Qualys platform URL and read-only API credentials are awaiting configuration.")
+        try:
+            response = httpx.get(
+                f"{self._base_url}/api/2.0/fo/asset/host/vm/detection/",
+                params={"action": "list", "status": "New,Active,Re-Opened", "severities": ",".join(str(value) for value in range(self._minimum_severity, 6)), "truncation_limit": self._limit},
+                headers={"X-Requested-With": "A.E.G.I.S.-9"}, auth=(self._username, self._password), timeout=60, verify=self._verify_tls,
+            )
+            response.raise_for_status()
+            root = ET.fromstring(response.text)
+            findings: list[QualysFinding] = []
+            for host in root.findall(".//HOST"):
+                asset = host.findtext("DNS") or host.findtext("IP") or host.findtext("ID") or "Unknown asset"
+                for detection in host.findall(".//DETECTION"):
+                    severity = int(detection.findtext("SEVERITY") or 0)
+                    if severity < self._minimum_severity:
+                        continue
+                    findings.append(QualysFinding(qid=detection.findtext("QID") or "", asset=asset, severity=severity, severity_label=self.SEVERITY_LABELS.get(severity, str(severity)), status=detection.findtext("STATUS") or "Unknown", first_found_at=detection.findtext("FIRST_FOUND_DATETIME"), last_found_at=detection.findtext("LAST_FOUND_DATETIME")))
+            findings.sort(key=lambda finding: (-finding.severity, finding.asset, finding.qid))
+            urgent = sum(finding.severity == 5 for finding in findings)
+            critical = sum(finding.severity == 4 for finding in findings)
+            serious = sum(finding.severity == 3 for finding in findings)
+            return QualysMonitor(status="error" if urgent else "warning" if critical or serious else "healthy", last_checked_at=checked_at, detail=f"{len(findings)} active prioritized Qualys finding(s) returned.", urgent_count=urgent, critical_count=critical, serious_count=serious, findings=findings)
+        except (httpx.HTTPError, ET.ParseError, ValueError) as error:
+            return QualysMonitor(status="unavailable", last_checked_at=checked_at, detail=f"Qualys monitoring request failed: {error}")
+
+
 class MonitoringCollector:
     def __init__(self, store: "MonitoringStore", audit_root: Path, settings: Settings) -> None:
         self.store = store
         self.audit_root = audit_root
         self.moveit = MoveItAdapter(settings)
         self.server = LocalServerAdapter(settings.server_inventory_path)
+        self.freeflow = FreeFlowAdapter(settings)
+        self.qualys = QualysAdapter(settings)
         self.settings = settings
 
     def collect(self) -> MonitoringDashboard:
@@ -396,6 +517,8 @@ class MonitoringCollector:
         audit_events = self.store.get_filesystem_audit(limit=8)
         moveit = self.moveit.collect(checked_at)
         server = self.server.collect(checked_at, audit_events)
+        freeflow = self.freeflow.collect(checked_at)
+        qualys = self.qualys.collect(checked_at)
         server.servers = self._server_inventory(server)
         snapshot_id = self.store.save_snapshot(moveit, server, checked_at)
         self.store.ensure_alert(source="moveit", severity="warning", title="MoveIT monitoring unavailable", detail=moveit.detail, active=moveit.status == "unavailable")
@@ -405,10 +528,16 @@ class MonitoringCollector:
         for task in moveit.tasks:
             if task.status.lower() in {"failed", "error", "missed"}:
                 self.store.ensure_alert(source="moveit", severity="error", title=f"MoveIT task issue: {task.name}", detail=task.detail, active=True)
+        for endpoint in freeflow.servers:
+            self.store.ensure_alert(source="freeflow", severity="error", title=f"FreeFlow portal unavailable: {endpoint.name}", detail=endpoint.detail, active=bool(endpoint.web_url) and endpoint.status == "error")
+        self.store.ensure_alert(source="qualys", severity="error", title="Urgent Qualys vulnerabilities detected", detail=qualys.detail, active=qualys.urgent_count > 0)
+        self.store.ensure_alert(source="qualys", severity="warning", title="Critical Qualys vulnerabilities detected", detail=qualys.detail, active=qualys.critical_count > 0)
         return MonitoringDashboard(
             generated_at=checked_at,
             moveit=moveit,
             server=server,
+            freeflow=freeflow,
+            qualys=qualys,
             alerts=self.store.get_alerts(),
         )
 

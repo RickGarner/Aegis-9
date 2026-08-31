@@ -17,12 +17,12 @@
   {
     "name": "BSOXERALB001",
     "address": "BSOXERALB001",
-    "role": "MoveIT monitored server"
+    "role": "Xerox FreeFlow Core primary"
   },
   {
-    "name": "BSOXEREALB002",
-    "address": "BSOXEREALB002",
-    "role": "MoveIT monitored server"
+    "name": "BSOXERALB002",
+    "address": "BSOXERALB002",
+    "role": "Xerox FreeFlow Core secondary"
   },
   {
     "name": "BSOTRNALB001",

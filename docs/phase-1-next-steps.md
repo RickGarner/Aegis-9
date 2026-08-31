@@ -116,6 +116,16 @@ The app should be able to:
 
 ## Native Migration Status
 
+### 2026-08-31 continuation
+
+Current work continues on
+`feature/workflow-automation-monitoring-2026-08-31`. The native cinematic shell
+now includes FreeFlow/Qualys monitoring foundations and staged workflow
+automation with mandatory Design Review, individual clarification answers,
+re-evaluation notification, final plan approval, coding-model generation,
+test-plan requests, and schedule capture. Actual isolated execution,
+authenticated supervisor authorization, and production scheduling remain open.
+
 The production operator path is now native WPF. Session restoration, file preview/removal, attachment propagation, monitoring alerts, activity display, settings, provider health, automatic backend startup, and native workflow supervision have been ported and smoke-tested.
 
 ## Next After Phase 1

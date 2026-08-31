@@ -102,6 +102,15 @@ class Settings(BaseSettings):
         default=Path(__file__).resolve().parents[2] / "config" / "monitored-servers.json",
         validation_alias="JARVIS_SERVER_INVENTORY_PATH",
     )
+    freeflow_inventory_path: Path = Field(default=Path("config/freeflow-servers.json"), validation_alias="JARVIS_FREEFLOW_INVENTORY_PATH")
+    freeflow_timeout_seconds: float = Field(default=10, ge=1, le=60, validation_alias="JARVIS_FREEFLOW_TIMEOUT_SECONDS")
+    freeflow_verify_tls: bool = Field(default=True, validation_alias="JARVIS_FREEFLOW_VERIFY_TLS")
+    qualys_base_url: str | None = Field(default=None, validation_alias="JARVIS_QUALYS_BASE_URL")
+    qualys_username: str | None = Field(default=None, validation_alias="JARVIS_QUALYS_USERNAME")
+    qualys_password: str | None = Field(default=None, validation_alias="JARVIS_QUALYS_PASSWORD")
+    qualys_verify_tls: bool = Field(default=True, validation_alias="JARVIS_QUALYS_VERIFY_TLS")
+    qualys_minimum_severity: int = Field(default=4, ge=1, le=5, validation_alias="JARVIS_QUALYS_MINIMUM_SEVERITY")
+    qualys_max_findings: int = Field(default=200, ge=10, le=1000, validation_alias="JARVIS_QUALYS_MAX_FINDINGS")
     moveit_servers: str = Field(
         default="BSOAUTALB002,BSOAUTALB001",
         validation_alias="JARVIS_MOVEIT_SERVERS",
@@ -121,6 +130,8 @@ class Settings(BaseSettings):
     def resolve_provider_base_url(self) -> "Settings":
         if not self.server_inventory_path.is_absolute():
             self.server_inventory_path = (Path(__file__).resolve().parents[2] / self.server_inventory_path).resolve()
+        if not self.freeflow_inventory_path.is_absolute():
+            self.freeflow_inventory_path = (Path(__file__).resolve().parents[2] / self.freeflow_inventory_path).resolve()
         if self.provider_base_url is not None or self.provider != "lmstudio":
             return self
 

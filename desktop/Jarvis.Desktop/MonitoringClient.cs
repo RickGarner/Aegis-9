@@ -125,12 +125,68 @@ public sealed class MonitoringClient
         return await response.Content.ReadFromJsonAsync<List<Workflow>>(JsonOptions, cancellationToken) ?? [];
     }
 
-    public async Task<Workflow> CreateWorkflowAsync(string title, string description, IReadOnlyList<int>? attachmentIds, CancellationToken cancellationToken)
+    public async Task<Workflow> CreateWorkflowAsync(string title, string description, IReadOnlyList<int>? attachmentIds, CancellationToken cancellationToken, string language = "powershell")
     {
-        using var response = await _httpClient.PostAsJsonAsync("api/workflows", new WorkflowRequest { Title = title, Description = description, AttachmentIds = attachmentIds ?? [] }, JsonOptions, cancellationToken);
+        using var response = await _httpClient.PostAsJsonAsync("api/workflows", new WorkflowRequest { Title = title, Description = description, AttachmentIds = attachmentIds ?? [], Language = language }, JsonOptions, cancellationToken);
         response.EnsureSuccessStatusCode();
         return await response.Content.ReadFromJsonAsync<Workflow>(JsonOptions, cancellationToken)
             ?? throw new InvalidOperationException("Workflow API returned an empty response.");
+    }
+
+    public async Task<Workflow> UpdateWorkflowAsync(int workflowId, WorkflowRequest request, CancellationToken cancellationToken)
+    {
+        using var response = await _httpClient.PutAsJsonAsync($"api/workflows/{workflowId}", request, JsonOptions, cancellationToken);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<Workflow>(JsonOptions, cancellationToken) ?? throw new InvalidOperationException("Workflow update returned an empty response.");
+    }
+
+    public async Task<Workflow> ReviewWorkflowAsync(int workflowId, string decision, CancellationToken cancellationToken)
+    {
+        using var response = await _httpClient.PostAsJsonAsync($"api/workflows/{workflowId}/review", new { decision }, JsonOptions, cancellationToken);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<Workflow>(JsonOptions, cancellationToken) ?? throw new InvalidOperationException("Workflow review returned an empty response.");
+    }
+
+    public async Task<Workflow> DesignWorkflowPlanAsync(int workflowId, CancellationToken cancellationToken)
+    {
+        using var response = await _httpClient.PostAsync($"api/workflows/{workflowId}/design-plan", null, cancellationToken);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<Workflow>(JsonOptions, cancellationToken) ?? throw new InvalidOperationException("Workflow planning returned an empty response.");
+    }
+
+    public async Task<Workflow> GenerateWorkflowImplementationAsync(int workflowId, CancellationToken cancellationToken)
+    {
+        using var response = await _httpClient.PostAsync($"api/workflows/{workflowId}/generate-implementation", null, cancellationToken);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<Workflow>(JsonOptions, cancellationToken) ?? throw new InvalidOperationException("Workflow implementation returned an empty response.");
+    }
+
+    public async Task<Workflow> AnswerWorkflowQuestionAsync(int workflowId, string questionId, string answer, CancellationToken cancellationToken)
+    {
+        using var response = await _httpClient.PutAsJsonAsync($"api/workflows/{workflowId}/clarifications/{Uri.EscapeDataString(questionId)}", new { answer }, JsonOptions, cancellationToken);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<Workflow>(JsonOptions, cancellationToken) ?? throw new InvalidOperationException("Question submission returned an empty response.");
+    }
+
+    public async Task<Workflow> CompleteWorkflowDesignReviewAsync(int workflowId, CancellationToken cancellationToken)
+    {
+        using var response = await _httpClient.PostAsync($"api/workflows/{workflowId}/complete-design-review", null, cancellationToken);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<Workflow>(JsonOptions, cancellationToken) ?? throw new InvalidOperationException("Draft re-evaluation returned an empty response.");
+    }
+
+    public async Task<Workflow> ScheduleWorkflowAsync(int workflowId, WorkflowSchedule schedule, CancellationToken cancellationToken)
+    {
+        using var response = await _httpClient.PutAsJsonAsync($"api/workflows/{workflowId}/schedule", schedule, JsonOptions, cancellationToken);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<Workflow>(JsonOptions, cancellationToken) ?? throw new InvalidOperationException("Workflow schedule returned an empty response.");
+    }
+
+    public async Task<Workflow> ArchiveWorkflowAsync(int workflowId, CancellationToken cancellationToken)
+    {
+        using var response = await _httpClient.DeleteAsync($"api/workflows/{workflowId}", cancellationToken);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<Workflow>(JsonOptions, cancellationToken) ?? throw new InvalidOperationException("Workflow archive returned an empty response.");
     }
 
     public async Task<Workflow> ApproveWorkflowAsync(int workflowId, CancellationToken cancellationToken)
@@ -249,6 +305,7 @@ public sealed class WorkflowRequest
     public string Title { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
     [JsonPropertyName("attachment_ids")] public IReadOnlyList<int> AttachmentIds { get; set; } = [];
+    public string Language { get; set; } = "powershell";
 }
 
 public sealed class WorkflowActionRequest
@@ -263,6 +320,39 @@ public sealed class Workflow
     public string Description { get; set; } = string.Empty;
     public string State { get; set; } = string.Empty;
     [JsonPropertyName("monitor_slot")] public int? MonitorSlot { get; set; }
+    public string Language { get; set; } = "powershell";
+    public int Revision { get; set; } = 1;
+    [JsonPropertyName("approval_stage")] public string ApprovalStage { get; set; } = "draft";
+    public Dictionary<string, JsonElement> Schedule { get; set; } = [];
+    public bool Archived { get; set; }
+    [JsonPropertyName("created_at")] public string CreatedAt { get; set; } = string.Empty;
+    [JsonPropertyName("updated_at")] public string UpdatedAt { get; set; } = string.Empty;
+    [JsonPropertyName("plan_text")] public string PlanText { get; set; } = string.Empty;
+    [JsonPropertyName("plan_provider")] public string PlanProvider { get; set; } = string.Empty;
+    [JsonPropertyName("plan_model")] public string PlanModel { get; set; } = string.Empty;
+    [JsonPropertyName("implementation_text")] public string ImplementationText { get; set; } = string.Empty;
+    [JsonPropertyName("implementation_provider")] public string ImplementationProvider { get; set; } = string.Empty;
+    [JsonPropertyName("implementation_model")] public string ImplementationModel { get; set; } = string.Empty;
+    [JsonPropertyName("clarification_questions")] public List<WorkflowClarificationQuestion> ClarificationQuestions { get; set; } = [];
+    [JsonPropertyName("clarification_answers")] public Dictionary<string, string> ClarificationAnswers { get; set; } = [];
+}
+
+public sealed class WorkflowClarificationQuestion
+{
+    public string Id { get; set; } = string.Empty;
+    public string Prompt { get; set; } = string.Empty;
+    public bool Required { get; set; } = true;
+    public List<string> Options { get; set; } = [];
+}
+
+public sealed class WorkflowSchedule
+{
+    public string Trigger { get; set; } = "daily";
+    public string Expression { get; set; } = string.Empty;
+    public string Timezone { get; set; } = "America/New_York";
+    public string Reason { get; set; } = string.Empty;
+    [JsonPropertyName("start_conditions")] public string StartConditions { get; set; } = string.Empty;
+    [JsonPropertyName("stop_conditions")] public string StopConditions { get; set; } = string.Empty;
 }
 
 public sealed class WorkflowTransition
@@ -276,7 +366,49 @@ public sealed class MonitoringDashboard
     [JsonPropertyName("generated_at")] public string GeneratedAt { get; set; } = string.Empty;
     [JsonPropertyName("moveit")] public MoveItMonitor MoveIt { get; set; } = new();
     [JsonPropertyName("server")] public ServerMonitor Server { get; set; } = new();
+    [JsonPropertyName("freeflow")] public FreeFlowMonitor FreeFlow { get; set; } = new();
+    [JsonPropertyName("qualys")] public QualysMonitor Qualys { get; set; } = new();
     [JsonPropertyName("alerts")] public List<MonitoringAlert> Alerts { get; set; } = [];
+}
+
+public sealed class FreeFlowMonitor
+{
+    public string Status { get; set; } = "unavailable";
+    public string Detail { get; set; } = string.Empty;
+    public List<FreeFlowServer> Servers { get; set; } = [];
+}
+
+public sealed class FreeFlowServer
+{
+    public string Name { get; set; } = string.Empty;
+    public string Role { get; set; } = string.Empty;
+    [JsonPropertyName("web_url")] public string WebUrl { get; set; } = string.Empty;
+    public string Status { get; set; } = "unavailable";
+    [JsonPropertyName("http_status")] public int? HttpStatus { get; set; }
+    [JsonPropertyName("response_ms")] public int? ResponseMs { get; set; }
+    public string Detail { get; set; } = string.Empty;
+}
+
+public sealed class QualysMonitor
+{
+    public string Status { get; set; } = "unavailable";
+    public string Detail { get; set; } = string.Empty;
+    [JsonPropertyName("urgent_count")] public int UrgentCount { get; set; }
+    [JsonPropertyName("critical_count")] public int CriticalCount { get; set; }
+    [JsonPropertyName("serious_count")] public int SeriousCount { get; set; }
+    public List<QualysFinding> Findings { get; set; } = [];
+}
+
+public sealed class QualysFinding
+{
+    public string Qid { get; set; } = string.Empty;
+    public string Asset { get; set; } = string.Empty;
+    public int Severity { get; set; }
+    [JsonPropertyName("severity_label")] public string SeverityLabel { get; set; } = string.Empty;
+    public string Status { get; set; } = string.Empty;
+    public string Title { get; set; } = string.Empty;
+    [JsonPropertyName("first_found_at")] public string? FirstFoundAt { get; set; }
+    [JsonPropertyName("last_found_at")] public string? LastFoundAt { get; set; }
 }
 
 public sealed class MoveItMonitor

@@ -1,7 +1,7 @@
 # Jarvis Desktop
 
-> **Canonical version notice (2026-08-30):** The current A.E.G.I.S.-9
-> application is on `feature/cinematic-jarvis-ui`. The `main` branch still
+> **Canonical version notice (2026-08-31):** The current A.E.G.I.S.-9
+> application is on `feature/workflow-automation-monitoring-2026-08-31`. The `main` branch still
 > builds the older pre-cinematic interface. New computers and review sessions
 > must fetch and switch to the cinematic branch before building or assessing
 > project status. Start with [`docs/CURRENT-VERSION.md`](docs/CURRENT-VERSION.md)

@@ -43,6 +43,15 @@ class ProviderDiscoveryTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual("qwen2.5-coder:14b", ranked[0].model)
 
+    async def test_reasoning_and_code_stages_rank_models_independently(self) -> None:
+        router = OpenAICompatibleProvider(settings())
+        router._candidates = [
+            ProviderRoute("local", "ollama", "deepseek-r1:8b", "http://reason"),
+            ProviderRoute("local", "lmstudio", "qwen2.5-coder:7b", "http://code"),
+        ]
+        self.assertEqual("deepseek-r1:8b", router._ranked_candidates("reasoning")[0].model)
+        self.assertEqual("qwen2.5-coder:7b", router._ranked_candidates("code")[0].model)
+
     async def test_remote_routes_are_preferred_without_scanning_local(self) -> None:
         router = OpenAICompatibleProvider(settings())
         locations: list[str] = []

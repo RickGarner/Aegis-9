@@ -1,3 +1,4 @@
+import json
 import sqlite3
 from pathlib import Path
 
@@ -35,6 +36,20 @@ class Workflow(BaseModel):
     attachment_ids: list[int] = Field(default_factory=list)
     state: str
     monitor_slot: int | None = None
+    language: str = "powershell"
+    revision: int = 1
+    approval_stage: str = "draft"
+    schedule: dict = Field(default_factory=dict)
+    archived: bool = False
+    last_run_at: str | None = None
+    plan_text: str = ""
+    plan_provider: str = ""
+    plan_model: str = ""
+    implementation_text: str = ""
+    implementation_provider: str = ""
+    implementation_model: str = ""
+    clarification_questions: list[dict] = Field(default_factory=list)
+    clarification_answers: dict[str, str] = Field(default_factory=dict)
     created_at: str
     updated_at: str
 
@@ -104,6 +119,20 @@ class JarvisStore:
                     attachment_ids TEXT NOT NULL DEFAULT '[]',
                     state TEXT NOT NULL,
                     monitor_slot INTEGER,
+                    language TEXT NOT NULL DEFAULT 'powershell',
+                    revision INTEGER NOT NULL DEFAULT 1,
+                    approval_stage TEXT NOT NULL DEFAULT 'draft',
+                    schedule_json TEXT NOT NULL DEFAULT '{}',
+                    archived INTEGER NOT NULL DEFAULT 0,
+                    last_run_at TEXT,
+                    plan_text TEXT NOT NULL DEFAULT '',
+                    plan_provider TEXT NOT NULL DEFAULT '',
+                    plan_model TEXT NOT NULL DEFAULT '',
+                    implementation_text TEXT NOT NULL DEFAULT '',
+                    implementation_provider TEXT NOT NULL DEFAULT '',
+                    implementation_model TEXT NOT NULL DEFAULT '',
+                    clarification_questions_json TEXT NOT NULL DEFAULT '[]',
+                    clarification_answers_json TEXT NOT NULL DEFAULT '{}',
                     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
                 );
@@ -166,6 +195,20 @@ class JarvisStore:
         for column, definition in (
             ("description", "TEXT NOT NULL DEFAULT ''"),
             ("attachment_ids", "TEXT NOT NULL DEFAULT '[]'"),
+            ("language", "TEXT NOT NULL DEFAULT 'powershell'"),
+            ("revision", "INTEGER NOT NULL DEFAULT 1"),
+            ("approval_stage", "TEXT NOT NULL DEFAULT 'draft'"),
+            ("schedule_json", "TEXT NOT NULL DEFAULT '{}'"),
+            ("archived", "INTEGER NOT NULL DEFAULT 0"),
+            ("last_run_at", "TEXT"),
+            ("plan_text", "TEXT NOT NULL DEFAULT ''"),
+            ("plan_provider", "TEXT NOT NULL DEFAULT ''"),
+            ("plan_model", "TEXT NOT NULL DEFAULT ''"),
+            ("implementation_text", "TEXT NOT NULL DEFAULT ''"),
+            ("implementation_provider", "TEXT NOT NULL DEFAULT ''"),
+            ("implementation_model", "TEXT NOT NULL DEFAULT ''"),
+            ("clarification_questions_json", "TEXT NOT NULL DEFAULT '[]'"),
+            ("clarification_answers_json", "TEXT NOT NULL DEFAULT '{}'"),
         ):
             if column not in existing_columns:
                 connection.execute(f"ALTER TABLE workflows ADD COLUMN {column} {definition}")
@@ -241,32 +284,153 @@ class JarvisStore:
             ).fetchone()
         return ApprovalState(**dict(row))
 
-    def create_workflow(self, title: str, description: str = "", attachment_ids: list[int] | None = None) -> Workflow:
-        import json
-
+    def create_workflow(self, title: str, description: str = "", attachment_ids: list[int] | None = None, language: str = "powershell") -> Workflow:
         attachment_ids = attachment_ids or []
         with self._connect() as connection:
             cursor = connection.execute(
-                "INSERT INTO workflows (title, description, attachment_ids, state) VALUES (?, ?, ?, 'awaiting_approval')",
-                (title, description, json.dumps(attachment_ids)),
+                "INSERT INTO workflows (title, description, attachment_ids, state, language, approval_stage) VALUES (?, ?, ?, 'draft', ?, 'draft')",
+                (title, description, json.dumps(attachment_ids), language),
             )
             connection.execute(
                 "INSERT INTO activity_logs (event_type, message, tone) VALUES (?, ?, ?)",
-                ("workflow", f"Workflow '{title}' is awaiting approval.", "info"),
+                ("workflow", f"Workflow '{title}' created as a draft.", "info"),
             )
             row = connection.execute(
-                "SELECT id, title, description, attachment_ids, state, monitor_slot, created_at, updated_at FROM workflows WHERE id = ?",
+                f"SELECT {self._workflow_columns()} FROM workflows WHERE id = ?",
                 (cursor.lastrowid,),
             ).fetchone()
         return self._workflow_from_row(row)
 
     @staticmethod
-    def _workflow_from_row(row: sqlite3.Row) -> Workflow:
-        import json
+    def _workflow_columns() -> str:
+        return "id, title, description, attachment_ids, state, monitor_slot, language, revision, approval_stage, schedule_json, archived, last_run_at, plan_text, plan_provider, plan_model, implementation_text, implementation_provider, implementation_model, clarification_questions_json, clarification_answers_json, created_at, updated_at"
 
+    @staticmethod
+    def _workflow_from_row(row: sqlite3.Row) -> Workflow:
         values = dict(row)
         values["attachment_ids"] = json.loads(values.get("attachment_ids") or "[]")
+        values["schedule"] = json.loads(values.pop("schedule_json", None) or "{}")
+        values["clarification_questions"] = json.loads(values.pop("clarification_questions_json", None) or "[]")
+        values["clarification_answers"] = json.loads(values.pop("clarification_answers_json", None) or "{}")
+        values["archived"] = bool(values.get("archived"))
         return Workflow(**values)
+
+    def get_workflow(self, workflow_id: int) -> Workflow | None:
+        with self._connect() as connection:
+            row = connection.execute(f"SELECT {self._workflow_columns()} FROM workflows WHERE id = ?", (workflow_id,)).fetchone()
+        return self._workflow_from_row(row) if row else None
+
+    def update_workflow(self, workflow_id: int, title: str, description: str, attachment_ids: list[int], language: str) -> Workflow | None:
+        with self._connect() as connection:
+            current = connection.execute("SELECT title, state FROM workflows WHERE id = ? AND archived = 0", (workflow_id,)).fetchone()
+            if current is None or current["state"] in {"running", "paused"}:
+                return None
+            connection.execute(
+                "UPDATE workflows SET title = ?, description = ?, attachment_ids = ?, language = ?, revision = revision + 1, state = 'draft', approval_stage = 'draft', schedule_json = '{}', plan_text = '', plan_provider = '', plan_model = '', implementation_text = '', implementation_provider = '', implementation_model = '', clarification_questions_json = '[]', clarification_answers_json = '{}', updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                (title, description, json.dumps(attachment_ids), language, workflow_id),
+            )
+            connection.execute("INSERT INTO activity_logs (event_type, message, tone) VALUES (?, ?, ?)", ("workflow", f"Workflow '{title}' revised; prior approvals invalidated.", "warning"))
+            row = connection.execute(f"SELECT {self._workflow_columns()} FROM workflows WHERE id = ?", (workflow_id,)).fetchone()
+        return self._workflow_from_row(row)
+
+    def review_workflow(self, workflow_id: int, decision: str) -> Workflow | None:
+        transitions = {
+            ("plan_review", "approve_plan"): ("plan_approved", "plan_approved"),
+            ("implementation_review", "submit_for_test"): ("test_ready", "test_ready"),
+            ("test_ready", "test_pass"): ("test_passed", "test_passed"),
+            ("test_ready", "test_fail"): ("test_failed", "test_failed"),
+            ("test_failed", "submit_for_test"): ("test_ready", "test_ready"),
+            ("test_passed", "user_accept"): ("user_accepted", "user_accepted"),
+            ("user_accepted", "request_supervisor"): ("supervisor_pending", "supervisor_pending"),
+            ("supervisor_pending", "supervisor_approve"): ("approved", "approved"),
+        }
+        with self._connect() as connection:
+            current = connection.execute("SELECT title, state FROM workflows WHERE id = ? AND archived = 0", (workflow_id,)).fetchone()
+            if current is None:
+                return None
+            if decision == "reject" and current["state"] not in {"running", "paused", "completed"}:
+                next_state, stage = "rejected", "rejected"
+            else:
+                transition = transitions.get((current["state"], decision))
+                if transition is None:
+                    return None
+                next_state, stage = transition
+            connection.execute("UPDATE workflows SET state = ?, approval_stage = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", (next_state, stage, workflow_id))
+            connection.execute("INSERT INTO activity_logs (event_type, message, tone) VALUES (?, ?, ?)", ("workflow-approval", f"Workflow '{current['title']}' decision: {decision}.", "success" if decision in {"test_pass", "user_accept", "supervisor_approve"} else "warning"))
+            row = connection.execute(f"SELECT {self._workflow_columns()} FROM workflows WHERE id = ?", (workflow_id,)).fetchone()
+        return self._workflow_from_row(row)
+
+    def save_workflow_plan(self, workflow_id: int, content: str, provider: str, model: str, questions: list[dict] | None = None, finalizing: bool = False) -> Workflow | None:
+        questions = questions or []
+        with self._connect() as connection:
+            current = connection.execute("SELECT title, state FROM workflows WHERE id = ? AND archived = 0", (workflow_id,)).fetchone()
+            if current is None or current["state"] not in {"draft", "rejected", "plan_review"}:
+                return None
+            next_state = "needs_clarification" if questions else "plan_review" if finalizing else "design_review"
+            connection.execute("UPDATE workflows SET plan_text = ?, plan_provider = ?, plan_model = ?, implementation_text = '', implementation_provider = '', implementation_model = '', clarification_questions_json = ?, state = ?, approval_stage = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", (content, provider, model, json.dumps(questions), next_state, next_state, workflow_id))
+            message = f"Final plan for '{current['title']}' is ready for approval or rejection." if finalizing and not questions else f"Plan designed for '{current['title']}' by {provider}/{model}."
+            connection.execute("INSERT INTO activity_logs (event_type, message, tone) VALUES (?, ?, ?)", ("workflow-ready" if finalizing and not questions else "workflow-ai", message, "success" if finalizing and not questions else "info"))
+            row = connection.execute(f"SELECT {self._workflow_columns()} FROM workflows WHERE id = ?", (workflow_id,)).fetchone()
+        return self._workflow_from_row(row)
+
+    def save_clarification_answer(self, workflow_id: int, question_id: str, answer: str) -> Workflow | None:
+        with self._connect() as connection:
+            current = connection.execute(f"SELECT {self._workflow_columns()} FROM workflows WHERE id = ? AND archived = 0", (workflow_id,)).fetchone()
+            if current is None or current["state"] not in {"needs_clarification", "design_review"}:
+                return None
+            workflow = self._workflow_from_row(current)
+            valid_ids = {str(question.get("id")) for question in workflow.clarification_questions}
+            if question_id not in valid_ids:
+                return None
+            answers = dict(workflow.clarification_answers)
+            answers[question_id] = answer.strip()
+            connection.execute("UPDATE workflows SET clarification_answers_json = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", (json.dumps(answers), workflow_id))
+            connection.execute("INSERT INTO activity_logs (event_type, message, tone) VALUES (?, ?, ?)", ("workflow-clarification", f"One clarification answer submitted for '{workflow.title}'.", "info"))
+            row = connection.execute(f"SELECT {self._workflow_columns()} FROM workflows WHERE id = ?", (workflow_id,)).fetchone()
+        return self._workflow_from_row(row)
+
+    def begin_workflow_reevaluation(self, workflow_id: int) -> Workflow | None:
+        with self._connect() as connection:
+            current = connection.execute(f"SELECT {self._workflow_columns()} FROM workflows WHERE id = ? AND archived = 0", (workflow_id,)).fetchone()
+            if current is None or current["state"] not in {"needs_clarification", "design_review"}:
+                return None
+            workflow = self._workflow_from_row(current)
+            missing = [str(question.get("id")) for question in workflow.clarification_questions if question.get("required", True) and not workflow.clarification_answers.get(str(question.get("id")), "").strip()]
+            if missing:
+                return None
+            connection.execute("UPDATE workflows SET state = 'draft', approval_stage = 'reevaluating', updated_at = CURRENT_TIMESTAMP WHERE id = ?", (workflow_id,))
+            row = connection.execute(f"SELECT {self._workflow_columns()} FROM workflows WHERE id = ?", (workflow_id,)).fetchone()
+        return self._workflow_from_row(row)
+
+    def save_workflow_implementation(self, workflow_id: int, content: str, provider: str, model: str) -> Workflow | None:
+        with self._connect() as connection:
+            current = connection.execute("SELECT title, state FROM workflows WHERE id = ? AND archived = 0", (workflow_id,)).fetchone()
+            if current is None or current["state"] != "plan_approved":
+                return None
+            connection.execute("UPDATE workflows SET implementation_text = ?, implementation_provider = ?, implementation_model = ?, state = 'implementation_review', approval_stage = 'implementation_review', updated_at = CURRENT_TIMESTAMP WHERE id = ?", (content, provider, model, workflow_id))
+            connection.execute("INSERT INTO activity_logs (event_type, message, tone) VALUES (?, ?, ?)", ("workflow-ai", f"Implementation generated for '{current['title']}' by {provider}/{model}.", "info"))
+            row = connection.execute(f"SELECT {self._workflow_columns()} FROM workflows WHERE id = ?", (workflow_id,)).fetchone()
+        return self._workflow_from_row(row)
+
+    def set_workflow_schedule(self, workflow_id: int, schedule: dict) -> Workflow | None:
+        with self._connect() as connection:
+            current = connection.execute("SELECT title, state FROM workflows WHERE id = ? AND archived = 0", (workflow_id,)).fetchone()
+            if current is None or current["state"] != "approved":
+                return None
+            connection.execute("UPDATE workflows SET schedule_json = ?, state = 'scheduled', updated_at = CURRENT_TIMESTAMP WHERE id = ?", (json.dumps(schedule), workflow_id))
+            connection.execute("INSERT INTO activity_logs (event_type, message, tone) VALUES (?, ?, ?)", ("workflow-schedule", f"Workflow '{current['title']}' scheduled.", "success"))
+            row = connection.execute(f"SELECT {self._workflow_columns()} FROM workflows WHERE id = ?", (workflow_id,)).fetchone()
+        return self._workflow_from_row(row)
+
+    def archive_workflow(self, workflow_id: int) -> Workflow | None:
+        with self._connect() as connection:
+            current = connection.execute("SELECT title, state FROM workflows WHERE id = ? AND archived = 0", (workflow_id,)).fetchone()
+            if current is None or current["state"] in {"running", "paused"}:
+                return None
+            connection.execute("UPDATE workflows SET archived = 1, state = 'archived', monitor_slot = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?", (workflow_id,))
+            connection.execute("INSERT INTO activity_logs (event_type, message, tone) VALUES (?, ?, ?)", ("workflow", f"Workflow '{current['title']}' archived.", "warning"))
+            row = connection.execute(f"SELECT {self._workflow_columns()} FROM workflows WHERE id = ?", (workflow_id,)).fetchone()
+        return self._workflow_from_row(row)
 
     def approve_workflow(self, workflow_id: int, capacity: int) -> Workflow | None:
         with self._connect() as connection:
@@ -348,7 +512,7 @@ class JarvisStore:
     def get_workflows(self) -> list[Workflow]:
         with self._connect() as connection:
             rows = connection.execute(
-                "SELECT id, title, description, attachment_ids, state, monitor_slot, created_at, updated_at FROM workflows ORDER BY id DESC"
+                f"SELECT {self._workflow_columns()} FROM workflows WHERE archived = 0 ORDER BY id DESC"
             ).fetchall()
         return [self._workflow_from_row(row) for row in rows]
 

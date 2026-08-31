@@ -65,6 +65,8 @@ Only the workflow supervisor creates, repositions, or closes managed workflow wi
 - The current native workflow-window view is a supervision surface only. It does not execute external browser or desktop automation.
 - Native workflow creation preserves selected staged-file attachment IDs for future execution planning.
 - Real workflow execution is disabled until the action catalog, allowlist, approval binding, cancellation, retry, and audit requirements are implemented.
+- The expanded daily automation authoring, testing, approval, scheduling, and
+  execution requirements are tracked in `docs/workflow-automation-requirements.md`.
 
 ## Non-Goals
 

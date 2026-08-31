@@ -1,0 +1,16 @@
+[
+  {
+    "name": "BSOXERALB001",
+    "role": "Primary",
+    "webUrl": "",
+    "expectedText": "FreeFlow Core",
+    "enabled": true
+  },
+  {
+    "name": "BSOXERALB002",
+    "role": "Secondary",
+    "webUrl": "",
+    "expectedText": "FreeFlow Core",
+    "enabled": true
+  }
+]

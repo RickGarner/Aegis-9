@@ -2,10 +2,10 @@
 
 ## Read this first
 
-As of 2026-08-30, active development is on the Git branch:
+As of 2026-08-31, active development is on the Git branch:
 
 ```text
-feature/cinematic-jarvis-ui
+feature/workflow-automation-monitoring-2026-08-31
 ```
 
 The GitHub repository is:
@@ -24,8 +24,8 @@ Always verify the remote branch before beginning work:
 
 ```powershell
 git fetch origin
-git switch feature/cinematic-jarvis-ui
-git pull --ff-only origin feature/cinematic-jarvis-ui
+git switch feature/workflow-automation-monitoring-2026-08-31
+git pull --ff-only origin feature/workflow-automation-monitoring-2026-08-31
 git status --short --branch
 git log -5 --oneline --decorate
 ```
@@ -33,7 +33,7 @@ git log -5 --oneline --decorate
 Expected branch display:
 
 ```text
-feature/cinematic-jarvis-ui...origin/feature/cinematic-jarvis-ui
+feature/workflow-automation-monitoring-2026-08-31...origin/feature/workflow-automation-monitoring-2026-08-31
 ```
 
 Do not assume that `origin/HEAD`, the default GitHub branch, or an existing
@@ -71,7 +71,7 @@ running any installation script:
 ```powershell
 git clone https://github.com/RickGarner/Jarvis-Desktop.git
 Set-Location Jarvis-Desktop
-git switch feature/cinematic-jarvis-ui
+git switch feature/workflow-automation-monitoring-2026-08-31
 Set-ExecutionPolicy -Scope Process Bypass
 .\deployment\windows\Install-Aegis9Workstation.ps1 -ModelProfile Core
 ```
@@ -109,6 +109,10 @@ There are no build errors.
 
 ## Work still open
 
+- Implement the tracked daily workflow automation system in
+  `docs/workflow-automation-requirements.md`, including AI-assisted authoring,
+  immutable revisions, isolated testing, user and supervisor approval gates,
+  scheduling/conditions, execution history, and live supervision.
 - Complete end-to-end UI validation of microphone capture, transcription,
   Kokoro playback, interruption, and avatar mouth/state synchronization.
 - Validate the service-based bootstrap after reboot on each new workstation,
@@ -122,10 +126,59 @@ There are no build errors.
 - Implement research tools and broaden bounded artifact generation behind
   explicit approval and allowlist policies.
 
+## Workflow automation and operational monitoring slice — 2026-08-31
+
+This continuation branch contains the daily-workflow interface
+and domain implementation. It adds recent and awaiting-action dashboard lists,
+designer/edit, approval, scheduling, and two-step archive windows; PowerShell or
+C# selection; document staging; revision invalidation; explicit test, user, and
+supervisor gates; and schedule/condition capture. Production execution remains
+disabled. Thirteen backend tests pass, and the WPF project compiles with no errors.
+
+The workflow AI path now independently selects a reasoning model to design a
+plan and a coding model to implement only an approved plan. Both provider/model
+identities and their outputs are persisted and displayed for review. Code
+generation before plan approval is rejected.
+
+The planning stage also supports structured clarification questions. The UI
+renders either free-text responses or selectable model-provided options, enforces
+required answers, submits responses back to the reasoning model, and repeats
+plan analysis until no unresolved material questions remain.
+
+The planning response parser also handles models that ignore the requested JSON
+contract and emit numbered questions under a Markdown `Clarification Questions`
+heading. Those questions are converted into stored, renderable input fields so
+they cannot appear only as unanswerable plan text.
+
+Design Review now uses a persistent split-pane window rather than a transient
+question popup. Every question has its own text/choice input and individual
+submit command. Submitted answers lock visibly, and `Update Draft` remains
+disabled until all required answers are stored. While information is missing,
+Review is the only progression action; approval/rejection is presented only
+after the updated draft is re-evaluated into a question-free final plan.
+The review/approval lifecycle was tightened again after live validation exposed
+a truncated planning-model JSON response. Tentative plans always require Design
+Review and Final Submit, malformed responses cannot bypass review, and unresolved
+statements such as `to be confirmed` or `not specified` become required question
+inputs. Approval/rejection appears only for the question-free plan created after
+Final Submit. Plan approval then automatically triggers coding-model workflow
+generation with at least two test plans. Eighteen backend tests pass.
+
+Workflow plan approval is now separated from design review. Creating a draft
+opens Workflow Design Review and starts plan analysis automatically. The review
+shows a prominent unresolved-question count/status, opens required answer fields,
+and does not offer `Approve Reviewed Plan` until re-analysis returns no unanswered
+questions.
+
+Still required are AI planning/clarification, generated implementation revisions,
+an isolated test runner, authenticated supervisor authorization, the scheduler
+engine, condition evaluation, live execution/event history, retries/recovery,
+secrets, and notifications.
+
 ## Multi-computer safety rules
 
 1. Fetch before reviewing or editing.
-2. Confirm the branch is `feature/cinematic-jarvis-ui`.
+2. Confirm the branch is `feature/workflow-automation-monitoring-2026-08-31`.
 3. Read this file and `docs/handoff.md` before making changes.
 4. Do not copy build output, `.venv`, `.env`, model caches, `storage`, or user
    preferences between computers through Git.

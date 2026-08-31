@@ -51,6 +51,7 @@ public partial class MainWindow : Window
             _speechService);
 
         InitializeComponent();
+        PendingWorkflowList.LayoutUpdated += (_, _) => RenameWorkflowReviewButtons(PendingWorkflowList);
         _speechRecognition.AudioLevelChanged += SpeechRecognition_AudioLevelChanged;
         _speechRecognition.StatusChanged += SpeechRecognition_StatusChanged;
         _speechRecognition.WakePhraseRecognized += SpeechRecognition_WakePhraseRecognized;
@@ -797,31 +798,42 @@ public partial class MainWindow : Window
 
     private async void CreateWorkflowButton_Click(object sender, RoutedEventArgs e)
     {
-        var title = WorkflowTitleInput.Text.Trim();
-        if (title.Length == 0) return;
-        try
+        var window = new WorkflowEditorWindow { Owner = this };
+        if (window.ShowDialog() == true)
         {
-            await _client.CreateWorkflowAsync(title, WorkflowDescriptionInput.Text.Trim(), _attachedFileIds, CancellationToken.None);
-            WorkflowTitleInput.Clear();
-            WorkflowDescriptionInput.Clear();
-            ConnectionText.Text = $"Workflow '{title}' awaiting approval";
             await LoadWorkflowsAsync();
-        }
-        catch (Exception error)
-        {
-            ConnectionText.Text = $"Workflow creation failed: {error.Message}";
+            if (window.SavedWorkflow is not null)
+            {
+                var review = new WorkflowDesignReviewWindow(window.SavedWorkflow) { Owner = this };
+                if (review.ShowDialog() == true) NotifyWorkflowReevaluation(review.UpdatedWorkflow);
+            }
+            await LoadWorkflowsAsync();
         }
     }
 
     private async void ApproveWorkflowButton_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is not FrameworkElement { Tag: Workflow workflow } || workflow.State != "awaiting_approval") return;
-        try
+        if (sender is FrameworkElement { Tag: Workflow workflow })
         {
-            await _client.ApproveWorkflowAsync(workflow.Id, CancellationToken.None);
+            if (workflow.State is "draft" or "rejected" or "needs_clarification" or "design_review")
+            {
+                var review = new WorkflowDesignReviewWindow(workflow) { Owner = this };
+                if (review.ShowDialog() == true) NotifyWorkflowReevaluation(review.UpdatedWorkflow);
+            }
+            else
+                new WorkflowApprovalWindow(workflow) { Owner = this }.ShowDialog();
             await LoadWorkflowsAsync();
         }
-        catch (Exception error) { ConnectionText.Text = $"Workflow approval failed: {error.Message}"; }
+    }
+
+    private async void EditWorkflowButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { Tag: Workflow workflow } && new WorkflowEditorWindow(workflow) { Owner = this }.ShowDialog() == true) await LoadWorkflowsAsync();
+    }
+
+    private async void DeleteWorkflowButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { Tag: Workflow workflow } && new WorkflowDeleteWindow(workflow) { Owner = this }.ShowDialog() == true) await LoadWorkflowsAsync();
     }
 
     private void OpenWorkflowButton_Click(object sender, RoutedEventArgs e)
@@ -833,11 +845,14 @@ public partial class MainWindow : Window
     }
 
     private void OpenMoveItWindow_Click(object sender, RoutedEventArgs e) => OpenMonitorWindow("MoveIT Automation");
+    private void OpenFreeFlowWindow_Click(object sender, RoutedEventArgs e) => OpenMonitorWindow("Xerox FreeFlow Core");
+    private void OpenQualysWindow_Click(object sender, RoutedEventArgs e) => OpenMonitorWindow("Qualys Vulnerabilities");
     private void OpenServerWindow_Click(object sender, RoutedEventArgs e) => OpenMonitorWindow("Server Status");
 
     private void OpenMonitorWindow(string title)
     {
-        var window = new MonitorWindow(title == "MoveIT Automation" ? MonitorWindowKind.MoveIt : MonitorWindowKind.ServerStatus) { Owner = this };
+        var kind = title switch { "MoveIT Automation" => MonitorWindowKind.MoveIt, "Xerox FreeFlow Core" => MonitorWindowKind.FreeFlow, "Qualys Vulnerabilities" => MonitorWindowKind.Qualys, _ => MonitorWindowKind.ServerStatus };
+        var window = new MonitorWindow(kind) { Owner = this };
         window.Show();
     }
 
@@ -1019,7 +1034,43 @@ public partial class MainWindow : Window
 
     private async Task LoadWorkflowsAsync()
     {
-        try { WorkflowList.ItemsSource = await _client.GetWorkflowsAsync(CancellationToken.None); }
+        try
+        {
+            var workflows = await _client.GetWorkflowsAsync(CancellationToken.None);
+            RecentWorkflowList.ItemsSource = workflows.Where(item => item.State is "running" or "paused" or "completed" or "failed" or "scheduled").Take(3).ToList();
+            PendingWorkflowList.ItemsSource = workflows.Where(item => item.State is not ("running" or "paused" or "completed" or "failed" or "scheduled")).ToList();
+            await Dispatcher.BeginInvoke(() => RenameWorkflowReviewButtons(PendingWorkflowList));
+        }
         catch (Exception error) { ConnectionText.Text = $"Workflow supervisor unavailable: {error.Message}"; }
+    }
+
+    private static void RenameWorkflowReviewButtons(DependencyObject root)
+    {
+        for (var index = 0; index < VisualTreeHelper.GetChildrenCount(root); index++)
+        {
+            var child = VisualTreeHelper.GetChild(root, index);
+            if (child is Button { DataContext: Workflow workflow } button)
+            {
+                var needsReview = workflow.State is "draft" or "rejected" or "needs_clarification" or "design_review";
+                if (Equals(button.Content, "APPROVE")) button.Content = needsReview ? "REVIEW" : "APPROVE / REJECT";
+                else if (needsReview && (Equals(button.Content, "EDIT") || Equals(button.Content, "DELETE"))) button.IsEnabled = false;
+            }
+            RenameWorkflowReviewButtons(child);
+        }
+    }
+
+    private void NotifyWorkflowReevaluation(Workflow? workflow)
+    {
+        if (workflow is null) return;
+        if (workflow.State == "plan_review")
+        {
+            ConnectionText.Text = $"READY FOR APPROVAL · {workflow.Title}";
+            MessageBox.Show(this, $"A.E.G.I.S.-9 completed re-evaluation of '{workflow.Title}'.\n\nThe refined workflow plan is ready for your review. Select APPROVE / REJECT in the Workflow Center.", "Workflow plan ready", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        else if (workflow.State == "needs_clarification")
+        {
+            ConnectionText.Text = $"ADDITIONAL REVIEW REQUIRED · {workflow.Title}";
+            MessageBox.Show(this, $"A.E.G.I.S.-9 completed re-evaluation of '{workflow.Title}' and identified additional required questions.\n\nSelect REVIEW to continue.", "Additional workflow information required", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
     }
 }

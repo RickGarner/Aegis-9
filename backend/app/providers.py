@@ -137,13 +137,13 @@ class OpenAICompatibleProvider:
             await self.discover()
         return self._health()
 
-    async def chat(self, messages: Sequence[ChatMessage]) -> RoutedChatResult:
+    async def chat(self, messages: Sequence[ChatMessage], task_override: str | None = None) -> RoutedChatResult:
         if not self._candidates:
             await self.discover()
         if not self._candidates:
             raise ProviderError(self._detail)
 
-        task = self._classify_task(messages)
+        task = task_override or self._classify_task(messages)
         initial = self._active
         errors: list[str] = []
         result = await self._try_routes(self._ranked_candidates(task), messages, errors)
@@ -188,6 +188,11 @@ class OpenAICompatibleProvider:
             reason="The remote route did not complete the request. " + " | ".join(errors) if location_changed else "",
         )
         return RoutedChatResult(content=content, route=route, failover=failover)
+
+    async def chat_for_task(self, task: str, messages: Sequence[ChatMessage]) -> RoutedChatResult:
+        if task not in {"general", "reasoning", "code", "vision", "fast"}:
+            raise ValueError(f"Unsupported routing task: {task}")
+        return await self.chat(messages, task_override=task)
 
     def _health(self) -> ProviderHealth:
         return ProviderHealth(
