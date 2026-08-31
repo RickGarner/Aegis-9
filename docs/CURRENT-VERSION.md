@@ -164,6 +164,15 @@ inputs. Approval/rejection appears only for the question-free plan created after
 Final Submit. Plan approval then automatically triggers coding-model workflow
 generation with at least two test plans. Eighteen backend tests pass.
 
+Workflow Center now supports explicit portable workflow transfer between
+computers. `EXPORT` creates a versioned `.aegisworkflow` file and `IMPORT`
+restores or updates the same stable workflow identity, including planning state,
+answers, schedules, generated implementation, audit entries, and extracted
+attachment context. Equal or older packages cannot overwrite newer local work,
+and active workflows import as paused for safety. Transfer files contain workflow
+content and should be handled as operational data rather than committed to Git.
+See `docs/WORKFLOW-TRANSFER.md` for the operator procedure and safety rules.
+
 Workflow plan approval is now separated from design review. Creating a draft
 opens Workflow Design Review and starts plan analysis automatically. The review
 shows a prominent unresolved-question count/status, opens required answer fields,

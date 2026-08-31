@@ -811,6 +811,52 @@ public partial class MainWindow : Window
         }
     }
 
+    private async void ExportWorkflowButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { Tag: Workflow workflow }) return;
+        var safeTitle = Regex.Replace(workflow.Title, "[^A-Za-z0-9._-]+", "-").Trim('-');
+        var dialog = new SaveFileDialog
+        {
+            Filter = "A.E.G.I.S.-9 workflow|*.aegisworkflow",
+            FileName = $"{(string.IsNullOrWhiteSpace(safeTitle) ? "workflow" : safeTitle)}.aegisworkflow",
+            AddExtension = true,
+            DefaultExt = ".aegisworkflow",
+        };
+        if (dialog.ShowDialog(this) != true) return;
+        try
+        {
+            var contents = await _client.ExportWorkflowAsync(workflow.Id, CancellationToken.None);
+            await File.WriteAllBytesAsync(dialog.FileName, contents);
+            ConnectionText.Text = $"Workflow exported · {workflow.Title}";
+        }
+        catch (Exception error)
+        {
+            MessageBox.Show(this, error.Message, "Workflow export failed", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private async void ImportWorkflowButton_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new OpenFileDialog
+        {
+            Filter = "A.E.G.I.S.-9 workflow|*.aegisworkflow",
+            Multiselect = false,
+            CheckFileExists = true,
+        };
+        if (dialog.ShowDialog(this) != true) return;
+        try
+        {
+            var result = await _client.ImportWorkflowAsync(dialog.FileName, CancellationToken.None);
+            await LoadWorkflowsAsync();
+            MessageBox.Show(this, $"{result.Detail}\n\n{result.Workflow.Title}\nState: {result.Workflow.State}\nRevision: {result.Workflow.Revision}", "Workflow transfer", MessageBoxButton.OK, MessageBoxImage.Information);
+            ConnectionText.Text = $"Workflow {result.Action} · {result.Workflow.Title}";
+        }
+        catch (Exception error)
+        {
+            MessageBox.Show(this, error.Message, "Workflow import failed", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
     private async void ApproveWorkflowButton_Click(object sender, RoutedEventArgs e)
     {
         if (sender is FrameworkElement { Tag: Workflow workflow })

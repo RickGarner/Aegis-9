@@ -125,6 +125,29 @@ public sealed class MonitoringClient
         return await response.Content.ReadFromJsonAsync<List<Workflow>>(JsonOptions, cancellationToken) ?? [];
     }
 
+    public async Task<byte[]> ExportWorkflowAsync(int workflowId, CancellationToken cancellationToken)
+    {
+        using var response = await _httpClient.GetAsync($"api/workflows/{workflowId}/export", cancellationToken);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadAsByteArrayAsync(cancellationToken);
+    }
+
+    public async Task<WorkflowImportResult> ImportWorkflowAsync(string filePath, CancellationToken cancellationToken)
+    {
+        await using var stream = File.OpenRead(filePath);
+        using var content = new MultipartFormDataContent();
+        using var fileContent = new StreamContent(stream);
+        content.Add(fileContent, "file", Path.GetFileName(filePath));
+        using var response = await _httpClient.PostAsync("api/workflows/import", content, cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            var payload = await response.Content.ReadAsStringAsync(cancellationToken);
+            throw new HttpRequestException($"Workflow import returned HTTP {(int)response.StatusCode}: {payload}");
+        }
+        return await response.Content.ReadFromJsonAsync<WorkflowImportResult>(JsonOptions, cancellationToken)
+            ?? throw new InvalidOperationException("Workflow import API returned an empty response.");
+    }
+
     public async Task<Workflow> CreateWorkflowAsync(string title, string description, IReadOnlyList<int>? attachmentIds, CancellationToken cancellationToken, string language = "powershell")
     {
         using var response = await _httpClient.PostAsJsonAsync("api/workflows", new WorkflowRequest { Title = title, Description = description, AttachmentIds = attachmentIds ?? [], Language = language }, JsonOptions, cancellationToken);
@@ -316,6 +339,7 @@ public sealed class WorkflowActionRequest
 public sealed class Workflow
 {
     public int Id { get; set; }
+    [JsonPropertyName("transfer_id")] public string TransferId { get; set; } = string.Empty;
     public string Title { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
     public string State { get; set; } = string.Empty;
@@ -335,6 +359,13 @@ public sealed class Workflow
     [JsonPropertyName("implementation_model")] public string ImplementationModel { get; set; } = string.Empty;
     [JsonPropertyName("clarification_questions")] public List<WorkflowClarificationQuestion> ClarificationQuestions { get; set; } = [];
     [JsonPropertyName("clarification_answers")] public Dictionary<string, string> ClarificationAnswers { get; set; } = [];
+}
+
+public sealed class WorkflowImportResult
+{
+    public string Action { get; set; } = string.Empty;
+    public Workflow Workflow { get; set; } = new();
+    public string Detail { get; set; } = string.Empty;
 }
 
 public sealed class WorkflowClarificationQuestion

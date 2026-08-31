@@ -26,6 +26,7 @@ Thumbs.db
 logs/
 *.log
 storage/
+*.aegisworkflow
 workspace/
 
 # Local migration/install bundles and recovery copies

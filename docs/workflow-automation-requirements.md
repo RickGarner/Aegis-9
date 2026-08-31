@@ -159,6 +159,12 @@ Implemented in the initial interface/domain slice on 2026-08-30:
   statements converted to questions instead of allowing an approval bypass
 - final plan approval automatically starts coding-model implementation and asks
   for at least two non-production test plans
+- portable `.aegisworkflow` export/import with stable cross-computer identity,
+  workflow lifecycle state, plans, generated implementation, clarification
+  questions/answers, schedule, audit entries, and extracted attachment context
+- conflict protection that refuses to overwrite an equal or newer local
+  revision; imported active workflows are paused and detached from monitor slots
+  until the operator explicitly resumes them
 
 Not yet present:
 

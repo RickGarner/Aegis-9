@@ -7,6 +7,7 @@ from pathlib import Path
 from tempfile import gettempdir
 
 from fastapi import Depends, FastAPI, File, HTTPException, UploadFile, status
+from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
 from app.artifacts import try_create_requested_artifact
@@ -21,7 +22,7 @@ from app.monitoring import (
     MonitoringDashboard,
     MonitoringStore,
 )
-from app.storage import ApprovalState, FileEntry, JarvisStore, SessionState, Workflow, WorkflowTransition
+from app.storage import ApprovalState, FileEntry, JarvisStore, SessionState, Workflow, WorkflowImportResult, WorkflowTransferPackage, WorkflowTransition
 from app.supervisor import TopologyReconciliation, WorkflowCapacity, WorkflowWindowPlacement, get_workflow_capacity
 
 
@@ -392,6 +393,37 @@ async def workflow(workflow_id: int, store: JarvisStore = Depends(get_store)) ->
     if result is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workflow was not found.")
     return result
+
+
+@app.get("/api/workflows/{workflow_id}/export")
+async def export_workflow(workflow_id: int, store: JarvisStore = Depends(get_store)) -> Response:
+    package = store.export_workflow(workflow_id)
+    if package is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workflow was not found.")
+    safe_name = re.sub(r"[^A-Za-z0-9._-]+", "-", package.workflow["title"]).strip("-") or "workflow"
+    return Response(
+        content=package.model_dump_json(indent=2),
+        media_type="application/vnd.aegis9.workflow+json",
+        headers={"Content-Disposition": f'attachment; filename="{safe_name}.aegisworkflow"'},
+    )
+
+
+@app.post("/api/workflows/import", response_model=WorkflowImportResult)
+async def import_workflow(
+    file: UploadFile = File(...),
+    settings: Settings = Depends(get_settings),
+    store: JarvisStore = Depends(get_store),
+) -> WorkflowImportResult:
+    if not file.filename or Path(file.filename).suffix.lower() != ".aegisworkflow":
+        raise HTTPException(status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, detail="Select an .aegisworkflow file.")
+    contents = await file.read(settings.max_upload_bytes + 1)
+    if len(contents) > settings.max_upload_bytes:
+        raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="Workflow package exceeds the configured upload limit.")
+    try:
+        package = WorkflowTransferPackage.model_validate_json(contents)
+        return store.import_workflow(package)
+    except (ValueError, TypeError, json.JSONDecodeError) as error:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"Invalid workflow package: {error}") from error
 
 
 @app.get("/api/workflows/placements", response_model=list[WorkflowWindowPlacement])

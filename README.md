@@ -97,6 +97,7 @@ cd backend
 - `docs/avatar-assets.md` - licensed local 3D avatar plan and asset contract
 - `docs/avatar-onboarding-playbook.md` - step-by-step licensed asset and local renderer onboarding
 - `docs/JARVIS_FREE_AVATAR_VOICE_IMPLEMENTATION_HANDOFF.md` - current free local avatar/voice implementation specification and status notes
+- `docs/WORKFLOW-TRANSFER.md` - portable workflow export/import between development computers
 - `docs/moveit-integration/` - extracted MoveIT API and monitoring contract
 - `docs/server-monitoring/` - extracted server inventory, metrics, and SMTP reference
 - `docs/roadmap.md`, `docs/mvp-plan.md`, `docs/provider-architecture.md`, `docs/implementation-checklist.md`, `docs/phase-1-next-steps.md` - project-wide planning history

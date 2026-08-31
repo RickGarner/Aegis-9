@@ -1,5 +1,7 @@
 import json
 import sqlite3
+import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 
 from pydantic import BaseModel, Field
@@ -31,6 +33,7 @@ class ApprovalState(BaseModel):
 
 class Workflow(BaseModel):
     id: int
+    transfer_id: str
     title: str
     description: str = ""
     attachment_ids: list[int] = Field(default_factory=list)
@@ -57,6 +60,20 @@ class Workflow(BaseModel):
 class WorkflowTransition(BaseModel):
     workflow: Workflow
     promoted_workflow: Workflow | None = None
+
+
+class WorkflowTransferPackage(BaseModel):
+    schema_version: int = 1
+    exported_at: str
+    workflow: dict
+    attachments: list[dict] = Field(default_factory=list)
+    activity: list[dict] = Field(default_factory=list)
+
+
+class WorkflowImportResult(BaseModel):
+    action: str
+    workflow: Workflow
+    detail: str
 
 
 class WorkflowTopologyState(BaseModel):
@@ -114,6 +131,7 @@ class JarvisStore:
 
                 CREATE TABLE IF NOT EXISTS workflows (
                     id INTEGER PRIMARY KEY,
+                    transfer_id TEXT,
                     title TEXT NOT NULL,
                     description TEXT NOT NULL DEFAULT '',
                     attachment_ids TEXT NOT NULL DEFAULT '[]',
@@ -209,9 +227,14 @@ class JarvisStore:
             ("implementation_model", "TEXT NOT NULL DEFAULT ''"),
             ("clarification_questions_json", "TEXT NOT NULL DEFAULT '[]'"),
             ("clarification_answers_json", "TEXT NOT NULL DEFAULT '{}'"),
+            ("transfer_id", "TEXT"),
         ):
             if column not in existing_columns:
                 connection.execute(f"ALTER TABLE workflows ADD COLUMN {column} {definition}")
+        missing_transfer_ids = connection.execute("SELECT id FROM workflows WHERE transfer_id IS NULL OR transfer_id = ''").fetchall()
+        for row in missing_transfer_ids:
+            connection.execute("UPDATE workflows SET transfer_id = ? WHERE id = ?", (str(uuid.uuid4()), row["id"]))
+        connection.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_workflows_transfer_id ON workflows(transfer_id)")
 
     def record_chat(self, user_message: ChatMessage, assistant_message: ChatMessage) -> None:
         with self._connect() as connection:
@@ -288,8 +311,8 @@ class JarvisStore:
         attachment_ids = attachment_ids or []
         with self._connect() as connection:
             cursor = connection.execute(
-                "INSERT INTO workflows (title, description, attachment_ids, state, language, approval_stage) VALUES (?, ?, ?, 'draft', ?, 'draft')",
-                (title, description, json.dumps(attachment_ids), language),
+                "INSERT INTO workflows (transfer_id, title, description, attachment_ids, state, language, approval_stage) VALUES (?, ?, ?, ?, 'draft', ?, 'draft')",
+                (str(uuid.uuid4()), title, description, json.dumps(attachment_ids), language),
             )
             connection.execute(
                 "INSERT INTO activity_logs (event_type, message, tone) VALUES (?, ?, ?)",
@@ -303,7 +326,7 @@ class JarvisStore:
 
     @staticmethod
     def _workflow_columns() -> str:
-        return "id, title, description, attachment_ids, state, monitor_slot, language, revision, approval_stage, schedule_json, archived, last_run_at, plan_text, plan_provider, plan_model, implementation_text, implementation_provider, implementation_model, clarification_questions_json, clarification_answers_json, created_at, updated_at"
+        return "id, transfer_id, title, description, attachment_ids, state, monitor_slot, language, revision, approval_stage, schedule_json, archived, last_run_at, plan_text, plan_provider, plan_model, implementation_text, implementation_provider, implementation_model, clarification_questions_json, clarification_answers_json, created_at, updated_at"
 
     @staticmethod
     def _workflow_from_row(row: sqlite3.Row) -> Workflow:
@@ -319,6 +342,119 @@ class JarvisStore:
         with self._connect() as connection:
             row = connection.execute(f"SELECT {self._workflow_columns()} FROM workflows WHERE id = ?", (workflow_id,)).fetchone()
         return self._workflow_from_row(row) if row else None
+
+    def export_workflow(self, workflow_id: int) -> WorkflowTransferPackage | None:
+        with self._connect() as connection:
+            row = connection.execute(f"SELECT {self._workflow_columns()} FROM workflows WHERE id = ?", (workflow_id,)).fetchone()
+            if row is None:
+                return None
+            workflow = self._workflow_from_row(row)
+            attachments = []
+            for file_id in workflow.attachment_ids:
+                file_row = connection.execute(
+                    "SELECT name, size, content_type, status, extracted_text, created_at FROM files WHERE id = ?",
+                    (file_id,),
+                ).fetchone()
+                if file_row:
+                    attachments.append(dict(file_row))
+            activity = [
+                dict(item)
+                for item in connection.execute(
+                    "SELECT event_type, message, tone, created_at FROM activity_logs WHERE message LIKE ? ORDER BY id",
+                    (f"%'{workflow.title}'%",),
+                ).fetchall()
+            ]
+        return WorkflowTransferPackage(
+            exported_at=datetime.now(timezone.utc).isoformat(),
+            workflow=workflow.model_dump(),
+            attachments=attachments,
+            activity=activity,
+        )
+
+    def import_workflow(self, package: WorkflowTransferPackage) -> WorkflowImportResult:
+        if package.schema_version != 1:
+            raise ValueError(f"Unsupported workflow package schema version {package.schema_version}.")
+        incoming = Workflow.model_validate(package.workflow)
+        with self._connect() as connection:
+            existing_row = connection.execute(
+                f"SELECT {self._workflow_columns()} FROM workflows WHERE transfer_id = ?",
+                (incoming.transfer_id,),
+            ).fetchone()
+            if existing_row:
+                existing = self._workflow_from_row(existing_row)
+                if incoming.revision < existing.revision or (
+                    incoming.revision == existing.revision and incoming.updated_at <= existing.updated_at
+                ):
+                    return WorkflowImportResult(
+                        action="unchanged",
+                        workflow=existing,
+                        detail="The local workflow is the same revision or newer; no data was overwritten.",
+                    )
+
+            attachment_ids = []
+            for attachment in package.attachments:
+                cursor = connection.execute(
+                    "INSERT INTO files (name, size, content_type, stored_name, status, extracted_text, created_at) VALUES (?, ?, ?, NULL, ?, ?, ?)",
+                    (
+                        str(attachment.get("name") or "Imported attachment"),
+                        int(attachment.get("size") or 0),
+                        attachment.get("content_type"),
+                        str(attachment.get("status") or "extracted"),
+                        attachment.get("extracted_text"),
+                        str(attachment.get("created_at") or incoming.created_at),
+                    ),
+                )
+                attachment_ids.append(cursor.lastrowid)
+
+            imported_state = "paused" if incoming.state in {"running", "queued", "paused"} else incoming.state
+            monitor_slot = None
+            values = (
+                incoming.transfer_id, incoming.title, incoming.description, json.dumps(attachment_ids), imported_state,
+                monitor_slot, incoming.language, incoming.revision, incoming.approval_stage, json.dumps(incoming.schedule),
+                int(incoming.archived), incoming.last_run_at, incoming.plan_text, incoming.plan_provider, incoming.plan_model,
+                incoming.implementation_text, incoming.implementation_provider, incoming.implementation_model,
+                json.dumps(incoming.clarification_questions), json.dumps(incoming.clarification_answers),
+                incoming.created_at, incoming.updated_at,
+            )
+            if existing_row:
+                workflow_id = existing_row["id"]
+                connection.execute(
+                    """UPDATE workflows SET transfer_id=?, title=?, description=?, attachment_ids=?, state=?, monitor_slot=?,
+                    language=?, revision=?, approval_stage=?, schedule_json=?, archived=?, last_run_at=?, plan_text=?, plan_provider=?,
+                    plan_model=?, implementation_text=?, implementation_provider=?, implementation_model=?, clarification_questions_json=?,
+                    clarification_answers_json=?, created_at=?, updated_at=? WHERE id=?""",
+                    (*values, workflow_id),
+                )
+                action = "updated"
+            else:
+                cursor = connection.execute(
+                    """INSERT INTO workflows (transfer_id, title, description, attachment_ids, state, monitor_slot, language,
+                    revision, approval_stage, schedule_json, archived, last_run_at, plan_text, plan_provider, plan_model,
+                    implementation_text, implementation_provider, implementation_model, clarification_questions_json,
+                    clarification_answers_json, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    values,
+                )
+                workflow_id = cursor.lastrowid
+                action = "imported"
+            for event in package.activity:
+                connection.execute(
+                    "INSERT INTO activity_logs (event_type, message, tone, created_at) VALUES (?, ?, ?, ?)",
+                    (
+                        str(event.get("event_type") or "workflow-import"),
+                        str(event.get("message") or f"Imported workflow '{incoming.title}'."),
+                        str(event.get("tone") or "info"),
+                        str(event.get("created_at") or incoming.updated_at),
+                    ),
+                )
+            connection.execute(
+                "INSERT INTO activity_logs (event_type, message, tone) VALUES (?, ?, ?)",
+                ("workflow-import", f"Workflow '{incoming.title}' {action} from a portable package.", "success"),
+            )
+            row = connection.execute(f"SELECT {self._workflow_columns()} FROM workflows WHERE id = ?", (workflow_id,)).fetchone()
+        detail = f"Workflow {action} successfully."
+        if imported_state != incoming.state:
+            detail += f" Active state '{incoming.state}' was imported as paused for safety."
+        return WorkflowImportResult(action=action, workflow=self._workflow_from_row(row), detail=detail)
 
     def update_workflow(self, workflow_id: int, title: str, description: str, attachment_ids: list[int], language: str) -> Workflow | None:
         with self._connect() as connection:
@@ -458,7 +594,7 @@ class JarvisStore:
                 ("workflow", f"Workflow '{workflow['title']}' {state}.", "success" if state == "running" else "warning"),
             )
             row = connection.execute(
-                "SELECT id, title, description, attachment_ids, state, monitor_slot, created_at, updated_at FROM workflows WHERE id = ?",
+                f"SELECT {self._workflow_columns()} FROM workflows WHERE id = ?",
                 (workflow_id,),
             ).fetchone()
         return self._workflow_from_row(row)
@@ -501,7 +637,7 @@ class JarvisStore:
             )
             promoted_workflow = self._promote_next_queued_workflow(connection, capacity)
             row = connection.execute(
-                "SELECT id, title, description, attachment_ids, state, monitor_slot, created_at, updated_at FROM workflows WHERE id = ?",
+                f"SELECT {self._workflow_columns()} FROM workflows WHERE id = ?",
                 (workflow_id,),
             ).fetchone()
         return WorkflowTransition(
@@ -591,7 +727,7 @@ class JarvisStore:
             ("workflow", f"Workflow '{queued_workflow['title']}' promoted to running.", "success"),
         )
         row = connection.execute(
-            "SELECT id, title, description, attachment_ids, state, monitor_slot, created_at, updated_at FROM workflows WHERE id = ?",
+            f"SELECT {self._workflow_columns()} FROM workflows WHERE id = ?",
             (queued_workflow["id"],),
         ).fetchone()
         return self._workflow_from_row(row)
