@@ -69,9 +69,27 @@ def test_workflow_requires_test_user_and_supervisor_gates(tmp_path: Path) -> Non
     assert workflow is not None
     assert workflow.state == "implementation_review"
 
+    workflow = store.save_prepared_artifact(workflow.id, "a" * 64, {"restricted_execution_allowed": False})
+    assert workflow is not None
+    workflow = store.review_workflow(workflow.id, "submit_for_test")
+    assert workflow is not None and workflow.state == "test_ready"
+    assert store.review_workflow(workflow.id, "test_pass") is None
+    assert store.begin_workflow_test(workflow.id) is not None
+    workflow = store.complete_workflow_test(workflow.id, {
+        "artifact_sha256": "a" * 64,
+        "profile": "static",
+        "status": "passed",
+        "permission_manifest": {"restricted_execution_allowed": False},
+        "exit_code": 0,
+        "stdout": "syntax valid",
+        "stderr": "",
+        "duration_ms": 10,
+        "evidence_sha256": "b" * 64,
+        "summary": "Static validation passed.",
+    })
+    assert workflow is not None and workflow.state == "test_passed"
+
     for decision, expected in (
-        ("submit_for_test", "test_ready"),
-        ("test_pass", "test_passed"),
         ("user_accept", "user_accepted"),
         ("request_supervisor", "supervisor_pending"),
         ("supervisor_approve", "approved"),

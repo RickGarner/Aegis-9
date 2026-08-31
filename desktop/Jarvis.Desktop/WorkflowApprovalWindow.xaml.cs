@@ -1,4 +1,6 @@
 using System.Windows;
+using System.Text.Json;
+using System.Windows.Controls;
 namespace Jarvis.Desktop;
 public partial class WorkflowApprovalWindow : Window
 {
@@ -24,7 +26,8 @@ public partial class WorkflowApprovalWindow : Window
         "plan_review" => ("approve_plan", "APPROVE REVIEWED PLAN", "The design review is complete and has no unanswered required questions. Approving it unlocks coding-model implementation."),
         "plan_approved" => ("generate_implementation", "GENERATE IMPLEMENTATION", "A coding model will be selected independently to implement the approved plan."),
         "implementation_review" => ("submit_for_test", "SUBMIT FOR TEST", "Review the generated implementation before it enters the isolated-test queue."),
-        "test_ready" => ("test_pass", "RECORD TEST PASS", "Use only after reviewing retained non-production test evidence. The actual test runner is not connected yet."),
+        "test_ready" => ("run_test", "RUN SAFE TEST", "Run the selected bounded non-production profile and retain hashed evidence."),
+        "test_failed" => ("run_test", "RETRY SAFE TEST", "Review the permission findings or build errors, revise when necessary, and run validation again."),
         "test_passed" => ("user_accept", "USER ACCEPT", "User acceptance confirms the result but does not grant production authority."),
         "user_accepted" => ("request_supervisor", "REQUEST SUPERVISOR", "Submit this exact revision for independent production approval."),
         "supervisor_pending" => ("supervisor_approve", "SUPERVISOR APPROVE", "Supervisor approval unlocks scheduling; it does not immediately start the workflow."),
@@ -49,7 +52,8 @@ public partial class WorkflowApprovalWindow : Window
                     ? "ANALYSIS REQUIRED · A.E.G.I.S.-9 is preparing the design review."
                     : "No unresolved design questions are recorded at this stage.";
         var showingImplementation = !string.IsNullOrWhiteSpace(_workflow.ImplementationText);
-        ArtifactText.Text = showingImplementation ? _workflow.ImplementationText : _workflow.PlanText;
+        var evidence = string.IsNullOrWhiteSpace(_workflow.LatestTestStatus) ? "" : $"\n\n--- RETAINED TEST EVIDENCE ---\nStatus: {_workflow.LatestTestStatus}\nArtifact SHA-256: {_workflow.ArtifactSha256}\nEvidence SHA-256: {_workflow.LatestTestEvidenceSha256}\nSummary: {_workflow.LatestTestSummary}\nPermission manifest:\n{JsonSerializer.Serialize(_workflow.PermissionManifest, new JsonSerializerOptions { WriteIndented = true })}";
+        ArtifactText.Text = (showingImplementation ? _workflow.ImplementationText : _workflow.PlanText) + evidence;
         ModelText.Text = showingImplementation ? $"Implementation model: {_workflow.ImplementationProvider} / {_workflow.ImplementationModel}" : string.IsNullOrWhiteSpace(_workflow.PlanText) ? "Planning model selection pending." : $"Planning model: {_workflow.PlanProvider} / {_workflow.PlanModel}";
     }
     private async void AdvanceButton_Click(object sender, RoutedEventArgs e)
@@ -64,6 +68,7 @@ public partial class WorkflowApprovalWindow : Window
             {
                 "design_plan" => await _client.DesignWorkflowPlanAsync(_workflow.Id, CancellationToken.None),
                 "generate_implementation" => await _client.GenerateWorkflowImplementationAsync(_workflow.Id, CancellationToken.None),
+                "run_test" => (await _client.RunWorkflowTestAsync(_workflow.Id, (TestProfileInput.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "static", CancellationToken.None)).Workflow,
                 _ => await _client.ReviewWorkflowAsync(_workflow.Id, next.Value.decision, CancellationToken.None)
             };
             if (next.Value.decision == "approve_plan")

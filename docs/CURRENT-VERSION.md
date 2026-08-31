@@ -173,6 +173,13 @@ and active workflows import as paused for safety. Transfer files contain workflo
 content and should be handled as operational data rather than committed to Git.
 See `docs/WORKFLOW-TRANSFER.md` for the operator procedure and safety rules.
 
+The workflow test gate now extracts immutable fenced PowerShell/C# artifacts,
+stores SHA-256 hashes and permission manifests, runs bounded static validation,
+and retains hashed evidence. Low-risk PowerShell can optionally run under the
+restricted Constrained Language profile; external-capability workflows and C#
+execution remain blocked pending an approved disposable OS sandbox. Manual test
+pass recording has been removed. See `docs/WORKFLOW-TEST-RUNNER.md`.
+
 Workflow plan approval is now separated from design review. Creating a draft
 opens Workflow Design Review and starts plan analysis automatically. The review
 shows a prominent unresolved-question count/status, opens required answer fields,

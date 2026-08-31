@@ -178,6 +178,14 @@ public sealed class MonitoringClient
         return await response.Content.ReadFromJsonAsync<Workflow>(JsonOptions, cancellationToken) ?? throw new InvalidOperationException("Workflow review returned an empty response.");
     }
 
+    public async Task<WorkflowTestResult> RunWorkflowTestAsync(int workflowId, string profile, CancellationToken cancellationToken)
+    {
+        using var response = await _httpClient.PostAsJsonAsync($"api/workflows/{workflowId}/run-test", new { profile }, JsonOptions, cancellationToken);
+        await EnsureSuccessWithDetailAsync(response, "Workflow test", cancellationToken);
+        return await response.Content.ReadFromJsonAsync<WorkflowTestResult>(JsonOptions, cancellationToken)
+            ?? throw new InvalidOperationException("Workflow test API returned an empty response.");
+    }
+
     public async Task<Workflow> DesignWorkflowPlanAsync(int workflowId, CancellationToken cancellationToken)
     {
         using var response = await _httpClient.PostAsync($"api/workflows/{workflowId}/design-plan", null, cancellationToken);
@@ -393,6 +401,29 @@ public sealed class Workflow
     [JsonPropertyName("implementation_model")] public string ImplementationModel { get; set; } = string.Empty;
     [JsonPropertyName("clarification_questions")] public List<WorkflowClarificationQuestion> ClarificationQuestions { get; set; } = [];
     [JsonPropertyName("clarification_answers")] public Dictionary<string, string> ClarificationAnswers { get; set; } = [];
+    [JsonPropertyName("artifact_sha256")] public string ArtifactSha256 { get; set; } = string.Empty;
+    [JsonPropertyName("permission_manifest")] public Dictionary<string, JsonElement> PermissionManifest { get; set; } = [];
+    [JsonPropertyName("latest_test_status")] public string LatestTestStatus { get; set; } = string.Empty;
+    [JsonPropertyName("latest_test_evidence_sha256")] public string LatestTestEvidenceSha256 { get; set; } = string.Empty;
+    [JsonPropertyName("latest_test_summary")] public string LatestTestSummary { get; set; } = string.Empty;
+}
+
+public sealed class WorkflowTestResult
+{
+    public Workflow Workflow { get; set; } = new();
+    public WorkflowTestEvidence Evidence { get; set; } = new();
+}
+
+public sealed class WorkflowTestEvidence
+{
+    public string Profile { get; set; } = string.Empty;
+    public string Status { get; set; } = string.Empty;
+    [JsonPropertyName("artifact_sha256")] public string ArtifactSha256 { get; set; } = string.Empty;
+    [JsonPropertyName("evidence_sha256")] public string EvidenceSha256 { get; set; } = string.Empty;
+    public string Summary { get; set; } = string.Empty;
+    public string Stdout { get; set; } = string.Empty;
+    public string Stderr { get; set; } = string.Empty;
+    [JsonPropertyName("duration_ms")] public int DurationMs { get; set; }
 }
 
 public sealed class WorkflowImportResult

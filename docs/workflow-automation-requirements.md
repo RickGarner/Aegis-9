@@ -165,16 +165,26 @@ Implemented in the initial interface/domain slice on 2026-08-30:
 - conflict protection that refuses to overwrite an equal or newer local
   revision; imported active workflows are paused and detached from monitor slots
   until the operator explicitly resumes them
+- immutable fenced-source artifact extraction with SHA-256 identity and a
+  persisted permission manifest
+- bounded PowerShell parser validation and .NET 8 C# build validation with
+  retained, hashed stdout/stderr evidence
+- a restricted PowerShell profile that uses Constrained Language mode and is
+  denied for external capabilities or commands outside the test allowlist
+- lifecycle enforcement that permits `test_passed` only from retained passing
+  runner evidence rather than a manual pass button
 
 Not yet present:
 
-- extracting generated PowerShell/C# into immutable runnable artifact files (the
-  generated implementation is currently persisted for review)
-- immutable revisions, permission manifests, or code signing/hashing
-- test environment and user-acceptance gate
+- disposable VM/Windows Sandbox execution for workflows requiring external
+  capabilities and C# runtime execution
+- artifact signing (SHA-256 hashing is implemented; signing remains open)
+- external-system functional test adapters and dedicated non-production credentials
 - authenticated supervisor identity and authorization (the lifecycle gate exists)
 - scheduler execution, condition evaluator, and missed-run policy (schedule capture exists)
-- actual workflow runner, live step/output stream, history, retry, or recovery
+- production workflow executor, live step/output stream, execution history, and
+  production retry/recovery policies (bounded validation retry and interrupted-test
+  recovery are implemented)
 - workflow-specific notification/escalation delivery
 
 ## Delivery sequence

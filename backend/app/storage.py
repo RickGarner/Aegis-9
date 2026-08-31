@@ -53,6 +53,11 @@ class Workflow(BaseModel):
     implementation_model: str = ""
     clarification_questions: list[dict] = Field(default_factory=list)
     clarification_answers: dict[str, str] = Field(default_factory=dict)
+    artifact_sha256: str = ""
+    permission_manifest: dict = Field(default_factory=dict)
+    latest_test_status: str = ""
+    latest_test_evidence_sha256: str = ""
+    latest_test_summary: str = ""
     created_at: str
     updated_at: str
 
@@ -151,8 +156,31 @@ class JarvisStore:
                     implementation_model TEXT NOT NULL DEFAULT '',
                     clarification_questions_json TEXT NOT NULL DEFAULT '[]',
                     clarification_answers_json TEXT NOT NULL DEFAULT '{}',
+                    artifact_sha256 TEXT NOT NULL DEFAULT '',
+                    permission_manifest_json TEXT NOT NULL DEFAULT '{}',
+                    latest_test_status TEXT NOT NULL DEFAULT '',
+                    latest_test_evidence_sha256 TEXT NOT NULL DEFAULT '',
+                    latest_test_summary TEXT NOT NULL DEFAULT '',
                     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+
+                CREATE TABLE IF NOT EXISTS workflow_test_runs (
+                    id INTEGER PRIMARY KEY,
+                    workflow_id INTEGER NOT NULL,
+                    revision INTEGER NOT NULL,
+                    artifact_sha256 TEXT NOT NULL,
+                    profile TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    permission_manifest_json TEXT NOT NULL,
+                    exit_code INTEGER,
+                    stdout TEXT NOT NULL DEFAULT '',
+                    stderr TEXT NOT NULL DEFAULT '',
+                    duration_ms INTEGER NOT NULL DEFAULT 0,
+                    evidence_sha256 TEXT NOT NULL,
+                    summary TEXT NOT NULL,
+                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY(workflow_id) REFERENCES workflows(id)
                 );
 
                 CREATE TABLE IF NOT EXISTS workflow_topology_state (
@@ -228,6 +256,11 @@ class JarvisStore:
             ("clarification_questions_json", "TEXT NOT NULL DEFAULT '[]'"),
             ("clarification_answers_json", "TEXT NOT NULL DEFAULT '{}'"),
             ("transfer_id", "TEXT"),
+            ("artifact_sha256", "TEXT NOT NULL DEFAULT ''"),
+            ("permission_manifest_json", "TEXT NOT NULL DEFAULT '{}'"),
+            ("latest_test_status", "TEXT NOT NULL DEFAULT ''"),
+            ("latest_test_evidence_sha256", "TEXT NOT NULL DEFAULT ''"),
+            ("latest_test_summary", "TEXT NOT NULL DEFAULT ''"),
         ):
             if column not in existing_columns:
                 connection.execute(f"ALTER TABLE workflows ADD COLUMN {column} {definition}")
@@ -326,7 +359,7 @@ class JarvisStore:
 
     @staticmethod
     def _workflow_columns() -> str:
-        return "id, transfer_id, title, description, attachment_ids, state, monitor_slot, language, revision, approval_stage, schedule_json, archived, last_run_at, plan_text, plan_provider, plan_model, implementation_text, implementation_provider, implementation_model, clarification_questions_json, clarification_answers_json, created_at, updated_at"
+        return "id, transfer_id, title, description, attachment_ids, state, monitor_slot, language, revision, approval_stage, schedule_json, archived, last_run_at, plan_text, plan_provider, plan_model, implementation_text, implementation_provider, implementation_model, clarification_questions_json, clarification_answers_json, artifact_sha256, permission_manifest_json, latest_test_status, latest_test_evidence_sha256, latest_test_summary, created_at, updated_at"
 
     @staticmethod
     def _workflow_from_row(row: sqlite3.Row) -> Workflow:
@@ -335,6 +368,7 @@ class JarvisStore:
         values["schedule"] = json.loads(values.pop("schedule_json", None) or "{}")
         values["clarification_questions"] = json.loads(values.pop("clarification_questions_json", None) or "[]")
         values["clarification_answers"] = json.loads(values.pop("clarification_answers_json", None) or "{}")
+        values["permission_manifest"] = json.loads(values.pop("permission_manifest_json", None) or "{}")
         values["archived"] = bool(values.get("archived"))
         return Workflow(**values)
 
@@ -445,6 +479,8 @@ class JarvisStore:
                 int(incoming.archived), incoming.last_run_at, incoming.plan_text, incoming.plan_provider, incoming.plan_model,
                 incoming.implementation_text, incoming.implementation_provider, incoming.implementation_model,
                 json.dumps(incoming.clarification_questions), json.dumps(incoming.clarification_answers),
+                incoming.artifact_sha256, json.dumps(incoming.permission_manifest), incoming.latest_test_status,
+                incoming.latest_test_evidence_sha256, incoming.latest_test_summary,
                 incoming.created_at, incoming.updated_at,
             )
             if existing_row:
@@ -453,7 +489,8 @@ class JarvisStore:
                     """UPDATE workflows SET transfer_id=?, title=?, description=?, attachment_ids=?, state=?, monitor_slot=?,
                     language=?, revision=?, approval_stage=?, schedule_json=?, archived=?, last_run_at=?, plan_text=?, plan_provider=?,
                     plan_model=?, implementation_text=?, implementation_provider=?, implementation_model=?, clarification_questions_json=?,
-                    clarification_answers_json=?, created_at=?, updated_at=? WHERE id=?""",
+                    clarification_answers_json=?, artifact_sha256=?, permission_manifest_json=?, latest_test_status=?,
+                    latest_test_evidence_sha256=?, latest_test_summary=?, created_at=?, updated_at=? WHERE id=?""",
                     (*values, workflow_id),
                 )
                 action = "updated"
@@ -462,7 +499,9 @@ class JarvisStore:
                     """INSERT INTO workflows (transfer_id, title, description, attachment_ids, state, monitor_slot, language,
                     revision, approval_stage, schedule_json, archived, last_run_at, plan_text, plan_provider, plan_model,
                     implementation_text, implementation_provider, implementation_model, clarification_questions_json,
-                    clarification_answers_json, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    clarification_answers_json, artifact_sha256, permission_manifest_json, latest_test_status,
+                    latest_test_evidence_sha256, latest_test_summary, created_at, updated_at)
+                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                     values,
                 )
                 workflow_id = cursor.lastrowid
@@ -493,7 +532,7 @@ class JarvisStore:
             if current is None or current["state"] in {"running", "paused"}:
                 return None
             connection.execute(
-                "UPDATE workflows SET title = ?, description = ?, attachment_ids = ?, language = ?, revision = revision + 1, state = 'draft', approval_stage = 'draft', schedule_json = '{}', plan_text = '', plan_provider = '', plan_model = '', implementation_text = '', implementation_provider = '', implementation_model = '', clarification_questions_json = '[]', clarification_answers_json = '{}', updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                "UPDATE workflows SET title = ?, description = ?, attachment_ids = ?, language = ?, revision = revision + 1, state = 'draft', approval_stage = 'draft', schedule_json = '{}', plan_text = '', plan_provider = '', plan_model = '', implementation_text = '', implementation_provider = '', implementation_model = '', clarification_questions_json = '[]', clarification_answers_json = '{}', artifact_sha256='', permission_manifest_json='{}', latest_test_status='', latest_test_evidence_sha256='', latest_test_summary='', updated_at = CURRENT_TIMESTAMP WHERE id = ?",
                 (title, description, json.dumps(attachment_ids), language, workflow_id),
             )
             connection.execute("INSERT INTO activity_logs (event_type, message, tone) VALUES (?, ?, ?)", ("workflow", f"Workflow '{title}' revised; prior approvals invalidated.", "warning"))
@@ -504,8 +543,6 @@ class JarvisStore:
         transitions = {
             ("plan_review", "approve_plan"): ("plan_approved", "plan_approved"),
             ("implementation_review", "submit_for_test"): ("test_ready", "test_ready"),
-            ("test_ready", "test_pass"): ("test_passed", "test_passed"),
-            ("test_ready", "test_fail"): ("test_failed", "test_failed"),
             ("test_failed", "submit_for_test"): ("test_ready", "test_ready"),
             ("test_passed", "user_accept"): ("user_accepted", "user_accepted"),
             ("user_accepted", "request_supervisor"): ("supervisor_pending", "supervisor_pending"),
@@ -534,7 +571,7 @@ class JarvisStore:
             if current is None or current["state"] not in {"draft", "rejected", "plan_review"}:
                 return None
             next_state = "needs_clarification" if questions else "plan_review" if finalizing else "design_review"
-            connection.execute("UPDATE workflows SET plan_text = ?, plan_provider = ?, plan_model = ?, implementation_text = '', implementation_provider = '', implementation_model = '', clarification_questions_json = ?, state = ?, approval_stage = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", (content, provider, model, json.dumps(questions), next_state, next_state, workflow_id))
+            connection.execute("UPDATE workflows SET plan_text = ?, plan_provider = ?, plan_model = ?, implementation_text = '', implementation_provider = '', implementation_model = '', clarification_questions_json = ?, artifact_sha256='', permission_manifest_json='{}', latest_test_status='', latest_test_evidence_sha256='', latest_test_summary='', state = ?, approval_stage = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", (content, provider, model, json.dumps(questions), next_state, next_state, workflow_id))
             message = f"Final plan for '{current['title']}' is ready for approval or rejection." if finalizing and not questions else f"Plan designed for '{current['title']}' by {provider}/{model}."
             connection.execute("INSERT INTO activity_logs (event_type, message, tone) VALUES (?, ?, ?)", ("workflow-ready" if finalizing and not questions else "workflow-ai", message, "success" if finalizing and not questions else "info"))
             row = connection.execute(f"SELECT {self._workflow_columns()} FROM workflows WHERE id = ?", (workflow_id,)).fetchone()
@@ -574,9 +611,73 @@ class JarvisStore:
             current = connection.execute("SELECT title, state FROM workflows WHERE id = ? AND archived = 0", (workflow_id,)).fetchone()
             if current is None or current["state"] != "plan_approved":
                 return None
-            connection.execute("UPDATE workflows SET implementation_text = ?, implementation_provider = ?, implementation_model = ?, state = 'implementation_review', approval_stage = 'implementation_review', updated_at = CURRENT_TIMESTAMP WHERE id = ?", (content, provider, model, workflow_id))
+            connection.execute("UPDATE workflows SET implementation_text = ?, implementation_provider = ?, implementation_model = ?, state = 'implementation_review', approval_stage = 'implementation_review', artifact_sha256='', permission_manifest_json='{}', latest_test_status='', latest_test_evidence_sha256='', latest_test_summary='', updated_at = CURRENT_TIMESTAMP WHERE id = ?", (content, provider, model, workflow_id))
             connection.execute("INSERT INTO activity_logs (event_type, message, tone) VALUES (?, ?, ?)", ("workflow-ai", f"Implementation generated for '{current['title']}' by {provider}/{model}.", "info"))
             row = connection.execute(f"SELECT {self._workflow_columns()} FROM workflows WHERE id = ?", (workflow_id,)).fetchone()
+        return self._workflow_from_row(row)
+
+    def save_prepared_artifact(self, workflow_id: int, artifact_sha256: str, permission_manifest: dict) -> Workflow | None:
+        with self._connect() as connection:
+            current = connection.execute("SELECT state FROM workflows WHERE id=? AND archived=0", (workflow_id,)).fetchone()
+            if current is None or current["state"] not in {"implementation_review", "test_ready", "test_failed"}:
+                return None
+            connection.execute(
+                "UPDATE workflows SET artifact_sha256=?, permission_manifest_json=?, updated_at=CURRENT_TIMESTAMP WHERE id=?",
+                (artifact_sha256, json.dumps(permission_manifest), workflow_id),
+            )
+            row = connection.execute(f"SELECT {self._workflow_columns()} FROM workflows WHERE id=?", (workflow_id,)).fetchone()
+        return self._workflow_from_row(row)
+
+    def begin_workflow_test(self, workflow_id: int) -> Workflow | None:
+        with self._connect() as connection:
+            current = connection.execute("SELECT title,state,artifact_sha256 FROM workflows WHERE id=? AND archived=0", (workflow_id,)).fetchone()
+            if current is None or current["state"] not in {"test_ready", "test_failed"} or not current["artifact_sha256"]:
+                return None
+            connection.execute("UPDATE workflows SET state='testing', approval_stage='testing', latest_test_status='running', updated_at=CURRENT_TIMESTAMP WHERE id=?", (workflow_id,))
+            connection.execute("INSERT INTO activity_logs(event_type,message,tone) VALUES(?,?,?)", ("workflow-test", f"Isolated validation started for '{current['title']}'.", "info"))
+            row = connection.execute(f"SELECT {self._workflow_columns()} FROM workflows WHERE id=?", (workflow_id,)).fetchone()
+        return self._workflow_from_row(row)
+
+    def recover_interrupted_workflow_tests(self) -> int:
+        with self._connect() as connection:
+            interrupted = connection.execute(
+                "SELECT id,title FROM workflows WHERE state='testing' AND archived=0"
+            ).fetchall()
+            for workflow in interrupted:
+                connection.execute(
+                    "UPDATE workflows SET state='test_failed', approval_stage='test_failed', "
+                    "latest_test_status='interrupted', "
+                    "latest_test_summary='Validation was interrupted before evidence could be retained. Retry the safe test.', "
+                    "updated_at=CURRENT_TIMESTAMP WHERE id=?",
+                    (workflow["id"],),
+                )
+                connection.execute(
+                    "INSERT INTO activity_logs(event_type,message,tone) VALUES(?,?,?)",
+                    ("workflow-test", f"Interrupted validation recovered for '{workflow['title']}'.", "warning"),
+                )
+        return len(interrupted)
+
+    def complete_workflow_test(self, workflow_id: int, evidence: dict) -> Workflow | None:
+        with self._connect() as connection:
+            current = connection.execute(f"SELECT {self._workflow_columns()} FROM workflows WHERE id=? AND archived=0", (workflow_id,)).fetchone()
+            if current is None or current["state"] != "testing":
+                return None
+            workflow = self._workflow_from_row(current)
+            status = str(evidence["status"])
+            next_state = "test_passed" if status == "passed" else "test_failed"
+            connection.execute(
+                """INSERT INTO workflow_test_runs(workflow_id,revision,artifact_sha256,profile,status,permission_manifest_json,
+                exit_code,stdout,stderr,duration_ms,evidence_sha256,summary) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (workflow_id, workflow.revision, evidence["artifact_sha256"], evidence["profile"], status,
+                 json.dumps(evidence["permission_manifest"]), evidence.get("exit_code"), evidence.get("stdout", ""),
+                 evidence.get("stderr", ""), evidence.get("duration_ms", 0), evidence["evidence_sha256"], evidence["summary"]),
+            )
+            connection.execute(
+                "UPDATE workflows SET state=?, approval_stage=?, latest_test_status=?, latest_test_evidence_sha256=?, latest_test_summary=?, updated_at=CURRENT_TIMESTAMP WHERE id=?",
+                (next_state, next_state, status, evidence["evidence_sha256"], evidence["summary"], workflow_id),
+            )
+            connection.execute("INSERT INTO activity_logs(event_type,message,tone) VALUES(?,?,?)", ("workflow-test", f"Validation for '{workflow.title}' completed: {status}.", "success" if status == "passed" else "warning"))
+            row = connection.execute(f"SELECT {self._workflow_columns()} FROM workflows WHERE id=?", (workflow_id,)).fetchone()
         return self._workflow_from_row(row)
 
     def set_workflow_schedule(self, workflow_id: int, schedule: dict) -> Workflow | None:

@@ -98,6 +98,12 @@ class Settings(BaseSettings):
         default=25 * 1024 * 1024,
         validation_alias="JARVIS_MAX_UPLOAD_BYTES",
     )
+    workflow_artifact_root: Path = Field(
+        default=Path(__file__).resolve().parents[2] / "storage" / "workflow-artifacts",
+        validation_alias="JARVIS_WORKFLOW_ARTIFACT_ROOT",
+    )
+    workflow_test_timeout_seconds: int = Field(default=30, ge=5, le=300, validation_alias="JARVIS_WORKFLOW_TEST_TIMEOUT_SECONDS")
+    workflow_test_output_limit: int = Field(default=64_000, ge=4_096, le=1_000_000, validation_alias="JARVIS_WORKFLOW_TEST_OUTPUT_LIMIT")
     server_inventory_path: Path = Field(
         default=Path(__file__).resolve().parents[2] / "config" / "monitored-servers.json",
         validation_alias="JARVIS_SERVER_INVENTORY_PATH",
@@ -132,6 +138,8 @@ class Settings(BaseSettings):
             self.server_inventory_path = (Path(__file__).resolve().parents[2] / self.server_inventory_path).resolve()
         if not self.freeflow_inventory_path.is_absolute():
             self.freeflow_inventory_path = (Path(__file__).resolve().parents[2] / self.freeflow_inventory_path).resolve()
+        if not self.workflow_artifact_root.is_absolute():
+            self.workflow_artifact_root = (Path(__file__).resolve().parents[2] / self.workflow_artifact_root).resolve()
         if self.provider_base_url is not None or self.provider != "lmstudio":
             return self
 

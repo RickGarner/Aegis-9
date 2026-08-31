@@ -24,6 +24,7 @@ from app.monitoring import (
 )
 from app.storage import ApprovalState, FileEntry, JarvisStore, SessionState, Workflow, WorkflowImportResult, WorkflowTransferPackage, WorkflowTransition
 from app.supervisor import TopologyReconciliation, WorkflowCapacity, WorkflowWindowPlacement, get_workflow_capacity
+from app.workflow_runner import WorkflowTestEvidence, WorkflowTestRunner
 
 
 class ChatRequest(BaseModel):
@@ -51,7 +52,16 @@ class WorkflowRequest(BaseModel):
 
 
 class WorkflowReviewRequest(BaseModel):
-    decision: str = Field(pattern="^(approve_plan|submit_for_test|test_pass|test_fail|user_accept|request_supervisor|supervisor_approve|reject)$")
+    decision: str = Field(pattern="^(approve_plan|submit_for_test|user_accept|request_supervisor|supervisor_approve|reject)$")
+
+
+class WorkflowTestRequest(BaseModel):
+    profile: str = Field(default="static", pattern="^(static|restricted)$")
+
+
+class WorkflowTestResult(BaseModel):
+    workflow: Workflow
+    evidence: WorkflowTestEvidence
 
 
 class WorkflowScheduleRequest(BaseModel):
@@ -150,6 +160,7 @@ async def lifespan(app: FastAPI):
     app.state.settings = settings
     app.state.store = JarvisStore(settings.database_path)
     app.state.store.initialize()
+    app.state.store.recover_interrupted_workflow_tests()
     for workflow in app.state.store.get_workflows():
         parsed_plan, _ = parse_workflow_plan_response(workflow.plan_text) if workflow.plan_text else ("", [])
         if workflow.state in {"design_review", "needs_clarification", "plan_review"} and not parsed_plan:
@@ -491,11 +502,53 @@ async def update_workflow(workflow_id: int, request: WorkflowRequest, store: Jar
 
 
 @app.post("/api/workflows/{workflow_id}/review", response_model=Workflow)
-async def review_workflow(workflow_id: int, request: WorkflowReviewRequest, store: JarvisStore = Depends(get_store)) -> Workflow:
+async def review_workflow(
+    workflow_id: int,
+    request: WorkflowReviewRequest,
+    settings: Settings = Depends(get_settings),
+    store: JarvisStore = Depends(get_store),
+) -> Workflow:
+    if request.decision == "submit_for_test":
+        workflow = store.get_workflow(workflow_id)
+        if workflow is None or workflow.state != "implementation_review":
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Only an implementation under review can be submitted for testing.")
+        runner = WorkflowTestRunner(settings.workflow_artifact_root, settings.workflow_test_timeout_seconds, settings.workflow_test_output_limit)
+        try:
+            artifact = runner.prepare(workflow.transfer_id, workflow.revision, workflow.language, workflow.implementation_text)
+        except (OSError, RuntimeError, ValueError) as error:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"Implementation artifact could not be prepared: {error}") from error
+        if store.save_prepared_artifact(workflow_id, artifact.sha256, artifact.manifest.model_dump()) is None:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Workflow changed before its test artifact could be stored.")
     result = store.review_workflow(workflow_id, request.decision)
     if result is None:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Decision is not valid for the workflow's current gate.")
     return result
+
+
+@app.post("/api/workflows/{workflow_id}/run-test", response_model=WorkflowTestResult)
+async def run_workflow_test(
+    workflow_id: int,
+    request: WorkflowTestRequest,
+    settings: Settings = Depends(get_settings),
+    store: JarvisStore = Depends(get_store),
+) -> WorkflowTestResult:
+    workflow = store.get_workflow(workflow_id)
+    if workflow is None or workflow.state not in {"test_ready", "test_failed"}:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Workflow is not ready for isolated validation.")
+    runner = WorkflowTestRunner(settings.workflow_artifact_root, settings.workflow_test_timeout_seconds, settings.workflow_test_output_limit)
+    try:
+        artifact = runner.prepare(workflow.transfer_id, workflow.revision, workflow.language, workflow.implementation_text)
+    except (OSError, RuntimeError, ValueError) as error:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"Implementation artifact is invalid: {error}") from error
+    if artifact.sha256 != workflow.artifact_sha256:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Generated implementation changed after test submission; return it to implementation review.")
+    if store.begin_workflow_test(workflow_id) is None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Workflow could not enter the testing state.")
+    evidence = await asyncio.to_thread(runner.run, artifact, workflow.language, request.profile)
+    updated = store.complete_workflow_test(workflow_id, evidence.model_dump())
+    if updated is None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Test evidence could not be attached to the workflow.")
+    return WorkflowTestResult(workflow=updated, evidence=evidence)
 
 
 @app.post("/api/workflows/{workflow_id}/design-plan", response_model=Workflow)
