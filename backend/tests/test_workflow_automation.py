@@ -22,6 +22,21 @@ def test_empty_json_plan_is_rejected_instead_of_becoming_reviewable() -> None:
     assert questions == []
 
 
+def test_malformed_multiline_json_plan_recovers_clean_markdown() -> None:
+    response = '''{
+      "plan": "# Account Lockout Plan
+
+## Goal
+Monitor locked accounts safely.",
+      "questions": []
+    }
+    Additional model commentary.'''
+    plan, questions = parse_workflow_plan_response(response)
+    assert plan.startswith("# Account Lockout Plan")
+    assert "Additional model commentary" not in plan
+    assert questions == []
+
+
 def test_invalid_saved_plan_can_be_returned_to_draft(tmp_path: Path) -> None:
     store = make_store(tmp_path)
     workflow = store.create_workflow("Invalid plan", "Create a real plan", [], "powershell")

@@ -363,6 +363,17 @@ class JarvisStore:
             row = connection.execute(f"SELECT {self._workflow_columns()} FROM workflows WHERE id = ?", (workflow_id,)).fetchone()
         return self._workflow_from_row(row)
 
+    def normalize_workflow_plan_text(self, workflow_id: int, plan_text: str) -> Workflow | None:
+        if not plan_text.strip():
+            return None
+        with self._connect() as connection:
+            current = connection.execute("SELECT id FROM workflows WHERE id = ?", (workflow_id,)).fetchone()
+            if current is None:
+                return None
+            connection.execute("UPDATE workflows SET plan_text = ? WHERE id = ?", (plan_text.strip(), workflow_id))
+            row = connection.execute(f"SELECT {self._workflow_columns()} FROM workflows WHERE id = ?", (workflow_id,)).fetchone()
+        return self._workflow_from_row(row)
+
     def export_workflow(self, workflow_id: int) -> WorkflowTransferPackage | None:
         with self._connect() as connection:
             row = connection.execute(f"SELECT {self._workflow_columns()} FROM workflows WHERE id = ?", (workflow_id,)).fetchone()

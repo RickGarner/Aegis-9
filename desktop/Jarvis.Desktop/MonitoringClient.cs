@@ -125,6 +125,14 @@ public sealed class MonitoringClient
         return await response.Content.ReadFromJsonAsync<List<Workflow>>(JsonOptions, cancellationToken) ?? [];
     }
 
+    public async Task<Workflow> GetWorkflowAsync(int workflowId, CancellationToken cancellationToken)
+    {
+        using var response = await _httpClient.GetAsync($"api/workflows/{workflowId}", cancellationToken);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<Workflow>(JsonOptions, cancellationToken)
+            ?? throw new InvalidOperationException("Workflow API returned an empty response.");
+    }
+
     public async Task<byte[]> ExportWorkflowAsync(int workflowId, CancellationToken cancellationToken)
     {
         using var response = await _httpClient.GetAsync($"api/workflows/{workflowId}/export", cancellationToken);

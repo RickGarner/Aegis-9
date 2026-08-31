@@ -9,8 +9,12 @@ public partial class WorkflowDesignReviewWindow : Window
     public WorkflowDesignReviewWindow(Workflow workflow) { InitializeComponent(); _workflow = workflow; HeadingText.Text = workflow.Title; Loaded += async (_, _) => await LoadReviewAsync(); }
     private async Task LoadReviewAsync()
     {
+        ReviewStatusText.Text = "LOADING AUTHORITATIVE WORKFLOW STATE";
+        PlanText.Text = "Loading the saved workflow plan from A.E.G.I.S.-9...";
+        UpdateDraftButton.IsEnabled = false;
         try
         {
+            _workflow = await _client.GetWorkflowAsync(_workflow.Id, CancellationToken.None);
             if (_workflow.State is "draft" or "rejected") { OperationStatusText.Text = "A.E.G.I.S.-9 is selecting a planning model and preparing the review…"; _workflow = await _client.DesignWorkflowPlanAsync(_workflow.Id, CancellationToken.None); }
             Render();
         }

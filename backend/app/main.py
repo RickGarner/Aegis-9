@@ -77,6 +77,11 @@ def parse_workflow_plan_response(content: str) -> tuple[str, list[dict]]:
     try:
         payload = json.loads(candidate)
     except json.JSONDecodeError:
+        malformed_plan = re.search(r'"plan"\s*:\s*"(.*)"\s*,\s*"questions"\s*:', candidate, re.DOTALL | re.IGNORECASE)
+        if malformed_plan:
+            recovered = malformed_plan.group(1).replace(r'\n', '\n').replace(r'\"', '"').strip()
+            if recovered:
+                return recovered, infer_unresolved_plan_questions(recovered)
         questions = infer_unresolved_plan_questions(content)
         return content.strip(), questions
     if not isinstance(payload, dict):
@@ -150,6 +155,9 @@ async def lifespan(app: FastAPI):
         if workflow.state in {"design_review", "needs_clarification", "plan_review"} and not parsed_plan:
             app.state.store.reset_invalid_workflow_plan(workflow.id)
             continue
+        if parsed_plan and parsed_plan != workflow.plan_text:
+            app.state.store.normalize_workflow_plan_text(workflow.id, parsed_plan)
+            workflow = app.state.store.get_workflow(workflow.id) or workflow
         if workflow.state != "plan_review" or not workflow.plan_text:
             continue
         inferred = infer_unresolved_plan_questions(workflow.plan_text)
