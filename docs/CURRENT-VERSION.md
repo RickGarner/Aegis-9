@@ -119,7 +119,7 @@ There are no build errors.
   including the user-scoped LM Studio service credential.
 - Validate GPU-specific routing and the Core/Full model profiles on different
   hardware.
-- Finish MoveIT execution-history discovery or reliable log-based correlation.
+- Validate production alert policy for the now-connected MoveIT Task Run history feed.
 - Connect the remote ServerMonitoring agent/hub feeds.
 - Add the approved monitoring/workflow action catalog and notification outbox.
 - Finish production packaging and installer validation.
@@ -185,8 +185,10 @@ PowerShell remoting/CIM using the current approved domain identity. All configur
 hosts report CPU, available memory, fixed-disk capacity, and non-delayed automatic
 service issues. Both Xerox FreeFlow Core application routes are configured and
 actively checked; their Windows authentication challenges are treated as proof
-that the protected portal route is available. Qualys credentials and a supported
-MoveIT execution-history source remain configuration dependencies.
+that the protected portal route is available. MoveIT execution history is now
+collected from the installed Web Admin Task Run report endpoint, with the latest
+confirmed result retained per task. Qualys authentication remains a configuration
+dependency.
 
 Workflow plan approval is now separated from design review. Creating a draft
 opens Workflow Design Review and starts plan analysis automatically. The review

@@ -8,7 +8,7 @@ import ssl
 import time
 import xml.etree.ElementTree as ET
 from email.message import EmailMessage
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Literal
 
@@ -186,6 +186,8 @@ class MoveItAdapter:
         self._password = settings.moveit_password
         self._verify_tls = settings.moveit_verify_tls
         self._log_root = settings.moveit_log_root
+        self._history_days = settings.moveit_history_days
+        self._history_max_records = settings.moveit_history_max_records
 
     def collect(self, checked_at: str) -> MoveItMonitor:
         if not self._username or not self._password:
@@ -209,7 +211,9 @@ class MoveItAdapter:
                     )
                     response.raise_for_status()
                     tasks = self._parse_tasks(response.json())
-                    recent_logs = self._collect_recent_logs(tasks)
+                    recent_logs = self._collect_task_run_history(client, server, token, tasks)
+                    if not recent_logs:
+                        recent_logs = self._collect_recent_logs(tasks)
                 status: MonitorStatus = "warning" if any(task.status.lower() in {"failed", "error", "missed"} for task in tasks) else "healthy"
                 return MoveItMonitor(
                     status=status,
@@ -284,6 +288,57 @@ class MoveItAdapter:
             task_id = str(raw_task.get("ID") or raw_task.get("id") or "")
             tasks.append(MoveItTask(name=name, task_id=task_id, description=description, schedule_status=schedule_status, last_run_status="Unavailable", status=status, detail=detail, last_run_at=str(last_run) if last_run else None))
         return tasks
+
+    def _collect_task_run_history(self, client: httpx.Client, server: str, token: str, tasks: list[MoveItTask]) -> list[MoveItLogEntry]:
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=self._history_days)).strftime("%Y-%m-%dT%H:%M:%S.000")
+        try:
+            response = client.post(
+                f"https://{server}/api/v1/reports/taskruns",
+                headers={"Authorization": f"Bearer {token}"},
+                json={"predicate": f"LogStamp=ge={cutoff}", "orderBy": "", "maxCount": self._history_max_records},
+            )
+            response.raise_for_status()
+            payload = response.json()
+            records = payload.get("items", []) if isinstance(payload, dict) else []
+            return self._apply_task_run_history(tasks, records)
+        except (httpx.HTTPError, ValueError):
+            return []
+
+    @staticmethod
+    def _apply_task_run_history(tasks: list[MoveItTask], records: object) -> list[MoveItLogEntry]:
+        if not isinstance(records, list):
+            return []
+        latest_by_task: dict[str, dict] = {}
+        for record in records:
+            if not isinstance(record, dict):
+                continue
+            task_id = str(record.get("TaskID") or "")
+            captured_at = str(record.get("EndTime") or record.get("LogStamp") or record.get("StartTime") or "")
+            if not task_id or not captured_at:
+                continue
+            existing = latest_by_task.get(task_id)
+            existing_time = str(existing.get("EndTime") or existing.get("LogStamp") or existing.get("StartTime") or "") if existing else ""
+            if captured_at >= existing_time:
+                latest_by_task[task_id] = record
+        task_lookup = {task.task_id: task for task in tasks if task.task_id}
+        entries: list[MoveItLogEntry] = []
+        for task_id, record in latest_by_task.items():
+            task = task_lookup.get(task_id)
+            if task is None:
+                continue
+            captured_at = str(record.get("EndTime") or record.get("LogStamp") or record.get("StartTime"))
+            run_status = str(record.get("Status") or "Unknown")
+            status_message = str(record.get("StatusMsg") or "").strip()
+            task.last_run_at = captured_at
+            task.last_run_status = run_status
+            if run_status.lower() in {"failure", "failed", "error"} or int(record.get("StatusCode") or 0) not in {0, 5}:
+                task.status = "Failed"
+                task.detail = status_message or f"Latest confirmed task run ended with {run_status}."
+            detail = f"Run ID {record.get('RunID', 'Unavailable')} · Task ID {task_id}"
+            if status_message:
+                detail += f" · {status_message}"
+            entries.append(MoveItLogEntry(task_name=task.name, captured_at=captured_at, status=run_status, detail=detail))
+        return sorted(entries, key=lambda entry: entry.captured_at, reverse=True)
 
     def _collect_recent_logs(self, tasks: list[MoveItTask]) -> list[MoveItLogEntry]:
         if not self._log_root.exists():

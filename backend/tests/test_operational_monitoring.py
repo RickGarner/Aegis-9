@@ -6,7 +6,7 @@ from subprocess import CompletedProcess
 from unittest.mock import Mock, patch
 
 from app.config import Settings
-from app.monitoring import FreeFlowAdapter, LocalServerAdapter, QualysAdapter
+from app.monitoring import FreeFlowAdapter, LocalServerAdapter, MoveItAdapter, MoveItTask, QualysAdapter
 
 
 class OperationalMonitoringTests(unittest.TestCase):
@@ -62,6 +62,30 @@ class OperationalMonitoringTests(unittest.TestCase):
             self.assertEqual("Good", rows[0].status)
             self.assertEqual("50.0 GB", rows[0].free_disk)
             self.assertEqual("Good", rows[0].automatic_services)
+
+    def test_moveit_task_run_history_sets_latest_confirmed_result(self):
+        tasks = [MoveItTask(name="Daily export", task_id="42", status="Scheduled", detail="Configured task")]
+        records = [
+            {"TaskID": 42, "RunID": 100, "EndTime": "2026-09-01T08:00:00", "Status": "Failure", "StatusCode": 6, "StatusMsg": "Connection failed"},
+            {"TaskID": 42, "RunID": 101, "EndTime": "2026-09-01T09:00:00", "Status": "Success", "StatusCode": 0, "StatusMsg": ""},
+        ]
+
+        entries = MoveItAdapter._apply_task_run_history(tasks, records)
+
+        self.assertEqual("Success", tasks[0].last_run_status)
+        self.assertEqual("2026-09-01T09:00:00", tasks[0].last_run_at)
+        self.assertEqual("Scheduled", tasks[0].status)
+        self.assertEqual(1, len(entries))
+
+    def test_moveit_latest_failure_marks_task_for_alerting(self):
+        tasks = [MoveItTask(name="Daily export", task_id="42", status="Scheduled", detail="Configured task")]
+
+        MoveItAdapter._apply_task_run_history(tasks, [
+            {"TaskID": 42, "RunID": 102, "EndTime": "2026-09-01T10:00:00", "Status": "Failure", "StatusCode": 6, "StatusMsg": "Authentication failed"},
+        ])
+
+        self.assertEqual("Failed", tasks[0].status)
+        self.assertIn("Authentication failed", tasks[0].detail)
 
 
 if __name__ == "__main__":

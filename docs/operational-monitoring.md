@@ -55,13 +55,11 @@ Qualys:
 - Whether prioritization should use classic severity, QDS, QVSS, or a combined policy
 - Polling cadence and notification/digest recipients
 
-MoveIT execution history:
-
-- An approved read-only source for task-run history. MOVEit Automation 17.1.5
-  exposes the task catalog through REST but the tested history endpoints return
-  404. The legacy task log share is reachable, but its newest files are from
-  April 2025. A read-only reporting/database account or the supported Web Admin
-  report endpoint is needed for reliable run-result monitoring.
+MoveIT execution history is now read from the installed Web Admin report endpoint,
+`POST /api/v1/reports/taskruns`, using the existing read-only bearer token. The
+monitor requests the last five days, retains the latest run per task, and
+normalizes Success, No Transfer, and Failure results. The legacy log share remains
+as a fallback only.
 
 Credentials belong only in the git-ignored `.env` or managed secret storage.
 Never put them in `config/freeflow-servers.json`, documentation, commits, or logs.

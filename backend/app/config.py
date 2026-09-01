@@ -128,6 +128,8 @@ class Settings(BaseSettings):
     moveit_verify_tls: bool = Field(default=True, validation_alias="JARVIS_MOVEIT_VERIFY_TLS")
     moveit_task_poll_seconds: int = Field(default=300, ge=30, validation_alias="JARVIS_MOVEIT_TASK_POLL_SECONDS")
     moveit_log_root: Path = Field(default=Path(r"\\BSOAUTALB002\c$\ProgramData\Ipswitch\Automation\Logs"), validation_alias="JARVIS_MOVEIT_LOG_ROOT")
+    moveit_history_days: int = Field(default=5, ge=1, le=30, validation_alias="JARVIS_MOVEIT_HISTORY_DAYS")
+    moveit_history_max_records: int = Field(default=10_000, ge=100, le=50_000, validation_alias="JARVIS_MOVEIT_HISTORY_MAX_RECORDS")
     alert_smtp_server: str = Field(default="10.30.67.82", validation_alias="JARVIS_ALERT_SMTP_SERVER")
     alert_smtp_port: int = Field(default=25, ge=1, le=65535, validation_alias="JARVIS_ALERT_SMTP_PORT")
     alert_email_from: str = Field(default="servermonitor@bsoc.local", validation_alias="JARVIS_ALERT_EMAIL_FROM")
