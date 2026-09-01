@@ -1,4 +1,5 @@
 import json
+import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
@@ -6,7 +7,7 @@ from subprocess import CompletedProcess
 from unittest.mock import Mock, patch
 
 from app.config import Settings
-from app.monitoring import FreeFlowAdapter, LocalServerAdapter, MoveItAdapter, MoveItTask, QualysAdapter
+from app.monitoring import FreeFlowAdapter, LocalServerAdapter, MonitoringStore, MoveItAdapter, MoveItTask, QualysAdapter
 
 
 class OperationalMonitoringTests(unittest.TestCase):
@@ -86,6 +87,27 @@ class OperationalMonitoringTests(unittest.TestCase):
 
         self.assertEqual("Failed", tasks[0].status)
         self.assertIn("Authentication failed", tasks[0].detail)
+
+    def test_moveit_success_resolution_retains_failure_history(self):
+        connection = sqlite3.connect(":memory:")
+        connection.row_factory = sqlite3.Row
+        try:
+            connection.execute("""CREATE TABLE monitoring_alerts (
+                id INTEGER PRIMARY KEY, source TEXT, severity TEXT, title TEXT, detail TEXT,
+                status TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP, resolved_at TEXT)""")
+            monitoring = MonitoringStore(lambda: connection)
+            title = "MoveIT task issue: Daily export"
+            monitoring.ensure_alert("moveit", "error", title, "Original transfer failure", active=True)
+
+            monitoring.ensure_alert("moveit", "error", title, "Automatically resolved after confirmed Success.", active=False)
+
+            row = connection.execute("SELECT status,resolved_at,detail FROM monitoring_alerts WHERE title=?", (title,)).fetchone()
+            self.assertEqual("resolved", row["status"])
+            self.assertIsNotNone(row["resolved_at"])
+            self.assertIn("Original transfer failure", row["detail"])
+            self.assertIn("confirmed Success", row["detail"])
+        finally:
+            connection.close()
 
 
 if __name__ == "__main__":

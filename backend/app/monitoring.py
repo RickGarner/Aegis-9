@@ -655,8 +655,14 @@ class MonitoringCollector:
         if server_alert_created:
             self._send_alert_email("Automatic Windows service issue detected", server.detail)
         for task in moveit.tasks:
+            alert_title = f"MoveIT task issue: {task.name}"
             if task.status.lower() in {"failed", "error", "missed"}:
-                self.store.ensure_alert(source="moveit", severity="error", title=f"MoveIT task issue: {task.name}", detail=task.detail, active=True)
+                self.store.ensure_alert(source="moveit", severity="error", title=alert_title, detail=task.detail, active=True)
+            elif task.last_run_status.lower() == "success":
+                self.store.ensure_alert(
+                    source="moveit", severity="error", title=alert_title,
+                    detail=f"Automatically resolved after confirmed Success at {task.last_run_at or checked_at}.", active=False,
+                )
         for endpoint in freeflow.servers:
             self.store.ensure_alert(source="freeflow", severity="error", title=f"FreeFlow portal unavailable: {endpoint.name}", detail=endpoint.detail, active=bool(endpoint.web_url) and endpoint.status == "error")
         self.store.ensure_alert(source="qualys", severity="error", title="Urgent Qualys vulnerabilities detected", detail=qualys.detail, active=qualys.urgent_count > 0)
@@ -738,7 +744,7 @@ class MonitoringStore:
                 )
             elif not active and existing is not None:
                 connection.execute(
-                    "UPDATE monitoring_alerts SET status = 'resolved', resolved_at = CURRENT_TIMESTAMP, detail = ? WHERE id = ? AND status = 'active'",
+                    "UPDATE monitoring_alerts SET status = 'resolved', resolved_at = CURRENT_TIMESTAMP, detail = detail || char(10) || ? WHERE id = ? AND status = 'active'",
                     (detail, existing["id"]),
                 )
         return created

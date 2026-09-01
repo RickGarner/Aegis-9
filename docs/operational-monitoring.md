@@ -59,7 +59,10 @@ MoveIT execution history is now read from the installed Web Admin report endpoin
 `POST /api/v1/reports/taskruns`, using the existing read-only bearer token. The
 monitor requests the last five days, retains the latest run per task, and
 normalizes Success, No Transfer, and Failure results. The legacy log share remains
-as a fallback only.
+as a fallback only. `No xfers` is normal unless MOVEit reports a failure. A task
+failure alert stays active through later `No xfers` runs and resolves automatically
+only after a confirmed `Success`; the original failure and resolution details remain
+in alert history.
 
 Credentials belong only in the git-ignored `.env` or managed secret storage.
 Never put them in `config/freeflow-servers.json`, documentation, commits, or logs.
