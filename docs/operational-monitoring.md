@@ -12,9 +12,11 @@ servers are:
 - `BSOXERALB001` — Primary
 - `BSOXERALB002` — Secondary
 
-Until their exact URLs and ports are entered, the UI intentionally displays
-`unavailable` with `Web URL and port are awaiting configuration`. It does not
-create an outage alert for an unconfigured endpoint.
+The discovered application endpoints are configured as
+`http://BSOXERALB001/FreeFlowCore` and
+`http://BSOXERALB002/FreeFlowCore`. Both currently return HTTP 401 Windows
+authentication challenges, which confirms that IIS and the protected FreeFlow
+application route are available without storing a FreeFlow password in A.E.G.I.S.
 
 When configured, each portal check records the final HTTP response, response
 latency, expected page-content match, status, diagnostic detail, and check time.
@@ -30,15 +32,19 @@ New, Active, and Re-Opened findings. Results are sorted by severity descending:
 The default minimum is severity 4. Urgent findings create error-level alerts;
 Critical findings create warning-level alerts. No remediation is executed.
 
-## Details needed next session
+Remote Windows server telemetry now uses read-only PowerShell remoting/CIM with
+the current operator domain identity. It collects CPU load, available memory,
+fixed-disk capacity, and stopped non-delayed automatic services concurrently.
+Set `JARVIS_SERVER_REMOTE_CIM_ENABLED=true` only on workstations whose approved
+operator identity has remote read access. The corrected monitoring hub hostname
+is `BSOC-HPC-001`.
+
+## Details still needed
 
 FreeFlow:
 
-- Exact portal URL and port for both servers
-- HTTP or HTTPS and redirect behavior
-- Expected text or stable health/login-page marker
-- Whether internal CA trust is already installed
-- Whether an authenticated application/API health check is required
+- Whether HTTP 401 route availability is sufficient, or whether an authenticated
+  application/API health transaction is required
 
 Qualys:
 
@@ -48,6 +54,14 @@ Qualys:
 - Asset tags/groups/IP scope
 - Whether prioritization should use classic severity, QDS, QVSS, or a combined policy
 - Polling cadence and notification/digest recipients
+
+MoveIT execution history:
+
+- An approved read-only source for task-run history. MOVEit Automation 17.1.5
+  exposes the task catalog through REST but the tested history endpoints return
+  404. The legacy task log share is reachable, but its newest files are from
+  April 2025. A read-only reporting/database account or the supported Web Admin
+  report endpoint is needed for reliable run-result monitoring.
 
 Credentials belong only in the git-ignored `.env` or managed secret storage.
 Never put them in `config/freeflow-servers.json`, documentation, commits, or logs.

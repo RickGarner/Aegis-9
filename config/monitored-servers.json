@@ -40,8 +40,8 @@
     "role": "MoveIT monitored server"
   },
   {
-    "name": "BSO-HPC-001",
-    "address": "BSO-HPC-001",
-    "role": "MoveIT monitored server"
+    "name": "BSOC-HPC-001",
+    "address": "BSOC-HPC-001",
+    "role": "Server Monitoring hub"
   }
 ]

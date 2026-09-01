@@ -2,15 +2,15 @@
   {
     "name": "BSOXERALB001",
     "role": "Primary",
-    "webUrl": "",
-    "expectedText": "FreeFlow Core",
+    "webUrl": "http://BSOXERALB001/FreeFlowCore",
+    "expectedText": "",
     "enabled": true
   },
   {
     "name": "BSOXERALB002",
     "role": "Secondary",
-    "webUrl": "",
-    "expectedText": "FreeFlow Core",
+    "webUrl": "http://BSOXERALB002/FreeFlowCore",
+    "expectedText": "",
     "enabled": true
   }
 ]

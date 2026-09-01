@@ -180,6 +180,14 @@ restricted Constrained Language profile; external-capability workflows and C#
 execution remain blocked pending an approved disposable OS sandbox. Manual test
 pass recording has been removed. See `docs/WORKFLOW-TEST-RUNNER.md`.
 
+Operations monitoring now collects read-only remote Windows telemetry over
+PowerShell remoting/CIM using the current approved domain identity. All configured
+hosts report CPU, available memory, fixed-disk capacity, and non-delayed automatic
+service issues. Both Xerox FreeFlow Core application routes are configured and
+actively checked; their Windows authentication challenges are treated as proof
+that the protected portal route is available. Qualys credentials and a supported
+MoveIT execution-history source remain configuration dependencies.
+
 Workflow plan approval is now separated from design review. Creating a draft
 opens Workflow Design Review and starts plan analysis automatically. The review
 shows a prominent unresolved-question count/status, opens required answer fields,

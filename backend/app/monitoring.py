@@ -1,3 +1,4 @@
+import base64
 import json
 import shutil
 import subprocess
@@ -324,8 +325,10 @@ class MoveItAdapter:
 
 
 class LocalServerAdapter:
-    def __init__(self, inventory_path: Path) -> None:
-        self._inventory = self._load_inventory(inventory_path)
+    def __init__(self, settings: Settings) -> None:
+        self._inventory = self._load_inventory(settings.server_inventory_path)
+        self._remote_cim_enabled = settings.server_remote_cim_enabled
+        self._remote_cim_timeout = settings.server_remote_cim_timeout_seconds
 
     def collect(self, checked_at: str, audit_events: list[FilesystemAuditEvent]) -> ServerMonitor:
         disk = shutil.disk_usage(Path.cwd().anchor or Path.cwd())
@@ -373,6 +376,77 @@ class LocalServerAdapter:
             total_disk=f"{disk.total / (1024 ** 3):.1f} GB" if disk.total else "Unavailable",
             free_disk=f"{disk.free / (1024 ** 3):.1f} GB" if disk.total else "Unavailable",
         )
+
+    def collect_remote_inventory(self) -> list[ServerInventory]:
+        if not self._remote_cim_enabled or sys.platform != "win32":
+            return [ServerInventory(name=name, address=address, role=role, status="Remote CIM disabled") for name, address, role in self._inventory]
+        targets = [{"name": name, "address": address, "role": role} for name, address, role in self._inventory]
+        if not targets:
+            return []
+        target_json = json.dumps(targets).replace("'", "''")
+        script = rf"""
+$targets = ConvertFrom-Json '{target_json}'
+$addresses = @($targets | ForEach-Object {{ $_.address }})
+$remote = @(Invoke-Command -ComputerName $addresses -ThrottleLimit 12 -ErrorAction SilentlyContinue -ScriptBlock {{
+  try {{
+    $os = Get-CimInstance Win32_OperatingSystem -ErrorAction Stop
+    $cpuRows = @(Get-CimInstance Win32_Processor -ErrorAction Stop)
+    $disks = @(Get-CimInstance Win32_LogicalDisk -Filter "DriveType=3" -ErrorAction Stop)
+    $services = @(Get-CimInstance Win32_Service -Filter "StartMode='Auto'" -ErrorAction Stop)
+    $total = [double](($disks | Measure-Object Size -Sum).Sum)
+    $free = [double](($disks | Measure-Object FreeSpace -Sum).Sum)
+    $cpu = [double](($cpuRows | Measure-Object LoadPercentage -Average).Average)
+    $memoryAvailable = if ($os.TotalVisibleMemorySize) {{ 100.0 * [double]$os.FreePhysicalMemory / [double]$os.TotalVisibleMemorySize }} else {{ $null }}
+    $diskAvailable = if ($total) {{ 100.0 * $free / $total }} else {{ $null }}
+    $serviceIssues = @($services | Where-Object {{ $_.State -ne 'Running' -and -not $_.DelayedAutoStart }}).Count
+    [pscustomobject]@{{ Address=$env:COMPUTERNAME; Total=$total; Free=$free; DiskAvailable=$diskAvailable; Cpu=$cpu; MemoryAvailable=$memoryAvailable; ServiceIssues=$serviceIssues; Error=$null }}
+  }} catch {{
+    [pscustomobject]@{{ Address=$env:COMPUTERNAME; Error=$_.Exception.Message }}
+  }}
+}})
+$results = foreach ($target in $targets) {{
+  $match = $remote | Where-Object {{ $_.Address -ieq $target.address -or $_.PSComputerName -ieq $target.address }} | Select-Object -First 1
+  if ($null -eq $match) {{ [pscustomobject]@{{ Name=$target.name; Address=$target.address; Role=$target.role; Error='Host did not return CIM telemetry.' }} }}
+  else {{ [pscustomobject]@{{ Name=$target.name; Address=$target.address; Role=$target.role; Total=$match.Total; Free=$match.Free; DiskAvailable=$match.DiskAvailable; Cpu=$match.Cpu; MemoryAvailable=$match.MemoryAvailable; ServiceIssues=$match.ServiceIssues; Error=$match.Error }} }}
+}}
+$results | ConvertTo-Json -Compress -Depth 4
+"""
+        encoded = base64.b64encode(script.encode("utf-16-le")).decode("ascii")
+        try:
+            result = subprocess.run(
+                ["powershell.exe", "-NoProfile", "-NonInteractive", "-EncodedCommand", encoded],
+                capture_output=True, text=True, timeout=self._remote_cim_timeout, check=True,
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+            )
+            rows = json.loads(result.stdout)
+            if isinstance(rows, dict):
+                rows = [rows]
+        except (OSError, subprocess.SubprocessError, json.JSONDecodeError) as error:
+            detail = f"Remote CIM collection failed: {error}"
+            return [ServerInventory(name=name, address=address, role=role, status="Unavailable", automatic_services=detail) for name, address, role in self._inventory]
+        inventory: list[ServerInventory] = []
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            if row.get("Error"):
+                inventory.append(ServerInventory(name=str(row.get("Name", "Unknown")), address=str(row.get("Address", "")), role=str(row.get("Role", "Monitored server")), status="Unavailable", automatic_services=str(row["Error"])))
+                continue
+            total, free = float(row.get("Total") or 0), float(row.get("Free") or 0)
+            disk_available = float(row.get("DiskAvailable") or 0)
+            cpu = float(row.get("Cpu") or 0)
+            memory_available = float(row.get("MemoryAvailable") or 0)
+            service_issues = int(row.get("ServiceIssues") or 0)
+            needs_attention = disk_available < 20 or cpu >= 80 or memory_available < 15 or service_issues > 0
+            inventory.append(ServerInventory(
+                name=str(row.get("Name", "Unknown")), address=str(row.get("Address", "")), role=str(row.get("Role", "Monitored server")),
+                status="Needs Attention" if needs_attention else "Good",
+                total_disk=f"{total / (1024 ** 3):.1f} GB" if total else "Unavailable",
+                free_disk=f"{free / (1024 ** 3):.1f} GB" if total else "Unavailable",
+                threshold_status="Needs Attention" if disk_available < 20 or cpu >= 80 or memory_available < 15 else "Healthy",
+                cpu=f"{cpu:.1f}%", memory=f"{memory_available:.1f}% available",
+                automatic_services=f"{service_issues} issue(s)" if service_issues else "Good",
+            ))
+        return inventory
 
     @staticmethod
     def _threshold_status(available_percent: float | None) -> MonitorStatus:
@@ -506,7 +580,7 @@ class MonitoringCollector:
         self.store = store
         self.audit_root = audit_root
         self.moveit = MoveItAdapter(settings)
-        self.server = LocalServerAdapter(settings.server_inventory_path)
+        self.server = LocalServerAdapter(settings)
         self.freeflow = FreeFlowAdapter(settings)
         self.qualys = QualysAdapter(settings)
         self.settings = settings
@@ -572,7 +646,8 @@ class MonitoringCollector:
             memory=memory.display_value if memory else "Unavailable",
             automatic_services="Needs Attention" if server.stopped_automatic_services else "Good",
         )
-        return [local_row] + [ServerInventory(name=name, address=address, role=role, status="Agent not connected") for name, address, role in self.server._inventory if name.lower() != local.lower()]
+        remote = [row for row in self.server.collect_remote_inventory() if row.name.lower() != local.lower()]
+        return [local_row] + remote
 
 class MonitoringStore:
     def __init__(self, connection_factory) -> None:
