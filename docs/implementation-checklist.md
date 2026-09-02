@@ -77,6 +77,23 @@
 ## Safety and Hardening
 - [ ] Add allowlist/denylist policy
 
+## Aegis Developer Studio
+
+- [x] Approve the Aegis Developer Studio product name and responsibility split
+- [x] Select the existing WolfForge Code - OSS fork as the IDE foundation
+- [x] Approve the hybrid slide-out control panel and separate IDE window design
+- [ ] Add the native Developer Studio slide-out panel
+- [ ] Add recent folders/repositories and persisted selection
+- [ ] Add configured IDE discovery plus safe launch/focus/process status
+- [ ] Add a versioned, authenticated local Aegis/IDE bridge
+- [ ] Complete local-only mode and remove Copilot as the default AI path
+- [ ] Add governed rename, move, delete, and multi-file rollback
+- [ ] Add solution/project scaffolding and code-conversion workflows
+- [ ] Connect builds/tests to hashed artifacts, retained output, and approvals
+- [ ] Validate packaging, local-only egress controls, and multi-computer setup
+
+See `docs/AEGIS-DEVELOPER-STUDIO.md` for scope and milestone definitions.
+
 ## Daily Workflow Automation
 
 - [x] Add durable basic workflow records and supervisor lifecycle controls

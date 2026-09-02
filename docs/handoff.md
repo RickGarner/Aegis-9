@@ -67,6 +67,21 @@ Completed today:
 Continue by reading `docs/workflow-automation-requirements.md`,
 `docs/operational-monitoring.md`, and `docs/MIGRATION-2026-08-31.md`.
 
+## Aegis Developer Studio decision — 2026-09-02
+
+The local development environment is approved under the product name **Aegis
+Developer Studio**. The existing WolfForge Code - OSS fork at the separate
+`RickGarner/VSCode` repository is its implementation foundation. Aegis will add a
+native slide-out launcher/control panel; the full IDE will open in its own native
+window and later report repository, model, build/test, and approval state back to
+Aegis through an authenticated local bridge.
+
+Status: architecture and naming are complete; Jarvis-Desktop integration is
+pending. The immediate next implementation is the native WPF slide-out panel.
+WolfForge is not yet product-wide local-only because Copilot remains configured
+as its default chat agent, so Local-Only Mode is a release requirement rather
+than a completed privacy guarantee. See `docs/AEGIS-DEVELOPER-STUDIO.md`.
+
 ## Session Summary
 
 This document exists to provide continuity between development sessions and between different machines. It captures the project state, environment details, current progress, known issues, and the next actions to continue with.

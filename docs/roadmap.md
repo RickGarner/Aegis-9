@@ -162,6 +162,33 @@ Ensure the project is resilient and safe for daily use.
 - High-risk actions are blocked or require confirmation
 - The app remains usable over time
 
+## Phase 9: Aegis Developer Studio
+
+**Status: approved and planned. Existing WolfForge foundation is partially built; Aegis integration has not started.**
+
+### Goal
+Launch and supervise a local-first, repository-aware development IDE from an
+Aegis slide-out panel while retaining the full IDE in its own native window.
+
+### Deliverables
+- Developer Studio slide-out launcher and control surface
+- recent folder/repository selection and persisted session state
+- safe launch/focus/process-status integration with the Code - OSS-based IDE
+- authenticated local status and approval bridge
+- local FERAL coding assistance through LM Studio, Ollama, and LiteLLM
+- governed file operations, code conversion, solution/project scaffolding, and
+  retained build/test evidence
+- product-wide local-only controls and cloud-egress acceptance testing
+
+### Success criteria
+- A user can select a repository and launch Aegis Developer Studio from Aegis
+- the full IDE opens separately while its state remains visible in the slide-out
+- prompts, repository context, and inference remain on approved local endpoints
+- edits, commands, builds, tests, and operational release actions use explicit,
+  auditable approval boundaries
+
+See `docs/AEGIS-DEVELOPER-STUDIO.md` for the approved architecture and milestones.
+
 ## MVP Recommendation
 
 The first real milestone should include:

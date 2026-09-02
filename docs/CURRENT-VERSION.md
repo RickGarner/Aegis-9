@@ -214,10 +214,19 @@ shows a prominent unresolved-question count/status, opens required answer fields
 and does not offer `Approve Reviewed Plan` until re-analysis returns no unanswered
 questions.
 
-Still required are AI planning/clarification, generated implementation revisions,
-an isolated test runner, authenticated supervisor authorization, the scheduler
-engine, condition evaluation, live execution/event history, retries/recovery,
-secrets, and notifications.
+The workflow capabilities listed as pending in the original August 31 snapshot
+have since been implemented on this branch. Refer to `docs/handoff.md` and the
+workflow-specific documents for the current execution and validation state.
+
+## Aegis Developer Studio decision — 2026-09-02
+
+Aegis Developer Studio is approved as the local-first development environment.
+The separate WolfForge Code - OSS fork is the partially built IDE foundation.
+Jarvis-Desktop will own a native slide-out Developer Studio launcher and control
+surface; the full IDE will run in its own window. Naming and architecture are
+complete, while Aegis integration is pending. The first implementation milestone
+is the WPF slide-out panel. See `docs/AEGIS-DEVELOPER-STUDIO.md` for the tracked
+scope, privacy boundary, and milestone checklist.
 
 ## Multi-computer safety rules
 
