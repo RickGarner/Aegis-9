@@ -7,6 +7,7 @@ public sealed class JarvisDesktopOptions
 {
     public AvatarOptions Avatar { get; set; } = new();
     public SpeechOptions Speech { get; set; } = new();
+    public DeveloperStudioOptions DeveloperStudio { get; set; } = new();
 
     public static JarvisDesktopOptions Load()
     {
@@ -41,6 +42,12 @@ public sealed class JarvisDesktopOptions
                 options.Speech.StartupTimeoutSeconds = speech.TryGetProperty("startupTimeoutSeconds", out var startupTimeout) ? startupTimeout.GetInt32() : options.Speech.StartupTimeoutSeconds;
                 options.Speech.RequestTimeoutSeconds = speech.TryGetProperty("requestTimeoutSeconds", out var requestTimeout) ? requestTimeout.GetInt32() : options.Speech.RequestTimeoutSeconds;
                 options.Speech.LocalEndpoint = speech.TryGetProperty("localEndpoint", out var localEndpoint) ? localEndpoint.GetString() ?? options.Speech.LocalEndpoint : options.Speech.LocalEndpoint;
+            }
+
+            if (root.TryGetProperty("developerStudio", out var developerStudio))
+            {
+                options.DeveloperStudio.FoundationPath = developerStudio.TryGetProperty("foundationPath", out var foundationPath) ? foundationPath.GetString() ?? options.DeveloperStudio.FoundationPath : options.DeveloperStudio.FoundationPath;
+                options.DeveloperStudio.ExecutableRelativePath = developerStudio.TryGetProperty("executableRelativePath", out var executableRelativePath) ? executableRelativePath.GetString() ?? options.DeveloperStudio.ExecutableRelativePath : options.DeveloperStudio.ExecutableRelativePath;
             }
 
             return options;
@@ -93,4 +100,10 @@ public sealed class SpeechOptions
     public int StartupTimeoutSeconds { get; set; } = 30;
     public int RequestTimeoutSeconds { get; set; } = 120;
     public string LocalEndpoint { get; set; } = "http://127.0.0.1:5050";
+}
+
+public sealed class DeveloperStudioOptions
+{
+    public string FoundationPath { get; set; } = @"D:\Development\VSCode";
+    public string ExecutableRelativePath { get; set; } = @".build\electron\WolfForge.exe";
 }

@@ -19,6 +19,8 @@ public sealed class UserPreferences
     public string WakePhrase { get; set; } = "AEGIS-9";
     public bool EnableStartupNotifications { get; set; } = true;
     public bool EnableVoiceResponses { get; set; } = true;
+    public string DeveloperStudioSelectedRepository { get; set; } = "";
+    public List<string> DeveloperStudioRecentRepositories { get; set; } = [];
 
     private static string PreferencesPath => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Jarvis", "settings.json");
 

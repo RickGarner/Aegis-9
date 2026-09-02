@@ -26,7 +26,7 @@
     <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
     <StackPanel VerticalAlignment="Center"><TextBlock Text="A · E · G · I · S · 9" Foreground="{StaticResource Cyan}" FontSize="25" FontWeight="Light"/><TextBlock Text="ADAPTIVE ENHANCED GUARDIAN INTELLIGENCE SYSTEM · NINTH GENERATION" Foreground="{StaticResource Cyan}" FontSize="11" FontWeight="SemiBold" Margin="2,5,0,0"/></StackPanel>
     <Border Grid.Column="1" BorderBrush="{StaticResource Cyan}" BorderThickness="1" CornerRadius="12" Padding="11,4" Background="#1828B9D5" VerticalAlignment="Center"><TextBlock Text="●  SYSTEM ONLINE" Foreground="{StaticResource Cyan}" FontSize="10" FontWeight="Bold"/></Border>
-    <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center"><Button Content="NEW CHANNEL" Click="NewConversationButton_Click"/><Button Content="AVATAR" Click="OpenAvatarHostButton_Click"/><Button Content="CONFIGURE" Click="SettingsButton_Click"/><Button Content="HIDE" Click="HideWindowButton_Click"/><Button Content="CLOSE" Click="CloseWindowButton_Click" Margin="0"/></StackPanel>
+    <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center"><Button Content="NEW CHANNEL" Click="NewConversationButton_Click"/><Button Content="DEVELOPER STUDIO" Click="DeveloperStudioButton_Click"/><Button Content="AVATAR" Click="OpenAvatarHostButton_Click"/><Button Content="CONFIGURE" Click="SettingsButton_Click"/><Button Content="HIDE" Click="HideWindowButton_Click"/><Button Content="CLOSE" Click="CloseWindowButton_Click" Margin="0"/></StackPanel>
    </Grid>
    <Grid Grid.Row="1" Margin="0,8,0,6">
     <Grid.ColumnDefinitions><ColumnDefinition Width="260"/><ColumnDefinition Width="16"/><ColumnDefinition Width="*"/><ColumnDefinition Width="16"/><ColumnDefinition Width="292"/></Grid.ColumnDefinitions>
@@ -57,6 +57,12 @@
     </StackPanel></ScrollViewer>
    </Grid>
    <StatusBar Grid.Row="2" Background="Transparent" Foreground="{StaticResource Dim}" BorderBrush="#3438C9EA" BorderThickness="0,1,0,0"><StatusBarItem><TextBlock x:Name="ConnectionText" Text="Local command center · backend ready" FontSize="9"/></StatusBarItem><Separator/><StatusBarItem><TextBlock Text="CORE: LOCAL  ·  VOICE: STANDBY" FontSize="9"/></StatusBarItem><StatusBarItem HorizontalContentAlignment="Right"><TextBlock Text="OPERATOR AUTHORITY CONFIRMED" Foreground="{StaticResource Cyan}" FontSize="9" FontWeight="Bold"/></StatusBarItem></StatusBar>
+  </Grid>
+  <Grid x:Name="DeveloperStudioOverlay" Panel.ZIndex="150" Visibility="Collapsed">
+   <Border Background="#72000000" MouseLeftButtonDown="DeveloperStudioBackdrop_MouseLeftButtonDown"/>
+   <local:DeveloperStudioPanel x:Name="DeveloperStudioPanel" Width="455" HorizontalAlignment="Right">
+    <local:DeveloperStudioPanel.RenderTransform><TranslateTransform X="455"/></local:DeveloperStudioPanel.RenderTransform>
+   </local:DeveloperStudioPanel>
   </Grid>
   <Border x:Name="ProviderTransitionOverlay" Grid.RowSpan="3" Panel.ZIndex="200" Background="#E8030A0F" Visibility="Collapsed">
    <Grid>

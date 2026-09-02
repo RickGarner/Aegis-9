@@ -82,9 +82,9 @@
 - [x] Approve the Aegis Developer Studio product name and responsibility split
 - [x] Select the existing WolfForge Code - OSS fork as the IDE foundation
 - [x] Approve the hybrid slide-out control panel and separate IDE window design
-- [ ] Add the native Developer Studio slide-out panel
-- [ ] Add recent folders/repositories and persisted selection
-- [ ] Add configured IDE discovery plus safe launch/focus/process status
+- [x] Add and visually accept the native Developer Studio slide-out panel
+- [x] Add recent folders/repositories and persisted selection
+- [x] Add configured IDE discovery plus safe launch/focus/process status (runtime acceptance pending)
 - [ ] Add a versioned, authenticated local Aegis/IDE bridge
 - [ ] Complete local-only mode and remove Copilot as the default AI path
 - [ ] Add governed rename, move, delete, and multi-file rollback

@@ -5,6 +5,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
 using Microsoft.Win32;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.Wpf;
@@ -28,6 +29,7 @@ public partial class MainWindow : Window
     private readonly List<FileEntry> _stagedFiles = [];
     private readonly UserPreferences _preferences = UserPreferences.Load();
     private readonly JarvisDesktopOptions _desktopOptions = JarvisDesktopOptions.Load();
+    private readonly DeveloperStudioService _developerStudioService;
     private readonly IAvatarService _avatarService;
     private readonly ISpeechService _speechService;
     private readonly LocalSpeechRecognitionService _speechRecognition = new();
@@ -44,6 +46,7 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         _speechService = new KokoroSpeechService(_desktopOptions.Speech);
+        _developerStudioService = new DeveloperStudioService(_desktopOptions.DeveloperStudio);
         _avatarService = new AvatarService(
             _preferences,
             _desktopOptions,
@@ -51,6 +54,9 @@ public partial class MainWindow : Window
             _speechService);
 
         InitializeComponent();
+        DeveloperStudioPanel.Initialize(_preferences, _developerStudioService);
+        DeveloperStudioPanel.CloseRequested += (_, _) => CloseDeveloperStudio();
+        DeveloperStudioPanel.StatusChanged += (_, status) => ConnectionText.Text = status;
         PendingWorkflowList.LayoutUpdated += (_, _) => RenameWorkflowReviewButtons(PendingWorkflowList);
         _speechRecognition.AudioLevelChanged += SpeechRecognition_AudioLevelChanged;
         _speechRecognition.StatusChanged += SpeechRecognition_StatusChanged;
@@ -87,6 +93,26 @@ public partial class MainWindow : Window
     private void HideWindowButton_Click(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
 
     private void CloseWindowButton_Click(object sender, RoutedEventArgs e) => Close();
+
+    private void DeveloperStudioButton_Click(object sender, RoutedEventArgs e)
+    {
+        DeveloperStudioPanel.Initialize(_preferences, _developerStudioService);
+        DeveloperStudioOverlay.Visibility = Visibility.Visible;
+        ((TranslateTransform)DeveloperStudioPanel.RenderTransform).BeginAnimation(
+            TranslateTransform.XProperty,
+            new DoubleAnimation(455, 0, TimeSpan.FromMilliseconds(220)) { EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut } });
+        ConnectionText.Text = "Aegis Developer Studio · panel active";
+    }
+
+    private void DeveloperStudioBackdrop_MouseLeftButtonDown(object sender, MouseButtonEventArgs e) => CloseDeveloperStudio();
+
+    private void CloseDeveloperStudio()
+    {
+        var animation = new DoubleAnimation(0, 455, TimeSpan.FromMilliseconds(180)) { EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseIn } };
+        animation.Completed += (_, _) => DeveloperStudioOverlay.Visibility = Visibility.Collapsed;
+        ((TranslateTransform)DeveloperStudioPanel.RenderTransform).BeginAnimation(TranslateTransform.XProperty, animation);
+        ConnectionText.Text = "Local command center · Developer Studio panel closed";
+    }
 
     private async void CommandInput_PreviewKeyDown(object sender, KeyEventArgs e)
     {

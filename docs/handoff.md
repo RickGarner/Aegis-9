@@ -76,8 +76,12 @@ native slide-out launcher/control panel; the full IDE will open in its own nativ
 window and later report repository, model, build/test, and approval state back to
 Aegis through an authenticated local bridge.
 
-Status: architecture and naming are complete; Jarvis-Desktop integration is
-pending. The immediate next implementation is the native WPF slide-out panel.
+Status: architecture and naming are complete. The native WPF slide-out panel,
+WolfForge checkout detection, folder browsing, and persisted recent-repository
+selection are implemented and visually accepted. Configurable exact-path IDE
+discovery, safe selected-repository launch, existing-window focus/reuse, and
+process status are implemented and await runtime acceptance. The authenticated
+local bridge is the next milestone.
 WolfForge is not yet product-wide local-only because Copilot remains configured
 as its default chat agent, so Local-Only Mode is a release requirement rather
 than a completed privacy guarantee. See `docs/AEGIS-DEVELOPER-STUDIO.md`.

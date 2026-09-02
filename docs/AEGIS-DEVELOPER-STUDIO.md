@@ -2,7 +2,7 @@
 
 ## Decision and status
 
-**Product decision: approved. Integration status: planned. First milestone: pending implementation.**
+**Product decision: approved. Integration status: in progress. Milestone 1 accepted; milestone 2 implemented and awaiting runtime acceptance.**
 
 Aegis Developer Studio is the approved name for the local development environment
 that will be launched and supervised from A.E.G.I.S.-9. The existing WolfForge
@@ -17,7 +17,8 @@ The source repositories remain separate:
   Developer Studio IDE. Its repository/product rename will be handled as a
   separate, deliberate migration after integration is stable.
 
-No Aegis Developer Studio production code has been added to Jarvis-Desktop yet.
+Jarvis-Desktop now contains the first native slide-out panel foundation. Safe IDE
+launch, process supervision, and the authenticated bridge remain pending.
 
 ## Product identity
 
@@ -101,12 +102,13 @@ the selected endpoint/model and must not silently fall back to a cloud provider.
 
 ## Delivery milestones
 
-1. **Slide-out foundation — pending:** add the Developer Studio navigation and
-   slide-out panel with placeholder status, recent repositories, folder browsing,
-   and launch-ready view models.
-2. **Safe launcher — pending:** configure the executable, validate paths, launch
-   or focus one IDE session, pass the selected repository, and report process
-   state without terminating unrelated processes.
+1. **Slide-out foundation — completed and accepted:** Developer
+   Studio navigation, animated slide-out panel, WolfForge checkout detection,
+   folder browsing, persisted selected/recent repositories, and milestone status.
+2. **Safe launcher — implemented; runtime acceptance pending:** configurable
+   foundation/executable paths, exact-path process detection, selected-repository
+   launch, existing-window focus/reuse, and running/ready status. Aegis does not
+   terminate or take ownership of unrelated processes.
 3. **Local bridge — pending:** authenticated session/status contract, provider
    health, active repository, activity, and approval messages.
 4. **Governed development — pending:** file-operation approvals, scaffolding,
@@ -116,8 +118,6 @@ the selected endpoint/model and must not silently fall back to a cloud provider.
 
 ## Immediate next action
 
-Implement milestone 1 in the native WPF command center. The slide-out should be
-useful before IDE launch is wired: it must open and close cleanly, fit the
-cinematic Aegis visual language, expose repository selection and status fields,
-and present disabled or explanatory controls for capabilities scheduled in later
-milestones.
+Run milestone 2 from the accepted slide-out panel and confirm that the selected
+repository opens in the separate IDE window. Then begin milestone 3, the
+versioned authenticated local status and approval bridge.
