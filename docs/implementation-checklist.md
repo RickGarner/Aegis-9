@@ -89,11 +89,11 @@
 - [x] Require tentative-plan Design Review and individual question submission
 - [x] Prevent malformed/truncated model responses from bypassing review
 - [x] Notify the dashboard/operator when re-evaluation is ready for approval or needs more answers
-- [ ] Add versioned PowerShell and C# workflow generation
-- [ ] Add non-production test profiles and retained test evidence
+- [x] Add versioned PowerShell and C# workflow generation
+- [x] Add non-production test profiles and retained test evidence
 - [x] Separate user acceptance from supervisor production approval in the domain model and UI
-- [ ] Add schedules, prerequisites, start/stop conditions, and missed-run policy
-- [ ] Add production runner, live output, history, cancellation, retry, and recovery
+- [x] Add schedules and default-deny declarative prerequisites (advanced stop/missed-run policies remain profile-specific)
+- [x] Add allowlisted PowerShell production runner, live output, history, cancellation, retry, and recovery
 - [x] Add recoverable archive/delete and two-step destructive confirmation
 - [x] Add explicit approval for risky actions
 - [x] Add stop/pause support

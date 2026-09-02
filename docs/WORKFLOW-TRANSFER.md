@@ -27,6 +27,10 @@ stable transfer identity. Later packages update that same workflow only when the
 incoming revision/timestamp is newer. Equal or older packages leave local work
 unchanged. A workflow exported while running, queued, or paused imports as
 paused with no monitor assignment; an operator must explicitly resume it.
+An approved or scheduled workflow imports as `supervisor_pending`. Production
+authorization is deliberately machine-local and must be granted again by a
+configured Windows supervisor identity after the imported revision, artifact,
+permission manifest, and schedule have been reviewed.
 
 Treat transfer files as operational data. They can include workflow-generated
 code and extracted business-document text and should not be committed to Git or

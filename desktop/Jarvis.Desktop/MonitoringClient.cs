@@ -244,6 +244,33 @@ public sealed class MonitoringClient
             ?? throw new InvalidOperationException("Workflow action API returned an empty response.");
     }
 
+    public async Task<WorkflowRun> ExecuteWorkflowAsync(int workflowId, CancellationToken cancellationToken)
+    {
+        using var response = await _httpClient.PostAsJsonAsync($"api/workflows/{workflowId}/execute", new { trigger = "manual" }, JsonOptions, cancellationToken);
+        await EnsureSuccessWithDetailAsync(response, "Workflow execution", cancellationToken);
+        return await response.Content.ReadFromJsonAsync<WorkflowRun>(JsonOptions, cancellationToken) ?? throw new InvalidOperationException("Workflow execution returned an empty response.");
+    }
+
+    public async Task<List<WorkflowRun>> GetWorkflowRunsAsync(int workflowId, CancellationToken cancellationToken)
+        => await _httpClient.GetFromJsonAsync<List<WorkflowRun>>($"api/workflows/{workflowId}/runs", JsonOptions, cancellationToken) ?? [];
+
+    public async Task<List<WorkflowRunEvent>> GetWorkflowRunEventsAsync(int runId, CancellationToken cancellationToken)
+        => await _httpClient.GetFromJsonAsync<List<WorkflowRunEvent>>($"api/workflow-runs/{runId}/events", JsonOptions, cancellationToken) ?? [];
+
+    public async Task<WorkflowRun> CancelWorkflowRunAsync(int runId, CancellationToken cancellationToken)
+    {
+        using var response = await _httpClient.PostAsync($"api/workflow-runs/{runId}/cancel", null, cancellationToken);
+        await EnsureSuccessWithDetailAsync(response, "Workflow cancellation", cancellationToken);
+        return await response.Content.ReadFromJsonAsync<WorkflowRun>(JsonOptions, cancellationToken) ?? throw new InvalidOperationException("Workflow cancellation returned an empty response.");
+    }
+
+    public async Task<WorkflowRun> RetryWorkflowRunAsync(int runId, CancellationToken cancellationToken)
+    {
+        using var response = await _httpClient.PostAsync($"api/workflow-runs/{runId}/retry", null, cancellationToken);
+        await EnsureSuccessWithDetailAsync(response, "Workflow retry", cancellationToken);
+        return await response.Content.ReadFromJsonAsync<WorkflowRun>(JsonOptions, cancellationToken) ?? throw new InvalidOperationException("Workflow retry returned an empty response.");
+    }
+
     private static async Task EnsureSuccessWithDetailAsync(HttpResponseMessage response, string operation, CancellationToken cancellationToken)
     {
         if (response.IsSuccessStatusCode) return;
@@ -406,6 +433,38 @@ public sealed class Workflow
     [JsonPropertyName("latest_test_status")] public string LatestTestStatus { get; set; } = string.Empty;
     [JsonPropertyName("latest_test_evidence_sha256")] public string LatestTestEvidenceSha256 { get; set; } = string.Empty;
     [JsonPropertyName("latest_test_summary")] public string LatestTestSummary { get; set; } = string.Empty;
+    [JsonPropertyName("supervisor_approved_by")] public string SupervisorApprovedBy { get; set; } = string.Empty;
+    [JsonPropertyName("supervisor_approved_at")] public string? SupervisorApprovedAt { get; set; }
+    [JsonPropertyName("supervisor_revision")] public int? SupervisorRevision { get; set; }
+    [JsonPropertyName("supervisor_artifact_sha256")] public string SupervisorArtifactSha256 { get; set; } = string.Empty;
+}
+
+public sealed class WorkflowRun
+{
+    public int Id { get; set; }
+    [JsonPropertyName("workflow_id")] public int WorkflowId { get; set; }
+    public int Revision { get; set; }
+    [JsonPropertyName("artifact_sha256")] public string ArtifactSha256 { get; set; } = string.Empty;
+    public string Trigger { get; set; } = string.Empty;
+    public string Status { get; set; } = string.Empty;
+    public int Attempt { get; set; }
+    [JsonPropertyName("requested_by")] public string RequestedBy { get; set; } = string.Empty;
+    [JsonPropertyName("started_at")] public string StartedAt { get; set; } = string.Empty;
+    [JsonPropertyName("completed_at")] public string? CompletedAt { get; set; }
+    [JsonPropertyName("exit_code")] public int? ExitCode { get; set; }
+    public string Stdout { get; set; } = string.Empty;
+    public string Stderr { get; set; } = string.Empty;
+    public string Error { get; set; } = string.Empty;
+}
+
+public sealed class WorkflowRunEvent
+{
+    public int Id { get; set; }
+    [JsonPropertyName("run_id")] public int RunId { get; set; }
+    public int Sequence { get; set; }
+    [JsonPropertyName("event_type")] public string EventType { get; set; } = string.Empty;
+    public string Message { get; set; } = string.Empty;
+    [JsonPropertyName("created_at")] public string CreatedAt { get; set; } = string.Empty;
 }
 
 public sealed class WorkflowTestResult
@@ -443,12 +502,18 @@ public sealed class WorkflowClarificationQuestion
 
 public sealed class WorkflowSchedule
 {
-    public string Trigger { get; set; } = "daily";
+    public string Trigger { get; set; } = "recurring";
     public string Expression { get; set; } = string.Empty;
     public string Timezone { get; set; } = "America/New_York";
     public string Reason { get; set; } = string.Empty;
     [JsonPropertyName("start_conditions")] public string StartConditions { get; set; } = string.Empty;
     [JsonPropertyName("stop_conditions")] public string StopConditions { get; set; } = string.Empty;
+    [JsonPropertyName("start_date")] public string StartDate { get; set; } = string.Empty;
+    [JsonPropertyName("end_date")] public string EndDate { get; set; } = string.Empty;
+    [JsonPropertyName("start_time")] public string StartTime { get; set; } = "00:00";
+    [JsonPropertyName("end_time")] public string EndTime { get; set; } = "23:59";
+    [JsonPropertyName("interval_value")] public int IntervalValue { get; set; } = 1;
+    [JsonPropertyName("interval_unit")] public string IntervalUnit { get; set; } = "days";
 }
 
 public sealed class WorkflowTransition

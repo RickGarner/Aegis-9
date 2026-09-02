@@ -1,6 +1,8 @@
 import json
+import hashlib
 import sqlite3
 import uuid
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -58,6 +60,12 @@ class Workflow(BaseModel):
     latest_test_status: str = ""
     latest_test_evidence_sha256: str = ""
     latest_test_summary: str = ""
+    supervisor_approved_by: str = ""
+    supervisor_approved_at: str | None = None
+    supervisor_revision: int | None = None
+    supervisor_artifact_sha256: str = ""
+    supervisor_manifest_sha256: str = ""
+    supervisor_schedule_sha256: str = ""
     created_at: str
     updated_at: str
 
@@ -65,6 +73,33 @@ class Workflow(BaseModel):
 class WorkflowTransition(BaseModel):
     workflow: Workflow
     promoted_workflow: Workflow | None = None
+
+
+class WorkflowRun(BaseModel):
+    id: int
+    workflow_id: int
+    revision: int
+    artifact_sha256: str
+    trigger: str
+    status: str
+    attempt: int
+    requested_by: str
+    started_at: str
+    completed_at: str | None = None
+    exit_code: int | None = None
+    stdout: str = ""
+    stderr: str = ""
+    output_sha256: str = ""
+    error: str = ""
+
+
+class WorkflowRunEvent(BaseModel):
+    id: int
+    run_id: int
+    sequence: int
+    event_type: str
+    message: str
+    created_at: str
 
 
 class WorkflowTransferPackage(BaseModel):
@@ -161,6 +196,12 @@ class JarvisStore:
                     latest_test_status TEXT NOT NULL DEFAULT '',
                     latest_test_evidence_sha256 TEXT NOT NULL DEFAULT '',
                     latest_test_summary TEXT NOT NULL DEFAULT '',
+                    supervisor_approved_by TEXT NOT NULL DEFAULT '',
+                    supervisor_approved_at TEXT,
+                    supervisor_revision INTEGER,
+                    supervisor_artifact_sha256 TEXT NOT NULL DEFAULT '',
+                    supervisor_manifest_sha256 TEXT NOT NULL DEFAULT '',
+                    supervisor_schedule_sha256 TEXT NOT NULL DEFAULT '',
                     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
                 );
@@ -181,6 +222,49 @@ class JarvisStore:
                     summary TEXT NOT NULL,
                     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY(workflow_id) REFERENCES workflows(id)
+                );
+
+                CREATE TABLE IF NOT EXISTS workflow_runs (
+                    id INTEGER PRIMARY KEY,
+                    workflow_id INTEGER NOT NULL,
+                    revision INTEGER NOT NULL,
+                    artifact_sha256 TEXT NOT NULL,
+                    trigger TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    attempt INTEGER NOT NULL DEFAULT 1,
+                    requested_by TEXT NOT NULL,
+                    started_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    completed_at TEXT,
+                    exit_code INTEGER,
+                    stdout TEXT NOT NULL DEFAULT '',
+                    stderr TEXT NOT NULL DEFAULT '',
+                    output_sha256 TEXT NOT NULL DEFAULT '',
+                    error TEXT NOT NULL DEFAULT '',
+                    FOREIGN KEY(workflow_id) REFERENCES workflows(id)
+                );
+
+                CREATE TABLE IF NOT EXISTS workflow_run_events (
+                    id INTEGER PRIMARY KEY,
+                    run_id INTEGER NOT NULL,
+                    sequence INTEGER NOT NULL,
+                    event_type TEXT NOT NULL,
+                    message TEXT NOT NULL,
+                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY(run_id) REFERENCES workflow_runs(id),
+                    UNIQUE(run_id, sequence)
+                );
+
+                CREATE TABLE IF NOT EXISTS notification_outbox (
+                    id INTEGER PRIMARY KEY,
+                    category TEXT NOT NULL,
+                    subject TEXT NOT NULL,
+                    payload_json TEXT NOT NULL,
+                    status TEXT NOT NULL DEFAULT 'pending',
+                    attempts INTEGER NOT NULL DEFAULT 0,
+                    available_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    sent_at TEXT,
+                    last_error TEXT NOT NULL DEFAULT ''
                 );
 
                 CREATE TABLE IF NOT EXISTS workflow_topology_state (
@@ -261,6 +345,12 @@ class JarvisStore:
             ("latest_test_status", "TEXT NOT NULL DEFAULT ''"),
             ("latest_test_evidence_sha256", "TEXT NOT NULL DEFAULT ''"),
             ("latest_test_summary", "TEXT NOT NULL DEFAULT ''"),
+            ("supervisor_approved_by", "TEXT NOT NULL DEFAULT ''"),
+            ("supervisor_approved_at", "TEXT"),
+            ("supervisor_revision", "INTEGER"),
+            ("supervisor_artifact_sha256", "TEXT NOT NULL DEFAULT ''"),
+            ("supervisor_manifest_sha256", "TEXT NOT NULL DEFAULT ''"),
+            ("supervisor_schedule_sha256", "TEXT NOT NULL DEFAULT ''"),
         ):
             if column not in existing_columns:
                 connection.execute(f"ALTER TABLE workflows ADD COLUMN {column} {definition}")
@@ -359,7 +449,7 @@ class JarvisStore:
 
     @staticmethod
     def _workflow_columns() -> str:
-        return "id, transfer_id, title, description, attachment_ids, state, monitor_slot, language, revision, approval_stage, schedule_json, archived, last_run_at, plan_text, plan_provider, plan_model, implementation_text, implementation_provider, implementation_model, clarification_questions_json, clarification_answers_json, artifact_sha256, permission_manifest_json, latest_test_status, latest_test_evidence_sha256, latest_test_summary, created_at, updated_at"
+        return "id, transfer_id, title, description, attachment_ids, state, monitor_slot, language, revision, approval_stage, schedule_json, archived, last_run_at, plan_text, plan_provider, plan_model, implementation_text, implementation_provider, implementation_model, clarification_questions_json, clarification_answers_json, artifact_sha256, permission_manifest_json, latest_test_status, latest_test_evidence_sha256, latest_test_summary, supervisor_approved_by, supervisor_approved_at, supervisor_revision, supervisor_artifact_sha256, supervisor_manifest_sha256, supervisor_schedule_sha256, created_at, updated_at"
 
     @staticmethod
     def _workflow_from_row(row: sqlite3.Row) -> Workflow:
@@ -471,7 +561,7 @@ class JarvisStore:
                 )
                 attachment_ids.append(cursor.lastrowid)
 
-            imported_state = "paused" if incoming.state in {"running", "queued", "paused"} else incoming.state
+            imported_state = "paused" if incoming.state in {"running", "queued", "paused"} else "supervisor_pending" if incoming.state in {"approved", "scheduled"} else incoming.state
             monitor_slot = None
             values = (
                 incoming.transfer_id, incoming.title, incoming.description, json.dumps(attachment_ids), imported_state,
@@ -490,7 +580,9 @@ class JarvisStore:
                     language=?, revision=?, approval_stage=?, schedule_json=?, archived=?, last_run_at=?, plan_text=?, plan_provider=?,
                     plan_model=?, implementation_text=?, implementation_provider=?, implementation_model=?, clarification_questions_json=?,
                     clarification_answers_json=?, artifact_sha256=?, permission_manifest_json=?, latest_test_status=?,
-                    latest_test_evidence_sha256=?, latest_test_summary=?, created_at=?, updated_at=? WHERE id=?""",
+                    latest_test_evidence_sha256=?, latest_test_summary=?, supervisor_approved_by='',
+                    supervisor_approved_at=NULL, supervisor_revision=NULL, supervisor_artifact_sha256='',
+                    supervisor_manifest_sha256='', supervisor_schedule_sha256='', created_at=?, updated_at=? WHERE id=?""",
                     (*values, workflow_id),
                 )
                 action = "updated"
@@ -523,7 +615,7 @@ class JarvisStore:
             row = connection.execute(f"SELECT {self._workflow_columns()} FROM workflows WHERE id = ?", (workflow_id,)).fetchone()
         detail = f"Workflow {action} successfully."
         if imported_state != incoming.state:
-            detail += f" Active state '{incoming.state}' was imported as paused for safety."
+            detail += f" State '{incoming.state}' was imported as '{imported_state}' for safety and local reauthorization."
         return WorkflowImportResult(action=action, workflow=self._workflow_from_row(row), detail=detail)
 
     def update_workflow(self, workflow_id: int, title: str, description: str, attachment_ids: list[int], language: str) -> Workflow | None:
@@ -532,7 +624,7 @@ class JarvisStore:
             if current is None or current["state"] in {"running", "paused"}:
                 return None
             connection.execute(
-                "UPDATE workflows SET title = ?, description = ?, attachment_ids = ?, language = ?, revision = revision + 1, state = 'draft', approval_stage = 'draft', schedule_json = '{}', plan_text = '', plan_provider = '', plan_model = '', implementation_text = '', implementation_provider = '', implementation_model = '', clarification_questions_json = '[]', clarification_answers_json = '{}', artifact_sha256='', permission_manifest_json='{}', latest_test_status='', latest_test_evidence_sha256='', latest_test_summary='', updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                "UPDATE workflows SET title = ?, description = ?, attachment_ids = ?, language = ?, revision = revision + 1, state = 'draft', approval_stage = 'draft', schedule_json = '{}', plan_text = '', plan_provider = '', plan_model = '', implementation_text = '', implementation_provider = '', implementation_model = '', clarification_questions_json = '[]', clarification_answers_json = '{}', artifact_sha256='', permission_manifest_json='{}', latest_test_status='', latest_test_evidence_sha256='', latest_test_summary='', supervisor_approved_by='', supervisor_approved_at=NULL, supervisor_revision=NULL, supervisor_artifact_sha256='', supervisor_manifest_sha256='', supervisor_schedule_sha256='', updated_at = CURRENT_TIMESTAMP WHERE id = ?",
                 (title, description, json.dumps(attachment_ids), language, workflow_id),
             )
             connection.execute("INSERT INTO activity_logs (event_type, message, tone) VALUES (?, ?, ?)", ("workflow", f"Workflow '{title}' revised; prior approvals invalidated.", "warning"))
@@ -546,7 +638,6 @@ class JarvisStore:
             ("test_failed", "submit_for_test"): ("test_ready", "test_ready"),
             ("test_passed", "user_accept"): ("user_accepted", "user_accepted"),
             ("user_accepted", "request_supervisor"): ("supervisor_pending", "supervisor_pending"),
-            ("supervisor_pending", "supervisor_approve"): ("approved", "approved"),
         }
         with self._connect() as connection:
             current = connection.execute("SELECT title, state FROM workflows WHERE id = ? AND archived = 0", (workflow_id,)).fetchone()
@@ -616,6 +707,33 @@ class JarvisStore:
             row = connection.execute(f"SELECT {self._workflow_columns()} FROM workflows WHERE id = ?", (workflow_id,)).fetchone()
         return self._workflow_from_row(row)
 
+    def revise_workflow_implementation(self, workflow_id: int, content: str, actor: str, reason: str) -> Workflow | None:
+        """Replace a reviewed artifact and invalidate every downstream decision."""
+        if not content.strip() or not actor.strip() or not reason.strip():
+            return None
+        with self._connect() as connection:
+            current = connection.execute(
+                "SELECT title,state FROM workflows WHERE id=? AND archived=0", (workflow_id,)
+            ).fetchone()
+            if current is None or current["state"] in {"running", "paused", "queued", "testing"}:
+                return None
+            connection.execute(
+                """UPDATE workflows SET implementation_text=?, implementation_provider='operator-revision',
+                implementation_model=?, revision=revision+1, state='implementation_review',
+                approval_stage='implementation_review', schedule_json='{}', artifact_sha256='',
+                permission_manifest_json='{}', latest_test_status='', latest_test_evidence_sha256='',
+                latest_test_summary='', supervisor_approved_by='', supervisor_approved_at=NULL,
+                supervisor_revision=NULL, supervisor_artifact_sha256='', supervisor_manifest_sha256='',
+                supervisor_schedule_sha256='', monitor_slot=NULL, updated_at=CURRENT_TIMESTAMP WHERE id=?""",
+                (content.strip(), actor.strip(), workflow_id),
+            )
+            connection.execute(
+                "INSERT INTO activity_logs(event_type,message,tone) VALUES(?,?,?)",
+                ("workflow-revision", f"Implementation for '{current['title']}' revised by {actor}; revision reason: {reason}. Tests and approvals were invalidated.", "warning"),
+            )
+            row = connection.execute(f"SELECT {self._workflow_columns()} FROM workflows WHERE id=?", (workflow_id,)).fetchone()
+        return self._workflow_from_row(row)
+
     def save_prepared_artifact(self, workflow_id: int, artifact_sha256: str, permission_manifest: dict) -> Workflow | None:
         with self._connect() as connection:
             current = connection.execute("SELECT state FROM workflows WHERE id=? AND archived=0", (workflow_id,)).fetchone()
@@ -683,12 +801,137 @@ class JarvisStore:
     def set_workflow_schedule(self, workflow_id: int, schedule: dict) -> Workflow | None:
         with self._connect() as connection:
             current = connection.execute("SELECT title, state FROM workflows WHERE id = ? AND archived = 0", (workflow_id,)).fetchone()
-            if current is None or current["state"] != "approved":
+            if current is None or current["state"] != "supervisor_pending":
                 return None
-            connection.execute("UPDATE workflows SET schedule_json = ?, state = 'scheduled', updated_at = CURRENT_TIMESTAMP WHERE id = ?", (json.dumps(schedule), workflow_id))
-            connection.execute("INSERT INTO activity_logs (event_type, message, tone) VALUES (?, ?, ?)", ("workflow-schedule", f"Workflow '{current['title']}' scheduled.", "success"))
+            connection.execute("UPDATE workflows SET schedule_json = ?, state = 'supervisor_pending', supervisor_approved_by='', supervisor_approved_at=NULL, supervisor_revision=NULL, supervisor_artifact_sha256='', supervisor_manifest_sha256='', supervisor_schedule_sha256='', updated_at = CURRENT_TIMESTAMP WHERE id = ?", (json.dumps(schedule), workflow_id))
+            connection.execute("INSERT INTO activity_logs (event_type, message, tone) VALUES (?, ?, ?)", ("workflow-schedule", f"Workflow '{current['title']}' schedule recorded; supervisor approval is bound after this step.", "info"))
             row = connection.execute(f"SELECT {self._workflow_columns()} FROM workflows WHERE id = ?", (workflow_id,)).fetchone()
         return self._workflow_from_row(row)
+
+    def approve_workflow_for_production(self, workflow_id: int, supervisor_identity: str) -> Workflow | None:
+        with self._connect() as connection:
+            row = connection.execute(f"SELECT {self._workflow_columns()} FROM workflows WHERE id=? AND archived=0", (workflow_id,)).fetchone()
+            if row is None:
+                return None
+            workflow = self._workflow_from_row(row)
+            if workflow.state != "supervisor_pending" or workflow.latest_test_status != "passed" or not workflow.schedule:
+                return None
+            manifest_hash = hashlib.sha256(json.dumps(workflow.permission_manifest, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+            schedule_hash = hashlib.sha256(json.dumps(workflow.schedule, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+            connection.execute(
+                """UPDATE workflows SET state='scheduled', approval_stage='approved', supervisor_approved_by=?,
+                supervisor_approved_at=CURRENT_TIMESTAMP, supervisor_revision=?, supervisor_artifact_sha256=?,
+                supervisor_manifest_sha256=?, supervisor_schedule_sha256=?, updated_at=CURRENT_TIMESTAMP WHERE id=?""",
+                (supervisor_identity, workflow.revision, workflow.artifact_sha256, manifest_hash, schedule_hash, workflow_id),
+            )
+            connection.execute(
+                "INSERT INTO activity_logs(event_type,message,tone) VALUES(?,?,?)",
+                ("workflow-supervisor-approval", f"Workflow '{workflow.title}' revision {workflow.revision} approved for production by {supervisor_identity}; artifact, manifest, and schedule hashes retained.", "success"),
+            )
+            approved = connection.execute(f"SELECT {self._workflow_columns()} FROM workflows WHERE id=?", (workflow_id,)).fetchone()
+        return self._workflow_from_row(approved)
+
+    @staticmethod
+    def workflow_approval_is_current(workflow: Workflow) -> bool:
+        if workflow.supervisor_revision != workflow.revision or workflow.supervisor_artifact_sha256 != workflow.artifact_sha256:
+            return False
+        manifest_hash = hashlib.sha256(json.dumps(workflow.permission_manifest, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+        schedule_hash = hashlib.sha256(json.dumps(workflow.schedule, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+        return manifest_hash == workflow.supervisor_manifest_sha256 and schedule_hash == workflow.supervisor_schedule_sha256
+
+    def begin_workflow_run(self, workflow_id: int, trigger: str, requested_by: str, attempt: int = 1) -> WorkflowRun | None:
+        with self._connect() as connection:
+            row = connection.execute(f"SELECT {self._workflow_columns()} FROM workflows WHERE id=? AND archived=0", (workflow_id,)).fetchone()
+            if row is None:
+                return None
+            workflow = self._workflow_from_row(row)
+            if workflow.state not in {"approved", "scheduled", "completed", "failed"} or not self.workflow_approval_is_current(workflow):
+                return None
+            active = connection.execute("SELECT id FROM workflow_runs WHERE workflow_id=? AND status IN ('queued','running','cancelling')", (workflow_id,)).fetchone()
+            if active:
+                return None
+            cursor = connection.execute(
+                "INSERT INTO workflow_runs(workflow_id,revision,artifact_sha256,trigger,status,attempt,requested_by) VALUES(?,?,?,?,?,?,?)",
+                (workflow_id, workflow.revision, workflow.artifact_sha256, trigger, "queued", attempt, requested_by),
+            )
+            run_id = int(cursor.lastrowid)
+            connection.execute("INSERT INTO workflow_run_events(run_id,sequence,event_type,message) VALUES(?,?,?,?)", (run_id, 1, "queued", "Execution accepted and queued after approval revalidation."))
+            connection.execute("UPDATE workflows SET state='queued', approval_stage='approved', updated_at=CURRENT_TIMESTAMP WHERE id=?", (workflow_id,))
+            run = connection.execute("SELECT * FROM workflow_runs WHERE id=?", (run_id,)).fetchone()
+        return WorkflowRun(**dict(run))
+
+    def mark_workflow_run_running(self, run_id: int) -> WorkflowRun | None:
+        with self._connect() as connection:
+            run = connection.execute("SELECT * FROM workflow_runs WHERE id=? AND status='queued'", (run_id,)).fetchone()
+            if run is None:
+                return None
+            connection.execute("UPDATE workflow_runs SET status='running' WHERE id=?", (run_id,))
+            connection.execute("UPDATE workflows SET state='running', last_run_at=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP WHERE id=?", (run["workflow_id"],))
+            self._append_run_event(connection, run_id, "started", "Approved artifact execution started.")
+            updated = connection.execute("SELECT * FROM workflow_runs WHERE id=?", (run_id,)).fetchone()
+        return WorkflowRun(**dict(updated))
+
+    def append_workflow_run_event(self, run_id: int, event_type: str, message: str) -> None:
+        with self._connect() as connection:
+            self._append_run_event(connection, run_id, event_type, message)
+
+    @staticmethod
+    def _append_run_event(connection: sqlite3.Connection, run_id: int, event_type: str, message: str) -> None:
+        sequence = int(connection.execute("SELECT COALESCE(MAX(sequence),0)+1 AS value FROM workflow_run_events WHERE run_id=?", (run_id,)).fetchone()["value"])
+        connection.execute("INSERT INTO workflow_run_events(run_id,sequence,event_type,message) VALUES(?,?,?,?)", (run_id, sequence, event_type, message[-4000:]))
+
+    def complete_workflow_run(self, run_id: int, status: str, exit_code: int | None, stdout: str, stderr: str, error: str = "") -> WorkflowRun | None:
+        if status not in {"succeeded", "failed", "cancelled", "timed_out", "interrupted"}:
+            raise ValueError("Invalid terminal workflow run status.")
+        output_hash = hashlib.sha256(json.dumps({"stdout": stdout, "stderr": stderr, "exit_code": exit_code, "status": status}, sort_keys=True).encode()).hexdigest()
+        with self._connect() as connection:
+            run = connection.execute("SELECT * FROM workflow_runs WHERE id=? AND status IN ('queued','running','cancelling')", (run_id,)).fetchone()
+            if run is None:
+                return None
+            workflow = connection.execute("SELECT title,schedule_json FROM workflows WHERE id=?", (run["workflow_id"],)).fetchone()
+            next_state = "scheduled" if workflow and json.loads(workflow["schedule_json"] or "{}") else ("completed" if status == "succeeded" else "failed")
+            connection.execute("UPDATE workflow_runs SET status=?,completed_at=CURRENT_TIMESTAMP,exit_code=?,stdout=?,stderr=?,output_sha256=?,error=? WHERE id=?", (status, exit_code, stdout, stderr, output_hash, error, run_id))
+            connection.execute("UPDATE workflows SET state=?,monitor_slot=NULL,updated_at=CURRENT_TIMESTAMP WHERE id=?", (next_state, run["workflow_id"]))
+            self._append_run_event(connection, run_id, status, error or f"Execution finished with status {status} and exit code {exit_code}.")
+            payload = {"workflow_id": run["workflow_id"], "run_id": run_id, "status": status, "output_sha256": output_hash}
+            connection.execute("INSERT INTO notification_outbox(category,subject,payload_json) VALUES(?,?,?)", ("workflow-run", f"Workflow '{workflow['title']}' {status}", json.dumps(payload)))
+            connection.execute("INSERT INTO activity_logs(event_type,message,tone) VALUES(?,?,?)", ("workflow-run", f"Workflow '{workflow['title']}' run {run_id} finished: {status}.", "success" if status == "succeeded" else "warning"))
+            updated = connection.execute("SELECT * FROM workflow_runs WHERE id=?", (run_id,)).fetchone()
+        return WorkflowRun(**dict(updated))
+
+    def request_workflow_run_cancel(self, run_id: int) -> WorkflowRun | None:
+        with self._connect() as connection:
+            run = connection.execute("SELECT * FROM workflow_runs WHERE id=? AND status IN ('queued','running')", (run_id,)).fetchone()
+            if run is None:
+                return None
+            connection.execute("UPDATE workflow_runs SET status='cancelling' WHERE id=?", (run_id,))
+            self._append_run_event(connection, run_id, "cancelling", "Operator cancellation requested.")
+            updated = connection.execute("SELECT * FROM workflow_runs WHERE id=?", (run_id,)).fetchone()
+        return WorkflowRun(**dict(updated))
+
+    def get_workflow_runs(self, workflow_id: int, limit: int = 50) -> list[WorkflowRun]:
+        with self._connect() as connection:
+            rows = connection.execute("SELECT * FROM workflow_runs WHERE workflow_id=? ORDER BY id DESC LIMIT ?", (workflow_id, limit)).fetchall()
+        return [WorkflowRun(**dict(row)) for row in rows]
+
+    def get_workflow_run(self, run_id: int) -> WorkflowRun | None:
+        with self._connect() as connection:
+            row = connection.execute("SELECT * FROM workflow_runs WHERE id=?", (run_id,)).fetchone()
+        return WorkflowRun(**dict(row)) if row else None
+
+    def get_workflow_run_events(self, run_id: int, after_sequence: int = 0) -> list[WorkflowRunEvent]:
+        with self._connect() as connection:
+            rows = connection.execute("SELECT * FROM workflow_run_events WHERE run_id=? AND sequence>? ORDER BY sequence", (run_id, after_sequence)).fetchall()
+        return [WorkflowRunEvent(**dict(row)) for row in rows]
+
+    def recover_interrupted_workflow_runs(self) -> int:
+        with self._connect() as connection:
+            rows = connection.execute("SELECT id FROM workflow_runs WHERE status IN ('queued','running','cancelling')").fetchall()
+        recovered = 0
+        for row in rows:
+            if self.complete_workflow_run(row["id"], "interrupted", None, "", "", "Backend restarted before execution completed; operator review and retry are required."):
+                recovered += 1
+        return recovered
 
     def archive_workflow(self, workflow_id: int) -> Workflow | None:
         with self._connect() as connection:
@@ -783,6 +1026,12 @@ class JarvisStore:
                 f"SELECT {self._workflow_columns()} FROM workflows WHERE archived = 0 ORDER BY id DESC"
             ).fetchall()
         return [self._workflow_from_row(row) for row in rows]
+
+    def record_workflow_scheduler_event(self, workflow_id: int, message: str, tone: str = "info") -> None:
+        with self._connect() as connection:
+            row = connection.execute("SELECT title FROM workflows WHERE id=?", (workflow_id,)).fetchone()
+            if row:
+                connection.execute("INSERT INTO activity_logs(event_type,message,tone) VALUES(?,?,?)", ("workflow-scheduler", f"Workflow '{row['title']}': {message}", tone))
 
     def reconcile_workflow_topology(self, fingerprint: str, available_slots: set[int]) -> tuple[bool, list[int]]:
         with self._connect() as connection:
@@ -889,7 +1138,12 @@ class JarvisStore:
             approval=ApprovalState(**dict(approval_row)),
         )
 
-    def _connect(self) -> sqlite3.Connection:
+    @contextmanager
+    def _connect(self):
         connection = sqlite3.connect(self._database_path)
         connection.row_factory = sqlite3.Row
-        return connection
+        try:
+            with connection:
+                yield connection
+        finally:
+            connection.close()

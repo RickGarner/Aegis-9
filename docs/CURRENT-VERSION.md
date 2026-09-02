@@ -180,6 +180,24 @@ restricted Constrained Language profile; external-capability workflows and C#
 execution remain blocked pending an approved disposable OS sandbox. Manual test
 pass recording has been removed. See `docs/WORKFLOW-TEST-RUNNER.md`.
 
+The production workflow path now binds final supervisor authorization to the
+Windows identity and exact revision, source hash, permission-manifest hash, and
+schedule hash. Schedules support once, daily, weekly, interval, and manual
+triggers with IANA timezones and default-deny declarative prerequisites. The
+execution manager revalidates the action catalog immediately before launch and
+retains run history, ordered live stdout/stderr events, output hashes,
+cancellation, timeouts, retry attempts, interrupted-run recovery, and terminal
+notification outbox records. The native workflow window exposes these run and
+history controls. Production C# and capabilities without an explicit action
+profile remain blocked.
+
+The AD Account Lockouts workflow was revised to a scheduler-owned, single-pass,
+read-only collector. It uses configurable service-account exclusions, correlates
+Security events 4740/4624 across domain controllers, calculates policy-based
+automatic unlock timing, retains incomplete-controller warnings, and emits
+structured JSON for the A.E.G.I.S.-9 workflow window. Revision 2 passed static
+validation; its earlier acceptance was invalidated and must be repeated.
+
 Operations monitoring now collects read-only remote Windows telemetry over
 PowerShell remoting/CIM using the current approved domain identity. All configured
 hosts report CPU, available memory, fixed-disk capacity, and non-delayed automatic

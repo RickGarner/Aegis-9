@@ -11,6 +11,7 @@ public partial class WorkflowWindow : Window
     private readonly DispatcherTimer _timer;
     private CancellationTokenSource? _refreshCancellation;
     private Workflow? _workflow;
+    private WorkflowRun? _latestRun;
     private bool _refreshing;
 
     public WorkflowWindow(int workflowId)
@@ -49,7 +50,18 @@ public partial class WorkflowWindow : Window
             ConnectionText.Text = "CONNECTED";
             ConnectionText.Foreground = FindResource("Green") as Brush;
             UpdatedText.Text = $"Updated {DateTime.Now:HH:mm:ss}";
-            ResultText.Text = "Workflow state is controlled from this native Windows surface.";
+            var runs = await _client.GetWorkflowRunsAsync(_workflow.Id, _refreshCancellation.Token);
+            _latestRun = runs.FirstOrDefault();
+            if (_latestRun is null)
+            {
+                ResultText.Text = $"Revision {_workflow.Revision}. Test: {_workflow.LatestTestStatus}. Supervisor: {(string.IsNullOrWhiteSpace(_workflow.SupervisorApprovedBy) ? "not approved" : _workflow.SupervisorApprovedBy)}.";
+            }
+            else
+            {
+                var events = await _client.GetWorkflowRunEventsAsync(_latestRun.Id, _refreshCancellation.Token);
+                var live = string.Join(Environment.NewLine, events.TakeLast(40).Select(item => $"[{item.Sequence:000}] {item.EventType}: {item.Message}"));
+                ResultText.Text = $"Run {_latestRun.Id} · {_latestRun.Status.ToUpperInvariant()} · attempt {_latestRun.Attempt}{Environment.NewLine}{live}";
+            }
         }
         catch (OperationCanceledException) { }
         catch (Exception error)
@@ -97,4 +109,23 @@ public partial class WorkflowWindow : Window
     private async void PauseButton_Click(object sender, RoutedEventArgs e) => await TransitionAsync("pause");
     private async void ResumeButton_Click(object sender, RoutedEventArgs e) => await TransitionAsync("resume");
     private async void StopButton_Click(object sender, RoutedEventArgs e) => await TransitionAsync("stop");
+    private async void RunButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_workflow is null) return;
+        if (MessageBox.Show(this, "Run the exact supervisor-approved artifact now? Approval and action policy will be revalidated before launch.", "Confirm workflow run", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
+        try { _latestRun = await _client.ExecuteWorkflowAsync(_workflow.Id, CancellationToken.None); await RefreshAsync(); }
+        catch (Exception error) { ResultText.Text = error.Message; }
+    }
+    private async void CancelRunButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_latestRun is null) return;
+        try { _latestRun = await _client.CancelWorkflowRunAsync(_latestRun.Id, CancellationToken.None); await RefreshAsync(); }
+        catch (Exception error) { ResultText.Text = error.Message; }
+    }
+    private async void RetryRunButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_latestRun is null) return;
+        try { _latestRun = await _client.RetryWorkflowRunAsync(_latestRun.Id, CancellationToken.None); await RefreshAsync(); }
+        catch (Exception error) { ResultText.Text = error.Message; }
+    }
 }

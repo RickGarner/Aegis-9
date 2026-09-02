@@ -92,15 +92,15 @@ def test_workflow_requires_test_user_and_supervisor_gates(tmp_path: Path) -> Non
     for decision, expected in (
         ("user_accept", "user_accepted"),
         ("request_supervisor", "supervisor_pending"),
-        ("supervisor_approve", "approved"),
     ):
         workflow = store.review_workflow(workflow.id, decision)
         assert workflow is not None
         assert workflow.state == expected
 
-    scheduled = store.set_workflow_schedule(workflow.id, {"trigger": "daily", "expression": "07:00"})
-    assert scheduled is not None
-    assert scheduled.state == "scheduled"
+    pending = store.set_workflow_schedule(workflow.id, {"trigger": "daily", "expression": "07:00", "timezone": "UTC"})
+    assert pending is not None and pending.state == "supervisor_pending"
+    workflow = store.approve_workflow_for_production(workflow.id, "test-supervisor")
+    assert workflow is not None and workflow.state == "scheduled"
 
 
 def test_implementation_cannot_be_generated_before_plan_approval(tmp_path: Path) -> None:

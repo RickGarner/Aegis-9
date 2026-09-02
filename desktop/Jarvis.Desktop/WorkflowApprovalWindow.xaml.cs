@@ -30,7 +30,8 @@ public partial class WorkflowApprovalWindow : Window
         "test_failed" => ("run_test", "RETRY SAFE TEST", "Review the permission findings or build errors, revise when necessary, and run validation again."),
         "test_passed" => ("user_accept", "USER ACCEPT", "User acceptance confirms the result but does not grant production authority."),
         "user_accepted" => ("request_supervisor", "REQUEST SUPERVISOR", "Submit this exact revision for independent production approval."),
-        "supervisor_pending" => ("supervisor_approve", "SUPERVISOR APPROVE", "Supervisor approval unlocks scheduling; it does not immediately start the workflow."),
+        "supervisor_pending" when _workflow.Schedule.Count == 0 => ("set_schedule", "SET SCHEDULE / CONDITIONS", "Record the production trigger, timezone, purpose, and declarative prerequisites before requesting final supervisor authorization."),
+        "supervisor_pending" => ("supervisor_approve", "SUPERVISOR APPROVE", "Approval binds this exact revision, artifact, permission manifest, and saved schedule to the configured Windows supervisor identity."),
         _ => null
     };
     private void Render()
@@ -60,6 +61,15 @@ public partial class WorkflowApprovalWindow : Window
     {
         var next = NextGate();
         if (next is null) return;
+        if (next.Value.decision == "set_schedule")
+        {
+            StatusText.Text = "Record the production schedule and conditions before supervisor approval.";
+            new WorkflowScheduleWindow(_workflow) { Owner = this }.ShowDialog();
+            _workflow = (await _client.GetWorkflowsAsync(CancellationToken.None)).First(item => item.Id == _workflow.Id);
+            StatusText.Text = _workflow.Schedule.Count == 0 ? "Schedule was not saved." : "Schedule saved. Final supervisor approval is now available.";
+            Render();
+            return;
+        }
         AdvanceButton.IsEnabled = false;
         StatusText.Text = "A.E.G.I.S.-9 is selecting the best available model…";
         try

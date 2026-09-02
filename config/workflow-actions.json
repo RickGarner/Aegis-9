@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "profiles": {
+    "ad-account-lockouts": {
+      "enabled": true,
+      "language": "powershell",
+      "allowed_capabilities": [
+        "directory_service",
+        "dotnet_api",
+        "unapproved_command",
+        "unsupported_syntax"
+      ],
+      "allowed_commands": [
+        "ConvertTo-Json",
+        "ForEach-Object",
+        "Get-ADDefaultDomainPasswordPolicy",
+        "Get-ADDomainController",
+        "Get-ADGroup",
+        "Get-ADUser",
+        "Get-Date",
+        "Get-EventDataMap",
+        "Get-WinEvent",
+        "Import-Module",
+        "Search-ADAccount",
+        "Select-Object",
+        "Sort-Object",
+        "Test-IsExcludedServiceAccount",
+        "Where-Object"
+      ],
+      "maximum_runtime_seconds": 120,
+      "description": "Read-only locked user and domain-controller Security event correlation. No directory mutations are permitted."
+    }
+  }
+}

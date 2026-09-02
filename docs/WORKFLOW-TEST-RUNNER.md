@@ -53,4 +53,15 @@ credentials and targets.
    moves to `test_failed`.
 6. User acceptance becomes available only after `test_passed`.
 
-No production workflow execution is enabled by this runner.
+This runner does not itself authorize production execution. After a static or
+restricted test passes, user acceptance, an approval-bound schedule, and a
+configured Windows supervisor identity are still required. The separate
+production execution manager re-hashes the artifact, manifest, and schedule,
+checks the explicit `config/workflow-actions.json` action profile, and retains a
+run ledger, ordered output events, stdout/stderr, terminal evidence hash,
+cancellation, timeout, retry, restart recovery, and a notification outbox entry.
+
+Production execution is default-deny. A workflow type absent from the action
+catalog, a changed hash, an unapproved command/capability, or an unconfigured
+supervisor identity blocks launch. C# production execution remains blocked until
+an approved disposable Windows sandbox profile is installed and cataloged.

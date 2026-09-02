@@ -1,5 +1,7 @@
 import asyncio
+import getpass
 import json
+import os
 import re
 import uuid
 from contextlib import asynccontextmanager
@@ -8,7 +10,7 @@ from tempfile import gettempdir
 
 from fastapi import Depends, FastAPI, File, HTTPException, UploadFile, status
 from fastapi.responses import Response
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from app.artifacts import try_create_requested_artifact
 from app.config import Settings, get_settings
@@ -22,9 +24,11 @@ from app.monitoring import (
     MonitoringDashboard,
     MonitoringStore,
 )
-from app.storage import ApprovalState, FileEntry, JarvisStore, SessionState, Workflow, WorkflowImportResult, WorkflowTransferPackage, WorkflowTransition
+from app.storage import ApprovalState, FileEntry, JarvisStore, SessionState, Workflow, WorkflowImportResult, WorkflowRun, WorkflowRunEvent, WorkflowTransferPackage, WorkflowTransition
 from app.supervisor import TopologyReconciliation, WorkflowCapacity, WorkflowWindowPlacement, get_workflow_capacity
+from app.workflow_execution import WorkflowExecutionError, WorkflowExecutionManager
 from app.workflow_runner import WorkflowTestEvidence, WorkflowTestRunner
+from app.workflow_scheduler import ScheduleError, is_due, prerequisites_met
 
 
 class ChatRequest(BaseModel):
@@ -65,12 +69,36 @@ class WorkflowTestResult(BaseModel):
 
 
 class WorkflowScheduleRequest(BaseModel):
-    trigger: str = Field(default="daily", pattern="^(once|daily|weekly|interval|manual)$")
+    trigger: str = Field(default="recurring", pattern="^(once|recurring|daily|weekly|interval|manual)$")
     expression: str = Field(default="", max_length=200)
     timezone: str = Field(default="America/New_York", max_length=100)
     reason: str = Field(default="", max_length=500)
     start_conditions: str = Field(default="", max_length=2000)
     stop_conditions: str = Field(default="", max_length=2000)
+    start_date: str = Field(default="", max_length=10)
+    end_date: str = Field(default="", max_length=10)
+    start_time: str = Field(default="00:00", max_length=5)
+    end_time: str = Field(default="23:59", max_length=5)
+    interval_value: int = Field(default=1, ge=1, le=100000)
+    interval_unit: str = Field(default="days", pattern="^(minutes|hours|days|weeks|months)$")
+
+    @model_validator(mode="after")
+    def validate_calendar_window(self) -> "WorkflowScheduleRequest":
+        from datetime import date, time
+        if self.trigger == "manual":
+            return self
+        if not self.start_date:
+            raise ValueError("Start date is required.")
+        try:
+            start = date.fromisoformat(self.start_date)
+            end = date.fromisoformat(self.end_date) if self.end_date else None
+            time.fromisoformat(self.start_time)
+            time.fromisoformat(self.end_time)
+        except ValueError as error:
+            raise ValueError("Dates must use YYYY-MM-DD and times must use 24-hour HH:mm format.") from error
+        if end and end < start:
+            raise ValueError("End date cannot be earlier than start date.")
+        return self
 
 
 class WorkflowClarificationAnswerRequest(BaseModel):
@@ -147,6 +175,10 @@ class WorkflowActionRequest(BaseModel):
     action: str = Field(pattern="^(pause|resume|stop)$")
 
 
+class WorkflowExecuteRequest(BaseModel):
+    trigger: str = Field(default="manual", pattern="^(manual|scheduled|retry)$")
+
+
 class SpeechTranscriptionResponse(BaseModel):
     text: str
     language: str
@@ -161,6 +193,11 @@ async def lifespan(app: FastAPI):
     app.state.store = JarvisStore(settings.database_path)
     app.state.store.initialize()
     app.state.store.recover_interrupted_workflow_tests()
+    app.state.store.recover_interrupted_workflow_runs()
+    app.state.workflow_execution = WorkflowExecutionManager(
+        app.state.store, settings.workflow_artifact_root, settings.workflow_action_catalog_path,
+        settings.workflow_execution_timeout_seconds, settings.workflow_test_output_limit,
+    )
     for workflow in app.state.store.get_workflows():
         parsed_plan, _ = parse_workflow_plan_response(workflow.plan_text) if workflow.plan_text else ("", [])
         if workflow.state in {"design_review", "needs_clarification", "plan_review"} and not parsed_plan:
@@ -200,11 +237,30 @@ async def lifespan(app: FastAPI):
             await asyncio.sleep(settings.moveit_task_poll_seconds)
             app.state.monitoring.collect()
 
+    async def workflow_scheduler_loop() -> None:
+        while True:
+            await asyncio.sleep(15)
+            for workflow in app.state.store.get_workflows():
+                try:
+                    if not is_due(workflow):
+                        continue
+                    allowed, detail = await asyncio.to_thread(prerequisites_met, workflow.schedule)
+                    if not allowed:
+                        app.state.store.record_workflow_scheduler_event(workflow.id, f"scheduled run deferred: {detail}", "warning")
+                        continue
+                    await app.state.workflow_execution.start(workflow, "scheduled", "A.E.G.I.S.-9 scheduler")
+                    app.state.store.record_workflow_scheduler_event(workflow.id, "scheduled run queued after approval and prerequisite revalidation.", "success")
+                except (OSError, ScheduleError, WorkflowExecutionError, ValueError) as error:
+                    app.state.store.record_workflow_scheduler_event(workflow.id, f"schedule blocked: {error}", "warning")
+
     monitoring_task = asyncio.create_task(monitoring_loop())
+    workflow_scheduler_task = asyncio.create_task(workflow_scheduler_loop())
     app.state.monitoring_task = monitoring_task
+    app.state.workflow_scheduler_task = workflow_scheduler_task
     yield
     monitoring_task.cancel()
-    await asyncio.gather(monitoring_task, return_exceptions=True)
+    workflow_scheduler_task.cancel()
+    await asyncio.gather(monitoring_task, workflow_scheduler_task, return_exceptions=True)
 
 
 app = FastAPI(title="A.E.G.I.S.-9 API", version="0.1.0", lifespan=lifespan)
@@ -216,6 +272,10 @@ def get_provider(settings: Settings = Depends(get_settings)) -> OpenAICompatible
 
 def get_store() -> JarvisStore:
     return app.state.store
+
+
+def get_workflow_execution() -> WorkflowExecutionManager:
+    return app.state.workflow_execution
 
 
 def get_monitoring() -> MonitoringCollector:
@@ -519,7 +579,15 @@ async def review_workflow(
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"Implementation artifact could not be prepared: {error}") from error
         if store.save_prepared_artifact(workflow_id, artifact.sha256, artifact.manifest.model_dump()) is None:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Workflow changed before its test artifact could be stored.")
-    result = store.review_workflow(workflow_id, request.decision)
+    if request.decision == "supervisor_approve":
+        identity = getpass.getuser()
+        allowed = {item.strip().casefold() for item in settings.workflow_supervisor_identities.split(",") if item.strip()}
+        candidates = {identity.casefold(), f"{os.environ.get('USERDOMAIN', '')}\\{identity}".casefold()}
+        if not allowed or allowed.isdisjoint(candidates):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=f"Windows identity '{identity}' is not configured as an A.E.G.I.S.-9 workflow supervisor.")
+        result = store.approve_workflow_for_production(workflow_id, identity)
+    else:
+        result = store.review_workflow(workflow_id, request.decision)
     if result is None:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Decision is not valid for the workflow's current gate.")
     return result
@@ -657,8 +725,72 @@ async def generate_workflow_implementation(
 async def schedule_workflow(workflow_id: int, request: WorkflowScheduleRequest, store: JarvisStore = Depends(get_store)) -> Workflow:
     result = store.set_workflow_schedule(workflow_id, request.model_dump())
     if result is None:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Supervisor approval is required before scheduling.")
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="A workflow must be awaiting supervisor review before its approval-bound schedule can be recorded.")
     return result
+
+
+@app.post("/api/workflows/{workflow_id}/execute", response_model=WorkflowRun, status_code=status.HTTP_202_ACCEPTED)
+async def execute_workflow(
+    workflow_id: int,
+    request: WorkflowExecuteRequest,
+    store: JarvisStore = Depends(get_store),
+    manager: WorkflowExecutionManager = Depends(get_workflow_execution),
+) -> WorkflowRun:
+    workflow = store.get_workflow(workflow_id)
+    if workflow is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workflow was not found.")
+    try:
+        return await manager.start(workflow, request.trigger, getpass.getuser())
+    except (OSError, ValueError, WorkflowExecutionError) as error:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(error)) from error
+
+
+@app.get("/api/workflows/{workflow_id}/runs", response_model=list[WorkflowRun])
+async def list_workflow_runs(workflow_id: int, store: JarvisStore = Depends(get_store)) -> list[WorkflowRun]:
+    if store.get_workflow(workflow_id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workflow was not found.")
+    return store.get_workflow_runs(workflow_id)
+
+
+@app.get("/api/workflow-runs/{run_id}", response_model=WorkflowRun)
+async def get_workflow_run(run_id: int, store: JarvisStore = Depends(get_store)) -> WorkflowRun:
+    run = store.get_workflow_run(run_id)
+    if run is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workflow run was not found.")
+    return run
+
+
+@app.get("/api/workflow-runs/{run_id}/events", response_model=list[WorkflowRunEvent])
+async def list_workflow_run_events(run_id: int, after_sequence: int = 0, store: JarvisStore = Depends(get_store)) -> list[WorkflowRunEvent]:
+    if store.get_workflow_run(run_id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workflow run was not found.")
+    return store.get_workflow_run_events(run_id, after_sequence)
+
+
+@app.post("/api/workflow-runs/{run_id}/cancel", response_model=WorkflowRun)
+async def cancel_workflow_run(run_id: int, manager: WorkflowExecutionManager = Depends(get_workflow_execution)) -> WorkflowRun:
+    run = manager.cancel(run_id)
+    if run is None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Workflow run is not active or cannot be cancelled.")
+    return run
+
+
+@app.post("/api/workflow-runs/{run_id}/retry", response_model=WorkflowRun, status_code=status.HTTP_202_ACCEPTED)
+async def retry_workflow_run(
+    run_id: int,
+    store: JarvisStore = Depends(get_store),
+    manager: WorkflowExecutionManager = Depends(get_workflow_execution),
+) -> WorkflowRun:
+    prior = store.get_workflow_run(run_id)
+    if prior is None or prior.status not in {"failed", "cancelled", "timed_out", "interrupted"}:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Only a terminal unsuccessful run can be retried.")
+    workflow = store.get_workflow(prior.workflow_id)
+    if workflow is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workflow was not found.")
+    try:
+        return await manager.start(workflow, "retry", getpass.getuser(), prior.attempt + 1)
+    except (OSError, ValueError, WorkflowExecutionError) as error:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(error)) from error
 
 
 @app.delete("/api/workflows/{workflow_id}", response_model=Workflow)
