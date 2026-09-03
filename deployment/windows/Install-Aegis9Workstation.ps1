@@ -279,8 +279,8 @@ Set-DotEnvValue $dotEnv 'JARVIS_WHISPER_COMPUTE_TYPE' 'auto'
 
 Push-Location $RepoRoot
 try {
-    & dotnet restore Jarvis.sln
-    & dotnet build Jarvis.sln --no-restore
+    & dotnet restore Aegis-9.sln
+    & dotnet build Aegis-9.sln --no-restore
     if ($LASTEXITCODE -ne 0) { throw 'A.E.G.I.S.-9 desktop build failed.' }
 }
 finally { Pop-Location }

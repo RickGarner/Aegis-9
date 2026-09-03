@@ -2,7 +2,7 @@ param(
     [string]$ProjectRoot = (Split-Path -Parent $PSScriptRoot)
 )
 
-$avatarsRoot = Join-Path $ProjectRoot "desktop\Jarvis.Desktop\Assets\Avatars"
+$avatarsRoot = Join-Path $ProjectRoot "desktop\Aegis.Desktop\Assets\Avatars"
 $profiles = @("male", "female")
 $errors = @()
 

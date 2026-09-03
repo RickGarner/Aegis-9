@@ -6,7 +6,7 @@
 
 ## Build result
 
-The original solution builds successfully with .NET 8 using `dotnet build Jarvis.slnx --no-restore`.
+The original solution builds successfully with .NET 8 using `dotnet build Aegis-9.slnx --no-restore`.
 
 The build has seven existing warnings in `UI/MainWindow.xaml.cs` involving nullable fields and one unused local variable. No MoveIT compile errors were reported.
 

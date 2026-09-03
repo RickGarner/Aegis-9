@@ -105,7 +105,7 @@ python -m uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8000
 The desktop shell now includes a lightweight launcher to start a packaged Python FastAPI backend when the app is installed. This was added to support a native-first delivery model where the desktop app bundles and auto-starts the backend process in production while developers continue to run the backend manually during development.
 
 Key points
-- Implementation: desktop/Jarvis.Desktop/BackendLauncher.cs — starts/stops a python process (uvicorn) and redirects stdout/stderr to logs.
+- Implementation: desktop/Aegis.Desktop/BackendLauncher.cs — starts/stops a python process (uvicorn) and redirects stdout/stderr to logs.
 - App integration: App.xaml.cs attempts to start the bundled backend on startup unless developer mode is enabled. It polls the backend health endpoint via MonitoringClient.CheckHealthAsync and shows a warning if the backend is not ready within the startup timeout.
 - Logs: when launched by the app the backend appends logs to `<install-dir>\backend\logs\backend.stdout.log` and `backend.stderr.log`. Inspect these files for startup errors and tracebacks.
 - Developer override: set environment variable `JARVIS_DEVELOPER_MODE=1` to prevent auto-launch and run the backend manually during development.
@@ -119,8 +119,8 @@ When packaging the product, the installer should place the backend folder next t
 4. Build and start the desktop shell:
 
 ```powershell
-dotnet build desktop\Jarvis.Desktop\Jarvis.Desktop.csproj
-Start-Process desktop\Jarvis.Desktop\bin\Debug\net8.0-windows\Jarvis.Desktop.exe
+dotnet build desktop\Aegis.Desktop\Aegis.Desktop.csproj
+Start-Process desktop\Aegis.Desktop\bin\Debug\net8.0-windows\Aegis.Desktop.exe
 ```
 
 ## Current limitations

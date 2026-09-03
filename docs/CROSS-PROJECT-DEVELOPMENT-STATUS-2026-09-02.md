@@ -16,8 +16,8 @@ The central architecture is sound and substantial portions are implemented. The 
 
 | Product | Repository / local audit path | Current branch and audited commit | Important warning |
 |---|---|---|---|
-| A.E.G.I.S.-9 | `RickGarner/Jarvis-Desktop`; audited at `D:\Jarvis-Cinematic-Verify` | `feature/workflow-automation-monitoring-2026-08-31` at `642fac0` | `main` contains the older pre-cinematic UI. Do not use it to review current behavior. |
-| WolfForge / future Aegis Developer Studio | `RickGarner/VSCode`; audited at `D:\development\vscode` | `development-v2` at `0b091b419b1` | This is a Code - OSS fork, not an extension project. Preserve upstream mergeability. |
+| A.E.G.I.S.-9 | `RickGarner/Aegis-9`; audited at `D:\Aegis\Aegis-9` | `feature/workflow-automation-monitoring-2026-08-31` at `642fac0` | `main` contains the older pre-cinematic UI. Do not use it to review current behavior. |
+| WolfForge / future Aegis Developer Studio | `RickGarner/Aegis-Developer-Studio`; audited at `D:\Aegis\Aegis-Developer-Studio` | `development-v2` at `0b091b419b1` | This is a Code - OSS fork, not an extension project. Preserve upstream mergeability. |
 
 The repositories should remain separate. Jarvis owns governance and launch/integration surfaces; the VS Code fork owns the IDE. The future local bridge should connect them without combining their source trees.
 
@@ -108,7 +108,7 @@ The product name, ownership boundary and hybrid UX were approved. A native Aegis
 - Local model abstraction and health checks for LM Studio, Ollama and LiteLLM-compatible routes.
 - Backend auto-start from the WPF client and backend readiness waiting.
 - Reproducible Windows workstation installer, validator, service templates and dependency manifest.
-- Current clean build: `dotnet build Jarvis.sln --no-restore` completed with **0 errors and 0 warnings** during this audit.
+- Current clean build: `dotnet build Aegis-9.sln --no-restore` completed with **0 errors and 0 warnings** during this audit.
 - Current backend suite: **43 tests passed** from the `backend` directory during this audit.
 
 ### Files, chat and context
@@ -373,7 +373,7 @@ Copilot and Copilot Chat are default-disabled for fresh product profiles and Loc
 - Reviewed current-version, roadmap, implementation, workflow, monitoring, migration and Developer Studio documents.
 - Reviewed commit progression through cinematic UI, voice/providers, workstation bootstrap, workflow/monitoring, workflow transfer/test/execution and Developer Studio launcher.
 - Ran backend tests from `backend`: **43 passed in 6.53 seconds**.
-- Ran `dotnet build Jarvis.sln --no-restore`: **build succeeded, 0 warnings, 0 errors**.
+- Ran `dotnet build Aegis-9.sln --no-restore`: **build succeeded, 0 warnings, 0 errors**.
 - The repository contains an untracked `dist/` transfer-output folder; this audit did not alter or remove it.
 
 ## WolfForge / VS Code fork
@@ -391,7 +391,7 @@ Automated checks do not replace live validation of microphones, model servers, p
 ## A.E.G.I.S.-9
 
 ```powershell
-git clone https://github.com/RickGarner/Jarvis-Desktop.git
+git clone https://github.com/RickGarner/Aegis-9.git
 Set-Location Jarvis-Desktop
 git fetch origin
 git switch feature/workflow-automation-monitoring-2026-08-31
@@ -405,7 +405,7 @@ For a clean machine, follow `deployment/windows/README.md`, run `Install-Aegis9W
 ## Aegis Developer Studio / WolfForge
 
 ```powershell
-git clone https://github.com/RickGarner/VSCode.git vscode
+git clone https://github.com/RickGarner/Aegis-Developer-Studio.git vscode
 Set-Location vscode
 git remote add upstream https://github.com/microsoft/vscode.git
 git fetch origin

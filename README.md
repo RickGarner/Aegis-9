@@ -1,4 +1,4 @@
-# Jarvis Desktop
+# A.E.G.I.S.-9
 
 > **Canonical version notice (2026-08-31):** The current A.E.G.I.S.-9
 > application is on `feature/workflow-automation-monitoring-2026-08-31`. The `main` branch still
@@ -7,13 +7,16 @@
 > project status. Start with [`docs/CURRENT-VERSION.md`](docs/CURRENT-VERSION.md)
 > and [`docs/handoff.md`](docs/handoff.md).
 
-Jarvis Desktop is the native Windows Command Center for the Jarvis local-first personal assistant. It is a standalone application: this folder contains everything needed to build and run it, including its own copy of the FastAPI backend.
+A.E.G.I.S.-9 is the native Windows command center for the local-first Aegis
+assistant platform. It is a standalone application containing its WPF client,
+FastAPI backend, workflow engine, operations monitoring, voice/avatar runtime,
+and Aegis Developer Studio launcher.
 
 ## Repository split
 
 This folder was split out of the combined `Jarvis` checkout on 2026-08-25 so the desktop application and the legacy web dashboard can be developed, versioned, and run completely independently.
 
-- This folder (`D:\Jarvis_Desktop`): native WPF Command Center + its own bundled backend.
+- This repository (`Aegis-9`): native WPF command center and bundled backend.
 - `D:\Jarvis_Web`: React/Vite dashboard + its own bundled backend, kept as a legacy/reference client.
 
 Each folder has an independent copy of `backend/`, `config/`, `.env`, and a working Python virtual environment (`.venv`), so each one starts up on its own without the other folder present. This was verified after the split: the desktop app auto-started its own backend from this folder, and the web dashboard's dev server independently reached its own backend copy.
@@ -22,7 +25,7 @@ If you need the web dashboard, use `D:\Jarvis_Web` instead. The two folders do n
 
 ## Project structure
 
-- `Jarvis.sln` - Visual Studio 2022 solution for the native Windows client
+- `Aegis-9.sln` - Visual Studio 2022 solution for the native Windows client
 - `desktop/` - native Windows WPF command center, workflow, and monitoring windows, plus installer scaffolding
 - `backend/` - Python backend API, orchestration, and model integrations (bundled/auto-started by the desktop app)
 - `config/` - editable monitored-server inventory used by the backend's monitoring collector
@@ -67,9 +70,9 @@ model profiles, disk requirements, validation, and troubleshooting.
 Build and launch the native Windows shell (it starts its own backend automatically):
 
 ```powershell
-dotnet restore Jarvis.sln
-dotnet build Jarvis.sln --no-restore
-Start-Process desktop\Jarvis.Desktop\bin\Debug\net8.0-windows\Jarvis.Desktop.exe
+dotnet restore Aegis-9.sln
+dotnet build Aegis-9.sln --no-restore
+Start-Process desktop\Aegis.Desktop\bin\Debug\net8.0-windows\Aegis.Desktop.exe
 ```
 
 To smoke-test the first local artifact generator path, ask Jarvis:

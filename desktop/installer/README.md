@@ -5,12 +5,12 @@ This folder contains guidance for producing an MSI or MSIX installer that bundle
 Recommendation (initial):
 - Use WiX Toolset to produce an MSI that places files under Program Files and creates shortcuts.
 - Bundle a portable Python distribution or the embeddable Python runtime inside the `backend/` folder.
-- The installer should include the `backend/` folder next to the installed `Jarvis.Desktop.exe` so the app can launch it from `AppDomain.CurrentDomain.BaseDirectory + "backend"`.
+- The installer should include the `backend/` folder next to the installed `Aegis.Desktop.exe` so the app can launch it from `AppDomain.CurrentDomain.BaseDirectory + "backend"`.
 
 Minimum installer payload layout (installed directory):
 
 - Jarvis\
-  - Jarvis.Desktop.exe
+  - Aegis.Desktop.exe
   - (framework and runtime files)
   - backend\
 	- python\

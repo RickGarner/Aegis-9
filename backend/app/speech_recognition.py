@@ -34,7 +34,7 @@ class LocalWhisperService:
                 beam_size=5,
                 vad_filter=True,
                 condition_on_previous_text=False,
-                initial_prompt="Jarvis local assistant. LM Studio, Ollama, LiteLLM, MOVEit Automation, Wolforge.",
+                initial_prompt="A.E.G.I.S.-9 local assistant. LM Studio, Ollama, LiteLLM, MOVEit Automation, Aegis Developer Studio, FERAL.",
             )
             collected = list(segments)
         text = " ".join(segment.text.strip() for segment in collected if segment.text.strip()).strip()

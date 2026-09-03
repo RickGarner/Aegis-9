@@ -1,4 +1,15 @@
-# Jarvis Handoff
+# A.E.G.I.S.-9 Handoff
+
+## Repository and product rename — 2026-09-02
+
+The GitHub repository is now `RickGarner/Aegis-9`. The solution and WPF project
+are `Aegis-9.sln` and `desktop/Aegis.Desktop/Aegis.Desktop.csproj`. The former
+repository was renamed in place and its history was preserved. See
+`docs/REBRAND-MIGRATION-2026-09-02.md`.
+
+Aegis Developer Studio is the separate former WolfForge/VSCode repository at
+`RickGarner/Aegis-Developer-Studio`. Shared contracts and the multi-root
+workspace live in the private `RickGarner/Aegis-Platform` repository.
 
 ## Critical current-version notice — 2026-08-31
 
@@ -25,12 +36,12 @@ avatar commits, the August 30 local voice/adaptive provider work, the merge of
 the latest `main`, and the reproducible workstation bootstrap. The primary
 current implementation areas are:
 
-- `desktop/Jarvis.Desktop/MainWindow.xaml` and `.xaml.cs` — cinematic UI
-- `desktop/Jarvis.Desktop/Assets/AvatarHost/` — local avatar renderer
-- `desktop/Jarvis.Desktop/Assets/Avatars/shared/` — cyber-lupine GLB assets
+- `desktop/Aegis.Desktop/MainWindow.xaml` and `.xaml.cs` — cinematic UI
+- `desktop/Aegis.Desktop/Assets/AvatarHost/` — local avatar renderer
+- `desktop/Aegis.Desktop/Assets/Avatars/shared/` — cyber-lupine GLB assets
 - `backend/app/providers.py` — adaptive provider routing
 - `backend/app/speech_recognition.py` — local voice-input backend
-- `desktop/Jarvis.Desktop/LocalSpeechRecognitionService.cs` — WPF voice input
+- `desktop/Aegis.Desktop/LocalSpeechRecognitionService.cs` — WPF voice input
 - `deployment/windows/` — authoritative dependency/service bootstrap
 
 The older sections below remain useful implementation history, but statements
@@ -70,19 +81,19 @@ Continue by reading `docs/workflow-automation-requirements.md`,
 ## Aegis Developer Studio decision — 2026-09-02
 
 The local development environment is approved under the product name **Aegis
-Developer Studio**. The existing WolfForge Code - OSS fork at the separate
-`RickGarner/VSCode` repository is its implementation foundation. Aegis will add a
+Developer Studio**. The renamed Aegis Developer Studio Code - OSS fork at the separate
+`RickGarner/Aegis-Developer-Studio` repository is its implementation foundation. Aegis will add a
 native slide-out launcher/control panel; the full IDE will open in its own native
 window and later report repository, model, build/test, and approval state back to
 Aegis through an authenticated local bridge.
 
 Status: architecture and naming are complete. The native WPF slide-out panel,
-WolfForge checkout detection, folder browsing, and persisted recent-repository
+Developer Studio checkout detection, folder browsing, and persisted recent-repository
 selection are implemented and visually accepted. Configurable exact-path IDE
 discovery, safe selected-repository launch, existing-window focus/reuse, and
 process status are implemented and await runtime acceptance. The authenticated
 local bridge is the next milestone.
-WolfForge is not yet product-wide local-only because Copilot remains configured
+Developer Studio is not yet product-wide local-only because cloud-capable paths remain
 as its default chat agent, so Local-Only Mode is a release requirement rather
 than a completed privacy guarantee. See `docs/AEGIS-DEVELOPER-STUDIO.md`.
 
@@ -95,9 +106,9 @@ This document exists to provide continuity between development sessions and betw
 - Machine: Home workstation
 - Original handoff date: 2026-08-25; canonical branch update: 2026-08-31
 - Environment: Visual Studio 2022 solution with native WPF shell and live monitoring
-- Project: Jarvis Desktop
-- Local path: machine-specific; common paths include `D:\Jarvis_Desktop` and `D:\Jarvis-Desktop`
-- Repository: https://github.com/RickGarner/Jarvis-Desktop
+- Project: A.E.G.I.S.-9
+- Recommended local path: `D:\Aegis\Aegis-9`
+- Repository: https://github.com/RickGarner/Aegis-9
 - Current development branch: `feature/workflow-automation-monitoring-2026-08-31`
 
 ## Current Status
@@ -105,8 +116,8 @@ This document exists to provide continuity between development sessions and betw
 The planning phase and the first Phase 1 implementation slice are complete. The local dashboard, backend API, model integration, SQLite state, and workflow supervision control plane are implemented and verified.
 
 Current implementation includes:
-- Visual Studio 2022 solution at `Jarvis.sln` with `desktop/Jarvis.Desktop` as the startup project
-- .NET 8 WPF desktop shell at `desktop/Jarvis.Desktop`
+- Visual Studio 2022 solution at `Aegis-9.sln` with `desktop/Aegis.Desktop` as the startup project
+- .NET 8 WPF desktop shell at `desktop/Aegis.Desktop`
 - independent native Command Center for chat and issued commands
 - separate native MoveIT Automation and Server Status windows
 - native WorkflowWindow for workflow approval and lifecycle controls
@@ -164,11 +175,11 @@ Design intent:
 ## Current Files
 
 Core project files:
-- desktop/Jarvis.Desktop/Jarvis.Desktop.csproj
-- desktop/Jarvis.Desktop/MainWindow.xaml
-- desktop/Jarvis.Desktop/MonitorWindow.xaml
-- desktop/Jarvis.Desktop/MonitoringClient.cs
-- desktop/Jarvis.Desktop/MonitorWindow.xaml.cs
+- desktop/Aegis.Desktop/Aegis.Desktop.csproj
+- desktop/Aegis.Desktop/MainWindow.xaml
+- desktop/Aegis.Desktop/MonitorWindow.xaml
+- desktop/Aegis.Desktop/MonitoringClient.cs
+- desktop/Aegis.Desktop/MonitorWindow.xaml.cs
 - README.md
 - .env.example
 - backend/app/main.py
@@ -217,12 +228,12 @@ Core project files:
 
 ## Verified State
 
-- The intended git remote for this folder is `https://github.com/RickGarner/Jarvis-Desktop.git` on `main` (attach with `git remote add origin` if this folder is not yet a git repository).
+- The intended git remote for this folder is `https://github.com/RickGarner/Aegis-9.git` on `main` (attach with `git remote add origin` if this folder is not yet a git repository).
 - Local API is `http://127.0.0.1:8000`. The React dashboard mentioned in older notes now runs from the separate `D:\Jarvis_Web` folder.
 - Current host detects four monitor work areas; effective workflow capacity is four with the default limit of six.
 - Provider health and real LM Studio chat were verified against `qwen3-coder-30b-a3b-instruct` (work) and `deepseek/deepseek-r1-0528-qwen3-8b` (home, this session).
 - Prior browser checks verified persisted chat, workflow lifecycle controls, monitor placement, managed workflow views, and topology reconciliation.
-- Visual Studio solution and WPF build verified with `dotnet build Jarvis.sln --no-restore`.
+- Visual Studio solution and WPF build verified with `dotnet build Aegis-9.sln --no-restore`.
 - Backend artifact generator smoke-tested through `/api/chat`; the PowerShell add-two-numbers prompt returns `local-artifact-generator` and creates `storage/generated/scripts/add-two-numbers.ps1`.
 - Generated PowerShell script was executed with sample inputs `2` and `3`; it printed `The sum of 2 and 3 is 5`.
 - Avatar validation script correctly reports the current expected blockers: missing `jarvis-male.glb`, missing `jarvis-female.glb`, and placeholder `redistributionAllowed: false` metadata.
@@ -253,7 +264,7 @@ File intake (upload, extraction, full native preview, delete, and chat/workflow 
 
 Avatar integration note:
 - The command center now supports launching a local 3D host window via Ctrl+click on the avatar panel (when enabled in settings).
-- Assets are loaded from `desktop/Jarvis.Desktop/Assets/Avatars/<profile>/avatar.json` with `manifest.json` fallback and only render when redistribution is explicitly permitted.
+- Assets are loaded from `desktop/Aegis.Desktop/Assets/Avatars/<profile>/avatar.json` with `manifest.json` fallback and only render when redistribution is explicitly permitted.
 - The current development avatars are being created in Blender 5.2. Keep exported model filenames aligned with each avatar's `avatar.json` (`jarvis-male.glb` and `jarvis-female.glb` unless intentionally changed).
 - Missing model files, missing local renderer files, missing WebView2 runtime, or unsupported formats automatically fall back to the native WPF avatar.
 
@@ -280,7 +291,7 @@ At work:
 ## Recommended Next Session Start Point
 
 Begin with:
-- open `Jarvis.sln` in Visual Studio 2022 and set `Jarvis.Desktop` as the startup project
+- open `Aegis-9.sln` in Visual Studio 2022 and set `Aegis.Desktop` as the startup project
 - verify the native MoveIT and Server Status windows on the home workstation
 - connect or deploy the remote ServerMonitoring agent feed
 - identify the MoveIT run-history endpoint or confirm log-based status parsing

@@ -36,7 +36,7 @@ Test-Endpoint 'Kokoro' 'http://127.0.0.1:5050/health'
 
 Push-Location $RepoRoot
 try {
-    & dotnet build Jarvis.sln --no-restore
+    & dotnet build Aegis-9.sln --no-restore
     if ($LASTEXITCODE -ne 0) { $failed = $true }
     Push-Location backend
     & ..\.venv\Scripts\python.exe -m unittest discover -s tests -p 'test_*.py'

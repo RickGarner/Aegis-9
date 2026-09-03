@@ -11,7 +11,7 @@ feature/workflow-automation-monitoring-2026-08-31
 The GitHub repository is:
 
 ```text
-https://github.com/RickGarner/Jarvis-Desktop
+https://github.com/RickGarner/Aegis-9
 ```
 
 `main` currently contains the older pre-cinematic WPF interface. Do not use a
@@ -43,16 +43,16 @@ local `main` checkout is the current product version.
 
 | Area | Canonical location |
 |---|---|
-| Visual Studio solution | `Jarvis.sln` |
-| Cinematic WPF UI | `desktop/Jarvis.Desktop/MainWindow.xaml` |
-| Cinematic UI behavior | `desktop/Jarvis.Desktop/MainWindow.xaml.cs` |
-| Cyber-lupine WebView runtime | `desktop/Jarvis.Desktop/Assets/AvatarHost/` |
-| Cyber-lupine models | `desktop/Jarvis.Desktop/Assets/Avatars/shared/` |
-| Avatar profile manifests | `desktop/Jarvis.Desktop/Assets/Avatars/male/` and `female/` |
+| Visual Studio solution | `Aegis-9.sln` |
+| Cinematic WPF UI | `desktop/Aegis.Desktop/MainWindow.xaml` |
+| Cinematic UI behavior | `desktop/Aegis.Desktop/MainWindow.xaml.cs` |
+| Cyber-lupine WebView runtime | `desktop/Aegis.Desktop/Assets/AvatarHost/` |
+| Cyber-lupine models | `desktop/Aegis.Desktop/Assets/Avatars/shared/` |
+| Avatar profile manifests | `desktop/Aegis.Desktop/Assets/Avatars/male/` and `female/` |
 | Adaptive provider router | `backend/app/providers.py` |
 | Voice-input API | `backend/app/speech_recognition.py` and `backend/app/main.py` |
-| Windows speech client | `desktop/Jarvis.Desktop/LocalSpeechRecognitionService.cs` |
-| Kokoro speech client | `desktop/Jarvis.Desktop/KokoroSpeechService.cs` |
+| Windows speech client | `desktop/Aegis.Desktop/LocalSpeechRecognitionService.cs` |
+| Kokoro speech client | `desktop/Aegis.Desktop/KokoroSpeechService.cs` |
 | Workstation installer | `deployment/windows/Install-Aegis9Workstation.ps1` |
 | Workstation validator | `deployment/windows/Test-Aegis9Workstation.ps1` |
 | Service templates | `deployment/windows/services/` |
@@ -69,8 +69,8 @@ On a new Windows workstation, clone and select the cinematic branch before
 running any installation script:
 
 ```powershell
-git clone https://github.com/RickGarner/Jarvis-Desktop.git
-Set-Location Jarvis-Desktop
+git clone https://github.com/RickGarner/Aegis-9.git
+Set-Location Aegis-9
 git switch feature/workflow-automation-monitoring-2026-08-31
 Set-ExecutionPolicy -Scope Process Bypass
 .\deployment\windows\Install-Aegis9Workstation.ps1 -ModelProfile Core
@@ -89,7 +89,7 @@ Validate after installation or after moving to another computer:
 Then launch the current UI:
 
 ```powershell
-.\desktop\Jarvis.Desktop\bin\Debug\net8.0-windows\Jarvis.Desktop.exe
+.\desktop\Aegis.Desktop\bin\Debug\net8.0-windows\Aegis.Desktop.exe
 ```
 
 ## Verified cinematic state on 2026-08-30
@@ -221,8 +221,8 @@ workflow-specific documents for the current execution and validation state.
 ## Aegis Developer Studio decision — 2026-09-02
 
 Aegis Developer Studio is approved as the local-first development environment.
-The separate WolfForge Code - OSS fork is the partially built IDE foundation.
-Jarvis-Desktop will own a native slide-out Developer Studio launcher and control
+The separately versioned Aegis Developer Studio Code - OSS fork is the IDE foundation.
+Aegis-9 owns the native slide-out Developer Studio launcher and control
 surface; the full IDE will run in its own window. Naming and architecture are
 complete. The WPF slide-out, checkout detection, repository browsing, and
 persisted recent selection are implemented and visually accepted. Configurable

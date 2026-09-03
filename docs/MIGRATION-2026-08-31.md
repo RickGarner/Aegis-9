@@ -20,9 +20,9 @@ git status --short --branch
 - `backend/app/main.py`, `storage.py`, and `providers.py`: workflow design,
   clarification, model routing, lifecycle gates, scheduling contract, and audit
   events.
-- `desktop/Jarvis.Desktop/Workflow*`: designer, split-pane Design Review,
+- `desktop/Aegis.Desktop/Workflow*`: designer, split-pane Design Review,
   approval, archive, schedule, and supervision windows.
-- `desktop/Jarvis.Desktop/MainWindow*` and `MonitoringClient.cs`: Workflow Center,
+- `desktop/Aegis.Desktop/MainWindow*` and `MonitoringClient.cs`: Workflow Center,
   state-aware actions, and re-evaluation notifications.
 - `backend/app/monitoring.py`, `config.py`, `.env.example`, and monitor UI files:
   FreeFlow Core and Qualys read-only monitoring foundations.
@@ -59,7 +59,7 @@ configuration or managed secret storage.
 
 ```powershell
 py -m pytest backend/tests -q
-dotnet build Jarvis.sln --no-restore
+dotnet build Aegis-9.sln --no-restore
 ```
 
 Verified before push on 2026-08-31:

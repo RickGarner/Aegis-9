@@ -5,20 +5,18 @@
 **Product decision: approved. Integration status: in progress. Milestone 1 accepted; milestone 2 implemented and awaiting runtime acceptance.**
 
 Aegis Developer Studio is the approved name for the local development environment
-that will be launched and supervised from A.E.G.I.S.-9. The existing WolfForge
-Code - OSS fork is the implementation foundation; a second editor will not be
+that will be launched and supervised from A.E.G.I.S.-9. The renamed Aegis
+Developer Studio Code - OSS fork is the implementation foundation; a second editor will not be
 created from scratch.
 
 The source repositories remain separate:
 
-- `Jarvis-Desktop` owns the Aegis slide-out panel, launch controls, approvals,
+- `Aegis-9` owns the Aegis slide-out panel, launch controls, approvals,
   audit records, build/test evidence, and workflow integration.
-- `RickGarner/VSCode` currently owns WolfForge and will become the Aegis
-  Developer Studio IDE. Its repository/product rename will be handled as a
-  separate, deliberate migration after integration is stable.
+- `RickGarner/Aegis-Developer-Studio` owns the separately versioned IDE.
 
-Jarvis-Desktop now contains the first native slide-out panel foundation. Safe IDE
-launch, process supervision, and the authenticated bridge remain pending.
+Aegis-9 contains the native slide-out panel and safe launcher foundation. Runtime
+acceptance and the authenticated bridge remain pending.
 
 ## Product identity
 
@@ -57,9 +55,9 @@ focusing the IDE.
 Eventually, an approved workflow at Implementation Review may open Developer
 Studio directly on its retained implementation/artifact directory.
 
-## Existing foundation — completed in WolfForge
+## Existing foundation — completed in Aegis Developer Studio
 
-The WolfForge repository already contains a substantial local-first foundation:
+The Aegis Developer Studio repository contains a substantial local-first foundation:
 
 - branded standalone Code - OSS desktop application
 - LM Studio, Ollama, LiteLLM, and custom OpenAI-compatible providers
@@ -72,11 +70,11 @@ The WolfForge repository already contains a substantial local-first foundation:
 - support for large C# and VB.NET inputs and conversion prompts
 
 These capabilities are an existing external-project foundation, not completed
-Jarvis-Desktop integration work.
+Aegis-9 integration work.
 
 ## Required capabilities and remaining work
 
-- complete WolfForge Local-Only Mode and make Local AI the default
+- complete Developer Studio Local-Only Mode and make FERAL the default
 - disable or remove Copilot-owned default paths, cloud model choices, prompt
   egress, and relevant cloud telemetry/authentication in local-only operation
 - add Aegis slide-out panel and persisted recent-repository state
@@ -103,7 +101,7 @@ the selected endpoint/model and must not silently fall back to a cloud provider.
 ## Delivery milestones
 
 1. **Slide-out foundation — completed and accepted:** Developer
-   Studio navigation, animated slide-out panel, WolfForge checkout detection,
+   Studio navigation, animated slide-out panel, Developer Studio checkout detection,
    folder browsing, persisted selected/recent repositories, and milestone status.
 2. **Safe launcher — implemented; runtime acceptance pending:** configurable
    foundation/executable paths, exact-path process detection, selected-repository

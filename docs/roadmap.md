@@ -4,7 +4,7 @@
 
 **A.E.G.I.S.-9 branch:** `feature/workflow-automation-monitoring-2026-08-31`
 
-**Developer Studio branch:** `development-v2` in the separate `RickGarner/VSCode` repository
+**Developer Studio branch:** `development-v2` in the separate `RickGarner/Aegis-Developer-Studio` repository
 
 ## Product boundary
 

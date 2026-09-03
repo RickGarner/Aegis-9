@@ -11,9 +11,9 @@ This document is the handoff for continuing Jarvis Desktop in Visual Studio 2022
 
 ## Solution
 
-Open `Jarvis.sln` in Visual Studio 2022. The solution currently contains:
+Open `Aegis-9.sln` in Visual Studio 2022. The solution currently contains:
 
-- `desktop/Jarvis.Desktop/Jarvis.Desktop.csproj`
+- `desktop/Aegis.Desktop/Aegis.Desktop.csproj`
 
 The project targets `.NET 8` with `net8.0-windows` and enables WPF. Do not retarget it just because a newer Visual Studio or SDK is installed. Retarget only when there is a tested runtime requirement.
 
@@ -27,7 +27,7 @@ older notes. Validate with `deployment/windows/Test-Aegis9Workstation.ps1`.
 ## Runtime architecture
 
 ```text
-Jarvis.Desktop.exe (WPF)
+Aegis.Desktop.exe (WPF)
     -> http://127.0.0.1:8000
         -> FastAPI backend
             -> local LM Studio or Ollama provider
@@ -56,7 +56,7 @@ From the repository root, create or update `.env` from `.env.example`, then run:
   approval, test, and scheduling foundation. See
   `docs/MIGRATION-2026-08-31.md`.
 
-- Added a lightweight backend launcher and app startup integration so the WPF shell can auto-start a packaged Python FastAPI backend when installed. See desktop/Jarvis.Desktop/BackendLauncher.cs and App.xaml.cs.
+- Added a lightweight backend launcher and app startup integration so the WPF shell can auto-start a packaged Python FastAPI backend when installed. See desktop/Aegis.Desktop/BackendLauncher.cs and App.xaml.cs.
 - MonitoringClient now includes a CheckHealthAsync(CancellationToken) helper used by the UI to poll the backend readiness endpoint before updating status.
 - The WPF client creates the main window only after backend startup/readiness checks complete.
 - Native chat, session, files, alerts, settings, provider health, and workflow attachment contracts are implemented in `MonitoringClient.cs`.
@@ -94,8 +94,8 @@ From the repository root, create or update `.env` from `.env.example`, then run:
 2. Run the WPF client in developer mode (prevents auto-launch):
 
    $env:JARVIS_DEVELOPER_MODE = "1"
-   dotnet build Jarvis.sln --no-restore
-   Start-Process desktop\Jarvis.Desktop\bin\Debug\net8.0-windows\Jarvis.Desktop.exe
+   dotnet build Aegis-9.sln --no-restore
+   Start-Process desktop\Aegis.Desktop\bin\Debug\net8.0-windows\Aegis.Desktop.exe
 
 3. Verify health and monitoring endpoints:
 
@@ -110,7 +110,7 @@ Keep the backend terminal running while debugging the WPF application.
 
 From Visual Studio:
 
-1. Open `Jarvis.sln`.
+1. Open `Aegis-9.sln`.
 2. Set `Jarvis.Desktop` as the startup project.
 3. Select `Debug` and `Any CPU`.
 4. Press `F5`.
@@ -118,11 +118,11 @@ From Visual Studio:
 From a Developer PowerShell or repository terminal:
 
 ```powershell
-dotnet build Jarvis.sln --no-restore
-Start-Process desktop\Jarvis.Desktop\bin\Debug\net8.0-windows\Jarvis.Desktop.exe
+dotnet build Aegis-9.sln --no-restore
+Start-Process desktop\Aegis.Desktop\bin\Debug\net8.0-windows\Aegis.Desktop.exe
 ```
 
-The WPF client reads its backend URL from `desktop/Jarvis.Desktop/appsettings.json`. The current development value is `http://127.0.0.1:8000`.
+The WPF client reads its backend URL from `desktop/Aegis.Desktop/appsettings.json`. The current development value is `http://127.0.0.1:8000`.
 
 ## Native UI surfaces
 
@@ -155,7 +155,7 @@ Monitoring actions are intentionally pending until an approved action catalog ex
 
 ## Validation checklist
 
-- `dotnet build Jarvis.sln --no-restore` succeeds.
+- `dotnet build Aegis-9.sln --no-restore` succeeds.
 - The backend starts without import errors.
 - `GET http://127.0.0.1:8000/health` returns `status: ok`.
 - The WPF command center starts without the React dev server.

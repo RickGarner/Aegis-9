@@ -6,10 +6,10 @@ Summary:
 This change adds initial migration work to support a native-first desktop experience where the WPF application can bundle and auto-start a Python FastAPI backend in production while preserving the developer workflow.
 
 Key changes:
-- desktop/Jarvis.Desktop/BackendLauncher.cs: lightweight launcher to start/stop the bundled Python FastAPI backend and capture logs.
-- desktop/Jarvis.Desktop/App.xaml.cs: integrates the launcher on application startup, polls MonitoringClient.CheckHealthAsync for readiness, and provides environment toggles (JARVIS_DEVELOPER_MODE, JARVIS_MONITORING_URL).
-- desktop/Jarvis.Desktop/MonitoringClient.cs: added CheckHealthAsync(CancellationToken) helper.
-- desktop/Jarvis.Desktop/MonitorWindow.xaml.cs: hardened resource lookups with fallbacks to system brushes to avoid crashes when themed resources are missing.
+- desktop/Aegis.Desktop/BackendLauncher.cs: lightweight launcher to start/stop the bundled Python FastAPI backend and capture logs.
+- desktop/Aegis.Desktop/App.xaml.cs: integrates the launcher on application startup, polls MonitoringClient.CheckHealthAsync for readiness, and provides environment toggles (JARVIS_DEVELOPER_MODE, JARVIS_MONITORING_URL).
+- desktop/Aegis.Desktop/MonitoringClient.cs: added CheckHealthAsync(CancellationToken) helper.
+- desktop/Aegis.Desktop/MonitorWindow.xaml.cs: hardened resource lookups with fallbacks to system brushes to avoid crashes when themed resources are missing.
 - scripts/start-backend.ps1: helper to create or use .venv, install dependencies, activate the venv, and start uvicorn. Supports -Activate to dot-source activation.
 - scripts/create-migration-branch.ps1: helper to create a migration branch and move frontend/ to archive/frontend/ (run locally to preserve history).
 - desktop/installer/: initial WiX template and README for packaging guidance.

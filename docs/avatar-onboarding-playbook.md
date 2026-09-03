@@ -26,10 +26,10 @@ Blender 5.2 export checklist:
 
 Use this layout:
 
-- `desktop/Jarvis.Desktop/Assets/Avatars/male/jarvis-male.glb` (or update `avatar.json` for a different filename/format)
-- `desktop/Jarvis.Desktop/Assets/Avatars/male/avatar.json`
-- `desktop/Jarvis.Desktop/Assets/Avatars/female/jarvis-female.glb` (or update `avatar.json` for a different filename/format)
-- `desktop/Jarvis.Desktop/Assets/Avatars/female/avatar.json`
+- `desktop/Aegis.Desktop/Assets/Avatars/male/jarvis-male.glb` (or update `avatar.json` for a different filename/format)
+- `desktop/Aegis.Desktop/Assets/Avatars/male/avatar.json`
+- `desktop/Aegis.Desktop/Assets/Avatars/female/jarvis-female.glb` (or update `avatar.json` for a different filename/format)
+- `desktop/Aegis.Desktop/Assets/Avatars/female/avatar.json`
 
 Set `redistributionAllowed` to `true` only when your license explicitly allows redistribution under your deployment model.
 For ActorCore account/free-content downloads, use `localUseAllowed: true` only after confirming the specific actor terms permit local application use. Keep `redistributionAllowed: false` until redistribution is explicitly permitted.
@@ -40,10 +40,10 @@ Jarvis runtime is local-only and does not pull CDN scripts.
 
 Add this file:
 
-- `desktop/Jarvis.Desktop/Assets/AvatarHost/vendor/model-viewer.min.js`
+- `desktop/Aegis.Desktop/Assets/AvatarHost/vendor/model-viewer.min.js`
 
 Reference:
-- `desktop/Jarvis.Desktop/Assets/AvatarHost/vendor/README.md`
+- `desktop/Aegis.Desktop/Assets/AvatarHost/vendor/README.md`
 
 ## 4) Validate manifests and files
 
@@ -76,7 +76,7 @@ Current state:
 
 Recommended completion:
 
-1. Add local Three.js + VRM runtime files under `desktop/Jarvis.Desktop/Assets/AvatarHost/vendor/`.
+1. Add local Three.js + VRM runtime files under `desktop/Aegis.Desktop/Assets/AvatarHost/vendor/`.
 2. Add a `vrm-runtime.js` adapter in that same folder.
 3. Wire `avatar-host.js` VRM branch to call the adapter and set avatar states.
 

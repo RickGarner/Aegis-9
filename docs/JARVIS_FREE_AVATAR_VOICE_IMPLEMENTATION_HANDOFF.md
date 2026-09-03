@@ -8,7 +8,7 @@ Jarvis now has the first architecture slice of this specification implemented in
 - Versioned C# to JavaScript avatar message protocol for load, state, expression, speech start, and speech stop.
 - JavaScript to C# ready/error messages with native fallback when the runtime or assets are unavailable.
 - Avatar metadata contract using `avatar.json`, with legacy `manifest.json` fallback.
-- Male/female avatar metadata under `desktop/Jarvis.Desktop/Assets/Avatars/`.
+- Male/female avatar metadata under `desktop/Aegis.Desktop/Assets/Avatars/`.
 - Centralized `AvatarService` and persisted avatar/voice/lip-sync settings.
 - Kokoro local speech client scaffolding with graceful failure when the runtime is not running.
 - Asset validation script for metadata, licensing flags, supported formats, and model file presence.

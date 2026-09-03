@@ -66,7 +66,7 @@ Set-ExecutionPolicy -Scope Process Bypass
 ```powershell
 .\deployment\windows\Test-Aegis9Workstation.ps1
 py -m pytest backend/tests -q
-dotnet build Jarvis.sln
+dotnet build Aegis-9.sln
 ```
 
 ## Restore Git history without GitHub
@@ -92,7 +92,7 @@ retains prior commits and recovery branches. Copy only a destination-specific
 Cloning the pushed branch is simpler and avoids copying source twice:
 
 ```powershell
-git clone --branch feature/workflow-automation-monitoring-2026-08-31 https://github.com/RickGarner/Jarvis-Desktop.git
+git clone --branch feature/workflow-automation-monitoring-2026-08-31 https://github.com/RickGarner/Aegis-9.git
 Set-Location Jarvis-Desktop
 git status --short --branch
 ```

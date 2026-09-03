@@ -6,13 +6,13 @@ The native fallback avatar remains in the WPF command center, and Jarvis now inc
 
 Implemented in this repository:
 
-- 3D host window: `desktop/Jarvis.Desktop/AvatarWindow.xaml`
-- Avatar contract, manifest, and loader: `desktop/Jarvis.Desktop/AvatarDefinition.cs`, `desktop/Jarvis.Desktop/AvatarManifest.cs`, `desktop/Jarvis.Desktop/AvatarAssetCatalog.cs`
-- Avatar orchestration: `desktop/Jarvis.Desktop/IAvatarService.cs`, `desktop/Jarvis.Desktop/AvatarService.cs`, `desktop/Jarvis.Desktop/AvatarProtocol.cs`, `desktop/Jarvis.Desktop/AvatarVisualState.cs`
-- Speech scaffolding: `desktop/Jarvis.Desktop/ISpeechService.cs`, `desktop/Jarvis.Desktop/KokoroSpeechService.cs`, `desktop/Jarvis.Desktop/SpeechRequest.cs`, `desktop/Jarvis.Desktop/SpeechResult.cs`
-- Local web host assets: `desktop/Jarvis.Desktop/Assets/AvatarHost/`
-- Vendored GLB renderer: `desktop/Jarvis.Desktop/Assets/AvatarHost/vendor/model-viewer.min.js` version 4.0.0
-- Profile metadata: `desktop/Jarvis.Desktop/Assets/Avatars/male/avatar.json`, `desktop/Jarvis.Desktop/Assets/Avatars/female/avatar.json`, with legacy `manifest.json` fallback
+- 3D host window: `desktop/Aegis.Desktop/AvatarWindow.xaml`
+- Avatar contract, manifest, and loader: `desktop/Aegis.Desktop/AvatarDefinition.cs`, `desktop/Aegis.Desktop/AvatarManifest.cs`, `desktop/Aegis.Desktop/AvatarAssetCatalog.cs`
+- Avatar orchestration: `desktop/Aegis.Desktop/IAvatarService.cs`, `desktop/Aegis.Desktop/AvatarService.cs`, `desktop/Aegis.Desktop/AvatarProtocol.cs`, `desktop/Aegis.Desktop/AvatarVisualState.cs`
+- Speech scaffolding: `desktop/Aegis.Desktop/ISpeechService.cs`, `desktop/Aegis.Desktop/KokoroSpeechService.cs`, `desktop/Aegis.Desktop/SpeechRequest.cs`, `desktop/Aegis.Desktop/SpeechResult.cs`
+- Local web host assets: `desktop/Aegis.Desktop/Assets/AvatarHost/`
+- Vendored GLB renderer: `desktop/Aegis.Desktop/Assets/AvatarHost/vendor/model-viewer.min.js` version 4.0.0
+- Profile metadata: `desktop/Aegis.Desktop/Assets/Avatars/male/avatar.json`, `desktop/Aegis.Desktop/Assets/Avatars/female/avatar.json`, with legacy `manifest.json` fallback
 - Operator controls: settings for selected avatar/profile, voice IDs, lip-sync, and host toggle, plus Ctrl+click open from the avatar panel
 - Startup behavior: the saved selected avatar is loaded into the main command-center presence panel after initial sign-in/startup and remains active until the user saves a different selection
 
@@ -33,7 +33,7 @@ Jarvis will use licensed local 3D male and female humanoid avatars. The current 
 ## Planned local layout
 
 ```text
-desktop/Jarvis.Desktop/Assets/Avatars/
+desktop/Aegis.Desktop/Assets/Avatars/
     male/
         jarvis-male.glb or jarvis-male.vrm
         avatar.json
@@ -68,7 +68,7 @@ Do not add model files until the license explicitly permits local application us
 
 Current host notes:
 
-- GLB/GLTF preview is supported after `desktop/Jarvis.Desktop/Assets/AvatarHost/vendor/model-viewer.min.js` is provided locally.
+- GLB/GLTF preview is supported after `desktop/Aegis.Desktop/Assets/AvatarHost/vendor/model-viewer.min.js` is provided locally.
 - VRM files are detected but currently require a dedicated runtime extension; the host shows a fallback message until that adapter is added.
 - The host only loads profiles whose `avatar.json` or fallback manifest explicitly sets `redistributionAllowed: true`.
 - Development assets may use `localUseAllowed: true` while `redistributionAllowed` remains false; this keeps account-restricted ActorCore content local and prevents accidental packaging.

@@ -1,0 +1,46 @@
+<Window x:Class="Aegis.Desktop.MonitorWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Title="A.E.G.I.S.-9 · Operations Monitor" Width="1450" Height="820" MinWidth="900" MinHeight="560" WindowStartupLocation="CenterOwner" Background="#030A0F">
+  <Window.Resources>
+    <SolidColorBrush x:Key="Panel" Color="#B20A1821"/><SolidColorBrush x:Key="Raised" Color="#D0112733"/><SolidColorBrush x:Key="Line" Color="#6638C9EA"/><SolidColorBrush x:Key="Text" Color="#D9F7FF"/><SolidColorBrush x:Key="Muted" Color="#6A9BA9"/><SolidColorBrush x:Key="Green" Color="#4DE7FF"/><SolidColorBrush x:Key="Amber" Color="#FFB84D"/>
+    <Style TargetType="TextBlock"><Setter Property="Foreground" Value="{StaticResource Text}"/></Style>
+    <Style TargetType="Button"><Setter Property="Foreground" Value="{StaticResource Green}"/><Setter Property="Background" Value="{StaticResource Raised}"/><Setter Property="BorderBrush" Value="{StaticResource Line}"/><Setter Property="Padding" Value="12,7"/><Setter Property="Margin" Value="0,0,8,0"/><Setter Property="Cursor" Value="Hand"/><Setter Property="FontWeight" Value="SemiBold"/></Style>
+    <Style TargetType="ListView"><Setter Property="Background" Value="Transparent"/><Setter Property="BorderThickness" Value="0"/><Setter Property="Foreground" Value="{StaticResource Text}"/></Style>
+  </Window.Resources>
+  <Grid Margin="24">
+    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+    <DockPanel Grid.Row="0" Margin="0,0,0,16"><StackPanel DockPanel.Dock="Left"><TextBlock Text="OPERATIONS / LIVE TELEMETRY" Foreground="{StaticResource Muted}" FontSize="9"/><TextBlock x:Name="WindowTitleText" Text="MONITOR" FontSize="28" FontWeight="Light" Foreground="{StaticResource Green}" Margin="0,4,0,0"/><TextBlock x:Name="WindowSubtitleText" Text="A.E.G.I.S.-9 GUARDIAN MONITOR" Foreground="{StaticResource Muted}" FontSize="10" Margin="0,4,0,0"/></StackPanel><StackPanel DockPanel.Dock="Right" Orientation="Horizontal"><TextBlock x:Name="ConnectionText" Text="CONNECTING" Foreground="{StaticResource Amber}" FontWeight="Bold" VerticalAlignment="Center" Margin="0,0,12,0"/><Button Content="REFRESH TELEMETRY" Click="RefreshButton_Click"/></StackPanel></DockPanel>
+    <Border Grid.Row="1" Background="{StaticResource Panel}" BorderBrush="{StaticResource Line}" BorderThickness="1" Padding="12" Margin="0,0,0,14"><DockPanel><TextBlock x:Name="DetailText" Text="Loading live monitor data." Foreground="{StaticResource Muted}" TextWrapping="Wrap"/><TextBlock x:Name="LastUpdatedText" DockPanel.Dock="Right" Text="--" Foreground="{StaticResource Muted}" Margin="16,0,0,0"/></DockPanel></Border>
+    <Grid Grid.Row="2">
+      <Grid x:Name="MoveItView">
+        <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="220"/></Grid.RowDefinitions>
+        <Border Background="{StaticResource Panel}" BorderBrush="{StaticResource Line}" BorderThickness="1" Padding="12" Margin="0,0,0,12">
+          <ListView x:Name="MoveItTasksList"><ListView.View><GridView>
+            <GridViewColumn Header="Task name" DisplayMemberBinding="{Binding Name}" Width="245"/><GridViewColumn Header="Description" DisplayMemberBinding="{Binding Description}" Width="250"/><GridViewColumn Header="Schedule" DisplayMemberBinding="{Binding ScheduleStatus}" Width="90"/><GridViewColumn Header="Last run" DisplayMemberBinding="{Binding LastRunAt}" Width="150"/><GridViewColumn Header="Last run status" DisplayMemberBinding="{Binding LastRunStatus}" Width="120"/><GridViewColumn Header="Most recent log" DisplayMemberBinding="{Binding LogUrl}" Width="250"/>
+          </GridView></ListView.View></ListView>
+        </Border>
+        <Border Grid.Row="1" Background="{StaticResource Panel}" BorderBrush="{StaticResource Line}" BorderThickness="1" Padding="12">
+          <DockPanel><TextBlock Text="TASK LOGS · LAST 5 DAYS" FontSize="14" FontWeight="Bold" DockPanel.Dock="Top" Margin="0,0,0,10"/><ListView x:Name="MoveItLogsList"><ListView.View><GridView>
+            <GridViewColumn Header="Task" DisplayMemberBinding="{Binding TaskName}" Width="260"/><GridViewColumn Header="Captured" DisplayMemberBinding="{Binding CapturedAt}" Width="170"/><GridViewColumn Header="Status" DisplayMemberBinding="{Binding Status}" Width="120"/><GridViewColumn Header="Log" DisplayMemberBinding="{Binding LogUrl}" Width="400"/>
+          </GridView></ListView.View></ListView></DockPanel>
+        </Border>
+      </Grid>
+      <Grid x:Name="ServerView" Visibility="Collapsed">
+        <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+        <Border Background="{StaticResource Panel}" BorderBrush="{StaticResource Line}" BorderThickness="1" Padding="12"><ListView x:Name="ServersList"><ListView.View><GridView>
+          <GridViewColumn Header="Server" DisplayMemberBinding="{Binding Name}" Width="150"/><GridViewColumn Header="Address" DisplayMemberBinding="{Binding Address}" Width="125"/><GridViewColumn Header="Total disk" DisplayMemberBinding="{Binding TotalDisk}" Width="110"/><GridViewColumn Header="Free disk" DisplayMemberBinding="{Binding FreeDisk}" Width="110"/><GridViewColumn Header="Threshold" DisplayMemberBinding="{Binding ThresholdStatus}" Width="100"/><GridViewColumn Header="CPU" DisplayMemberBinding="{Binding Cpu}" Width="90"/><GridViewColumn Header="Memory" DisplayMemberBinding="{Binding Memory}" Width="90"/><GridViewColumn Header="Automatic services" DisplayMemberBinding="{Binding AutomaticServices}" Width="150"/><GridViewColumn Header="Status" DisplayMemberBinding="{Binding Status}" Width="150"/>
+        </GridView></ListView.View></ListView></Border>
+        <TextBlock Grid.Row="1" Text="Automatic services: Good when all automatic-start services are running; Needs Attention when any are stopped. Remote Windows hosts use read-only CIM with the operator's current domain identity." Foreground="{StaticResource Muted}" FontSize="10" Margin="0,12,0,0" TextWrapping="Wrap"/>
+      </Grid>
+      <Grid x:Name="FreeFlowView" Visibility="Collapsed">
+        <Border Background="{StaticResource Panel}" BorderBrush="{StaticResource Line}" BorderThickness="1" Padding="12"><ListView x:Name="FreeFlowServersList"><ListView.View><GridView>
+          <GridViewColumn Header="Server" DisplayMemberBinding="{Binding Name}" Width="190"/><GridViewColumn Header="Role" DisplayMemberBinding="{Binding Role}" Width="120"/><GridViewColumn Header="Web portal" DisplayMemberBinding="{Binding WebUrl}" Width="360"/><GridViewColumn Header="HTTP" DisplayMemberBinding="{Binding HttpStatus}" Width="85"/><GridViewColumn Header="Latency ms" DisplayMemberBinding="{Binding ResponseMs}" Width="100"/><GridViewColumn Header="Status" DisplayMemberBinding="{Binding Status}" Width="120"/><GridViewColumn Header="Detail" DisplayMemberBinding="{Binding Detail}" Width="380"/>
+        </GridView></ListView.View></ListView></Border>
+      </Grid>
+      <Grid x:Name="QualysView" Visibility="Collapsed">
+        <Border Background="{StaticResource Panel}" BorderBrush="{StaticResource Line}" BorderThickness="1" Padding="12"><ListView x:Name="QualysFindingsList"><ListView.View><GridView>
+          <GridViewColumn Header="Priority" DisplayMemberBinding="{Binding SeverityLabel}" Width="100"/><GridViewColumn Header="Severity" DisplayMemberBinding="{Binding Severity}" Width="80"/><GridViewColumn Header="Asset" DisplayMemberBinding="{Binding Asset}" Width="220"/><GridViewColumn Header="QID" DisplayMemberBinding="{Binding Qid}" Width="90"/><GridViewColumn Header="Status" DisplayMemberBinding="{Binding Status}" Width="110"/><GridViewColumn Header="First found" DisplayMemberBinding="{Binding FirstFoundAt}" Width="180"/><GridViewColumn Header="Last found" DisplayMemberBinding="{Binding LastFoundAt}" Width="180"/><GridViewColumn Header="Title" DisplayMemberBinding="{Binding Title}" Width="350"/>
+        </GridView></ListView.View></ListView></Border>
+      </Grid>
+    </Grid>
+    <StatusBar Grid.Row="3" Background="Transparent" Foreground="{StaticResource Muted}" Margin="0,14,0,0"><StatusBarItem><TextBlock Text="Actions and email controls remain approval/configuration gated."/></StatusBarItem><StatusBarItem HorizontalContentAlignment="Right"><TextBlock Text="Movable · resizable · scrollable" Foreground="{StaticResource Green}"/></StatusBarItem></StatusBar>
+  </Grid>
+</Window>

@@ -27,8 +27,8 @@ The script also installs or verifies Python 3.11, the .NET 8 SDK/Desktop runtime
 3. Clone the repository and check out the synchronized branch:
 
    ```powershell
-   git clone https://github.com/RickGarner/Jarvis-Desktop.git
-   cd Jarvis-Desktop
+   git clone https://github.com/RickGarner/Aegis-9.git
+   cd Aegis-9
    git switch feature/cinematic-jarvis-ui
    ```
 
@@ -103,10 +103,10 @@ The directory ACL is restricted to SYSTEM, Administrators, and the installing ac
 .\deployment\windows\Test-Aegis9Workstation.ps1
 ```
 
-The verifier checks all four services and endpoints, builds `Jarvis.sln`, and runs the backend unit tests. Then launch:
+The verifier checks all four services and endpoints, builds `Aegis-9.sln`, and runs the backend unit tests. Then launch:
 
 ```powershell
-.\desktop\Jarvis.Desktop\bin\Debug\net8.0-windows\Jarvis.Desktop.exe
+.\desktop\Aegis.Desktop\bin\Debug\net8.0-windows\Aegis.Desktop.exe
 ```
 
 ## Troubleshooting
