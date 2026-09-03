@@ -11,6 +11,10 @@ Aegis Developer Studio is the separate former WolfForge/VSCode repository at
 `RickGarner/Aegis-Developer-Studio`. Shared contracts and the multi-root
 workspace live in the private `RickGarner/Aegis-Platform` repository.
 
+The canonical local layout is now three real sibling clones under `D:\Aegis`.
+Follow `docs/CANONICAL-LOCAL-LAYOUT-MIGRATION.md`; retain former checkout folders
+until the new clones pass acceptance.
+
 ## Critical current-version notice — 2026-08-31
 
 The canonical A.E.G.I.S.-9 application is currently developed on
