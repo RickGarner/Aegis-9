@@ -1,204 +1,209 @@
-# Jarvis Roadmap
+# A.E.G.I.S.-9 and Aegis Developer Studio Roadmap
 
-## Vision
+**Updated:** 2026-09-02
 
-Create a local-first personal assistant inspired by the Jarvis concept: a voice-enabled, UI-driven, research-capable, task-oriented assistant that runs primarily on local hardware and local models while still supporting safe automation and internet-based research when needed.
+**A.E.G.I.S.-9 branch:** `feature/workflow-automation-monitoring-2026-08-31`
 
-## Guiding Principles
+**Developer Studio branch:** `development-v2` in the separate `RickGarner/VSCode` repository
 
-- Local first
-- Full UI command center
-- Safety over autonomy
-- Tool-driven execution rather than pure chat
-- Build in phases, not giant speculative design
-- Keep the project evolvable without over-engineering early
+## Product boundary
 
-## Phase 1: Local Assistant Shell
+A.E.G.I.S.-9 is the local-first Windows command center for assistant interaction,
+operations monitoring, governed workflows, approvals, and audit. Aegis Developer
+Studio is the separate Code - OSS-based IDE currently branded WolfForge. FERAL is
+the local coding/reasoning assistant within the development experience.
 
-**Status: implemented and verified on 2026-08-20.**
+- **Jarvis-Desktop** owns the cinematic UI, backend, monitoring, workflows,
+  governance, audit, and Developer Studio launcher/control surface.
+- **VSCode/WolfForge** owns the editor, terminal, debugger, repository-aware Local
+  AI, project planning, editing, build, and test experience.
+- Cross-product features must use a versioned, authenticated local bridge. The
+  repositories remain separate and must not duplicate one another's core UI.
 
-### Goal
-Create a working local assistant that can respond from a local model and interact with a simple UI.
+Evidence and historical detail are in
+`docs/CROSS-PROJECT-DEVELOPMENT-STATUS-2026-09-02.md`.
 
-### Deliverables
-- project skeleton
-- backend API service
-- frontend shell
-- model connection to Ollama or LM Studio
-- base chat interface
-- local logging
-- SQLite persistence and workflow supervision control plane
+## Status legend
 
-### Success criteria
-- A user can open the UI
-- A prompt can be sent to the local model
-- The response is visible in the interface
-- The app works without commercial token-based APIs
-- The dashboard restores local state and shows model and workflow status
+- **Complete:** Implemented and supported by current evidence.
+- **Acceptance pending:** Implemented but not fully verified live.
+- **Partial:** A working foundation exists; material requirements remain.
+- **Configuration blocked:** Site-specific endpoints, credentials, policy, or
+  infrastructure are still required.
+- **Not started:** No material implementation exists.
 
-## Phase 2: File Intake and Workspace
+## Phase 1 — Local assistant foundation
 
-**Status: next implementation milestone.**
+**Status: Complete.**
 
-### Goal
-Let the user drop files and work with them in the assistant context.
+Delivered: FastAPI backend, native .NET 8 WPF cinematic command center,
+provider-neutral local chat through LM Studio/Ollama/LiteLLM-compatible endpoints,
+health and fallback routing, SQLite persistence, session restoration, logs,
+backend auto-start, and readiness handling.
 
-### Deliverables
-- drag-and-drop file upload
-- file metadata extraction
-- text extraction for supported formats
-- saved workspace items
-- file attachment to chat and tasks
+Exit evidence: local chat works without requiring a paid cloud model; the current
+backend tests and WPF build pass.
 
-### Success criteria
-- User can drag files into the UI
-- The system recognizes and stores uploaded content
-- The assistant can reference and summarize uploaded files
+## Phase 2 — File intake and workspace context
 
-## Phase 3: Research and Web Tools
+**Status: Complete for local files; URL intake remains in Phase 3.**
 
-### Goal
-Allow internet-aware tasks through controlled tools instead of direct model internet access.
+Delivered: drag/drop and picker upload, size/type controls, metadata and bounded
+text extraction for TXT, Markdown, CSV, JSON, logs, PDF, and DOCX, durable
+storage, preview/deletion, and attachment to chat and workflow requests.
 
-### Deliverables
-- search tool
-- browser automation or content fetcher
-- summarization of search results
-- source tracking and research panel
-- UI for research workspace
+Remaining: controlled webpage/URL capture.
 
-### Success criteria
-- User can ask for research
-- The assistant can collect sources and summarize findings
-- The system shows what tools were used and why
+## Phase 3 — Controlled research and web tools
 
-## Phase 4: Voice Interaction
+**Status: Not started.**
 
-### Goal
-Support speech input and output for a more natural assistant experience.
+Required: approved search, bounded page fetching, source/citation tracking,
+research workspace and saved sessions, model/tool attribution, and a permission
+model before any browser automation.
 
-### Deliverables
-- push-to-talk voice input
-- local speech-to-text integration
-- local text-to-speech output
-- voice commands for core actions
+Exit criteria: research results show traceable sources and every network/tool
+action is visible and audited.
 
-### Success criteria
-- User can speak to the assistant
-- The assistant can respond verbally
-- Voice mode is usable without always-on ambient listening
+## Phase 4 — Voice and avatar interaction
 
-## Phase 5: Safe Automation
+**Status: Partial.**
 
-**Status: workflow safety foundation implemented; external automation tools pending.**
+Delivered: Windows-local push-to-talk foundation, Faster-Whisper transcription,
+optional wake-phrase foundation, Kokoro client/runtime path, Windows speech
+fallback, cancellable speech, cyber-lupine male/female GLB assets, manifests,
+WebView2 host, visual states, native fallback, and persisted preferences.
 
-### Goal
-Enable desktop and browser automation with guardrails.
+Remaining: live microphone/transcription acceptance, Kokoro startup/playback and
+interruption acceptance, approved voice-command routing, mouth/lip synchronization,
+and clean-machine validation of expanded avatar animation/movement assets.
 
-### Deliverables
-- app launching
-- browser automation
-- desktop interactions
-- automation log
-- approval flow for risky actions
-- workflow supervisor queue and lifecycle controls
+## Phase 5 — Operational monitoring
 
-### Success criteria
-- Assistant can complete basic workflows on command
-- High-risk actions require explicit confirmation
-- All actions are logged
-- Active automation is visible and stoppable from the command center
+**Status: Partial; collectors and native windows are implemented.**
 
-## Phase 6: Task Orchestration and Memory
+Delivered:
 
-**Status: workflow queue, lifecycle, monitor capacity, managed views, and display reconciliation are implemented; planning/memory features remain pending.**
+- MoveIT task catalog and report-based run history with recovery-aware alerts
+- local/remote Windows CPU, memory, disk, filesystem, and service checks
+- FreeFlow checks for `BSOXERALB001` primary and `BSOXERALB002` secondary
+- severity-first read-only Qualys collector foundation
+- durable, deduplicated alerts
 
-### Goal
-Turn the app from a chat tool into a task-oriented assistant.
+Remaining:
 
-### Deliverables
-- task queue
-- workflow planning
-- short-term memory
-- long-term preference memory
-- multi-step task execution
-- monitor-aware managed workflow windows, capped at six
+- decide whether FreeFlow HTTP 401 protected-route reachability is sufficient or
+  supply an authenticated application/API transaction
+- configure Qualys module, URL, read-only authentication, asset scope,
+  prioritization, cadence, and recipients
+- accept MoveIT alert policy and managed service credentials
+- finish approved remote agent/hub connectivity where required
+- add notification delivery outbox, retry, escalation, and visible delivery state
 
-### Success criteria
-- User can assign a multi-step task
-- Assistant can break it into ordered steps
-- Context persists over sessions
-- Approved workflows run within a visible, capacity-bounded supervision model
+Exit criteria: every monitored service has a documented health definition,
+approved read-only credentials, alert/recovery policy, and notification test.
 
-## Phase 7: Multi-Workspace and Advanced UI
+## Phase 6 — Governed daily workflow automation
 
-### Goal
-Support more complex desktop-style workflows.
+**Status: Substantially complete; production hardening remains.**
 
-### Deliverables
-- multi-panel UI
-- multiple workspaces or contexts
-- cross-panel drag behaviors
-- persistent research and task context
+Delivered: workflow dashboard/windows, document-assisted reasoning-model plans,
+split-pane question review, individual answers, re-evaluation notifications,
+final plan approval before independently routed implementation, immutable
+revisions, PowerShell/C# artifacts and test plans, hashes/manifests, bounded
+validation, restricted low-risk PowerShell tests, user and supervisor gates,
+schedules/prerequisites, allowlisted PowerShell production execution, live
+events/history/cancel/retry/recovery, recoverable archive, and portable transfer.
 
-### Success criteria
-- User can move items and data across workspaces
-- The interface feels like a true command center rather than a chat app
+Remaining: disposable Windows/VM sandbox for C# and external capabilities,
+authenticated supervisor authorization, managed secrets and non-production
+credentials, artifact signing, functional adapters, advanced missed-run and
+compensation policies, delivered notifications, and scheduler/reboot soak tests.
 
-## Phase 8: Security, Stability, and Hardening
+### A.E.G.I.S. ↔ Developer Studio link
 
-### Goal
-Ensure the project is resilient and safe for daily use.
+- Open an approved workflow artifact/revision in Developer Studio.
+- Use Developer Studio for governed review, repair, build, and testing.
+- Return hashes, build/test output, and results to the exact immutable A.E.G.I.S.
+  workflow revision.
+- Never allow an IDE result to bypass A.E.G.I.S. user or supervisor approval.
 
-### Deliverables
-- allowlist/denylist system
-- sandboxing and approved tools
-- audit trail
-- failure recovery logic
-- graceful stop/resume behavior
+## Phase 7 — Safe automation and action catalog
 
-### Success criteria
-- Assistant behaves predictably under failure
-- High-risk actions are blocked or require confirmation
-- The app remains usable over time
+**Status: Partial.**
 
-## Phase 9: Aegis Developer Studio
+Delivered: approvals, audit, workflow permission/action enforcement, safe
+pause/stop/recovery, and the specific Developer Studio launch path.
 
-**Status: approved and planned. Existing WolfForge foundation is partially built; Aegis integration has not started.**
+Remaining: general approved app-launch catalog, browser and desktop adapters,
+administrative allowlist/denylist management, generalized artifact generation,
+and rollback/compensation standards.
 
-### Goal
-Launch and supervise a local-first, repository-aware development IDE from an
-Aegis slide-out panel while retaining the full IDE in its own native window.
+Exit criteria: every capability is cataloged, permissioned, logged, stoppable,
+and denied when policy is absent.
 
-### Deliverables
-- Developer Studio slide-out launcher and control surface
-- recent folder/repository selection and persisted session state
-- safe launch/focus/process-status integration with the Code - OSS-based IDE
-- authenticated local status and approval bridge
-- local FERAL coding assistance through LM Studio, Ollama, and LiteLLM
-- governed file operations, code conversion, solution/project scaffolding, and
-  retained build/test evidence
-- product-wide local-only controls and cloud-egress acceptance testing
+## Phase 8 — Orchestration, memory, and advanced workspaces
 
-### Success criteria
-- A user can select a repository and launch Aegis Developer Studio from Aegis
-- the full IDE opens separately while its state remains visible in the slide-out
-- prompts, repository context, and inference remain on approved local endpoints
-- edits, commands, builds, tests, and operational release actions use explicit,
-  auditable approval boundaries
+**Status: Partial.**
 
-See `docs/AEGIS-DEVELOPER-STUDIO.md` for the approved architecture and milestones.
+Delivered: durable workflow/task state and queue, monitor-aware managed windows,
+session/short-term context, and a multi-window operations layout.
 
-## MVP Recommendation
+Remaining: general multi-step assistant orchestration, inspectable and deletable
+long-term preference memory, durable user workspaces, cross-panel context/drag
+behavior, and persistent research/task context.
 
-The first real milestone should include:
-- local assistant shell
-- full dashboard UI
-- drag/drop file support
-- file workspace
-- research panel
-- task queue
-- approval flow
-- local voice prototype
+## Phase 9 — Aegis Developer Studio
 
-This offers the best balance of functionality and risk for a personal project.
+**Status: In progress. Launcher implemented; runtime acceptance and bridge pending.**
+
+WolfForge already provides a branded Code - OSS app; Local AI through Ollama, LM
+Studio, LiteLLM, dual and custom providers; capability routing; repository-aware
+plan/implement/review/test roles; approved edits; repository/project maps,
+memory, context, diagnostics, Git/impact/build ownership and symbol tools; project
+plans; proactive suggestions; explicit proceed gates; protected paths; recovery;
+benchmarks; and a release matrix.
+
+A.E.G.I.S. already provides the accepted slide-out panel, repository browsing,
+recent selections, exact-path IDE discovery, selected-repository launch,
+process state, and focus/reuse logic.
+
+Remaining milestones:
+
+1. Live-accept launch/focus/reuse with the `development-v2` IDE build.
+2. Add an authenticated local bridge for version, session, repository,
+   provider/model, activity, and approval state.
+3. Add governed rename/move/delete, real project scaffolding/conversion,
+   build/test evidence, and workflow handoff.
+4. Complete product-wide Local-Only Mode, telemetry/auth audit, outbound policy,
+   and a blocked-cloud-egress acceptance test.
+5. Validate packaging and multi-computer setup, then deliberately migrate the
+   WolfForge identity to Aegis Developer Studio.
+
+## Phase 10 — Security, stability, packaging, and release
+
+**Status: Partial.**
+
+Delivered foundation: approvals, audits, hashes, manifests, protected paths,
+default-deny prerequisites, cancellation/retry/recovery, WolfForge Local AI
+endpoint filtering, A.E.G.I.S. workstation bootstrap, and a stable WolfForge v1
+recovery line plus v2 track.
+
+Remaining: bridge threat model, authenticated roles, managed secrets, signing,
+disposable isolation, product-wide egress enforcement, release criteria, full UI
+regression/performance/soak testing, clean-machine packaging, backup/restore, and
+database migration validation.
+
+No production-ready claim should be made until external integrations, privacy,
+workflow isolation, authorization, packaging, and recovery pass documented tests.
+
+## Current execution order
+
+1. Live-accept the Developer Studio launcher.
+2. Implement the read-only authenticated A.E.G.I.S./IDE status bridge.
+3. Complete Qualys, FreeFlow, MoveIT, server, and notification acceptance.
+4. Add workflow sandboxing, authenticated roles, managed secrets, and signing.
+5. Connect Developer Studio build/test evidence to immutable A.E.G.I.S. workflows.
+6. Finish WolfForge agent/MCP evidence, project execution, and Local-Only controls.
+7. Resume research, broader automation, preference memory, advanced workspaces,
+   and final voice/lip-sync acceptance.
