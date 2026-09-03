@@ -104,6 +104,6 @@ public sealed class SpeechOptions
 
 public sealed class DeveloperStudioOptions
 {
-    public string FoundationPath { get; set; } = @"D:\development\vscode";
+    public string FoundationPath { get; set; } = @"D:\Aegis\Aegis-Developer-Studio";
     public string ExecutableRelativePath { get; set; } = @".build\electron\Aegis Developer Studio.exe";
 }
