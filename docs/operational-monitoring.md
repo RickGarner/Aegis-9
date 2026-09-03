@@ -1,5 +1,13 @@
 # FreeFlow Core and Qualys monitoring handoff
 
+## Unified Operations Monitoring Center direction — 2026-09-03
+
+These collectors and their specialized windows will feed a separate,
+movable/resizable Operations Monitoring Center. They are not being replaced or
+merged internally. The center will normalize target health, collector health,
+alerts, workflow/schedule state, and navigation while retaining source-native
+evidence and failure detail. See `OPERATIONS-MONITORING-CENTER-PLAN.md`.
+
 ## Implemented foundation
 
 A.E.G.I.S.-9 now exposes dedicated cinematic Operations windows for Xerox

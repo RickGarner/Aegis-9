@@ -1,6 +1,6 @@
 # A.E.G.I.S.-9 and Aegis Developer Studio Implementation Checklist
 
-**Updated:** 2026-09-02
+**Updated:** 2026-09-03
 
 `[x]` means implemented with current evidence. `[ ]` includes incomplete,
 configuration-blocked, or live-acceptance work. Cross-product items are labeled
@@ -61,6 +61,22 @@ configuration-blocked, or live-acceptance work. Cross-product items are labeled
 - [x] Native MoveIT, Server, FreeFlow, and Qualys windows.
 - [x] Read-only configuration-driven collectors and deduplicated alerts.
 - [x] Local/remote Windows CPU, memory, disk, filesystem, and service checks.
+- [x] Approve the separate movable/resizable Operations Monitoring Center
+  direction and document its contracts, increments, safety, and acceptance plan.
+- [ ] Implement the feature-flagged native Monitoring Center window shell.
+- [ ] Add normalized monitor, resource, observation, alert, and collector-health
+  contracts plus aggregation endpoints.
+- [ ] Aggregate MoveIT, Server, FreeFlow, and Qualys without replacing their
+  specialized windows or collectors.
+- [ ] Add workflow, approval, prerequisite, and schedule status.
+- [ ] Add A.E.G.I.S. backend, provider, voice/runtime, and dependency health.
+- [ ] Add authenticated Developer Studio/bridge status.
+- [ ] Persist validated window bounds, layout mode, filters, sorting, and
+  selection across monitor-topology changes.
+- [ ] Add incident acknowledgement, assignment, escalation, recovery, and
+  notification-delivery state.
+- [ ] Complete accessibility, performance, stale-data, failure-isolation, and
+  large-inventory tests.
 - [ ] Complete approved remote agent/hub connectivity for all production hosts.
 - [ ] Add notification outbox, retry, escalation, and delivery state.
 - [ ] Validate SMTP/recipient policy and managed secret storage.

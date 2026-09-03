@@ -1,6 +1,6 @@
 # A.E.G.I.S.-9 and Aegis Developer Studio Roadmap
 
-**Updated:** 2026-09-02
+**Updated:** 2026-09-03
 
 **A.E.G.I.S.-9 branch:** `feature/workflow-automation-monitoring-2026-08-31`
 
@@ -13,9 +13,9 @@ operations monitoring, governed workflows, approvals, and audit. Aegis Developer
 Studio is the separate Code - OSS-based IDE currently branded WolfForge. FERAL is
 the local coding/reasoning assistant within the development experience.
 
-- **Jarvis-Desktop** owns the cinematic UI, backend, monitoring, workflows,
+- **A.E.G.I.S.-9** owns the cinematic UI, backend, monitoring, workflows,
   governance, audit, and Developer Studio launcher/control surface.
-- **VSCode/WolfForge** owns the editor, terminal, debugger, repository-aware Local
+- **Aegis Developer Studio** owns the editor, terminal, debugger, repository-aware Local
   AI, project planning, editing, build, and test experience.
 - Cross-product features must use a versioned, authenticated local bridge. The
   repositories remain separate and must not duplicate one another's core UI.
@@ -82,6 +82,12 @@ and clean-machine validation of expanded avatar animation/movement assets.
 
 **Status: Partial; collectors and native windows are implemented.**
 
+**New approved direction:** Add a separate movable, resizable, expandable
+Operations Monitoring Center as the one-stop monitoring space. It will aggregate
+normalized target health, collector health, alerts, workflows, schedules,
+A.E.G.I.S. services, and authenticated Developer Studio status while preserving
+all specialized windows. See `docs/OPERATIONS-MONITORING-CENTER-PLAN.md`.
+
 Delivered:
 
 - MoveIT task catalog and report-based run history with recovery-aware alerts
@@ -91,6 +97,13 @@ Delivered:
 - durable, deduplicated alerts
 
 Remaining:
+
+- implement the read-only Operations Monitoring Center shell, normalized
+  monitor/observation/alert contracts, layout persistence, and detail navigation
+- aggregate existing monitors, workflows, schedules, backend/providers, and
+  collector health without rewriting the specialized collectors
+- adopt the Enterprise AI operations-catalog concepts only after the initial
+  Aegis-native aggregation surface is accepted
 
 - decide whether FreeFlow HTTP 401 protected-route reachability is sufficient or
   supply an authenticated application/API transaction
@@ -199,11 +212,18 @@ workflow isolation, authorization, packaging, and recovery pass documented tests
 
 ## Current execution order
 
-1. Live-accept the Developer Studio launcher.
-2. Implement the read-only authenticated A.E.G.I.S./IDE status bridge.
-3. Complete Qualys, FreeFlow, MoveIT, server, and notification acceptance.
-4. Add workflow sandboxing, authenticated roles, managed secrets, and signing.
-5. Connect Developer Studio build/test evidence to immutable A.E.G.I.S. workflows.
-6. Finish WolfForge agent/MCP evidence, project execution, and Local-Only controls.
-7. Resume research, broader automation, preference memory, advanced workspaces,
+1. Build the read-only Operations Monitoring Center shell and normalized
+   monitoring contracts.
+2. Aggregate existing monitors, workflow/schedule state, and collector health.
+3. Implement the read-only authenticated A.E.G.I.S./Developer Studio bridge and
+   display its status in the Monitoring Center.
+4. Add authenticated roles, tamper-evident audit, global kill switch, grounded
+   output policy, and the default-deny adapter registry.
+5. Complete Qualys, FreeFlow, MoveIT, server, and notification acceptance; then
+   adopt approved Enterprise operations-catalog and monitoring enhancements.
+6. Add workflow sandboxing, managed secrets, and signing.
+7. Connect Developer Studio build/test evidence to immutable A.E.G.I.S. workflows.
+8. Finish Developer Studio agent/MCP evidence, project execution, and Local-Only controls.
+9. Add the managed knowledge/RAG increment after its architecture decision.
+10. Resume research, broader automation, preference memory, advanced workspaces,
    and final voice/lip-sync acceptance.

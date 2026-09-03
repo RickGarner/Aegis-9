@@ -1,5 +1,14 @@
 # A.E.G.I.S.-9 and Aegis Developer Studio: Development Status
 
+> **2026-09-03 planning addendum:** A.E.G.I.S.-9 will add a separate movable,
+> resizable Operations Monitoring Center that aggregates existing specialized
+> monitors, alerts, workflows/schedules, runtime health, collector health, and
+> authenticated Developer Studio status. The Enterprise AI Portal is an
+> independent donor only. Detailed current plans are
+> `docs/OPERATIONS-MONITORING-CENTER-PLAN.md` and the Enterprise evaluation and
+> selective-adoption documents in `D:\Aegis\Aegis-Platform\docs`. This addendum
+> supersedes older execution-order statements where they conflict.
+
 **Audit date:** 2026-09-02  
 **Purpose:** A single, evidence-based continuation guide covering the Jarvis-Desktop/A.E.G.I.S.-9 application and the separate VS Code/WolfForge project that is becoming Aegis Developer Studio.
 

@@ -1,5 +1,20 @@
 # A.E.G.I.S.-9 Handoff
 
+## Operations Monitoring Center and selective adoption — 2026-09-03
+
+A.E.G.I.S.-9 will add a separate movable, resizable, expandable Operations
+Monitoring Center as its one-stop monitoring space. It will aggregate MoveIT,
+Windows servers, FreeFlow, Qualys, workflows/schedules, A.E.G.I.S. runtime
+health, collector health, and authenticated Developer Studio status. Existing
+specialized windows remain authoritative for detail and platform-specific
+actions. Read `docs/OPERATIONS-MONITORING-CENTER-PLAN.md` before implementing it.
+
+The separately cloned `EnterpriseAI-Portal` is a donor/reference system only.
+The evaluation and selective-adoption plan live in the Aegis Platform repo.
+No Enterprise UI, database, secret, runtime, project reference, or build
+dependency is approved. Security, role authorization, audit integrity, kill
+controls, and adapter policy must land before write-capable adoption.
+
 ## Repository and product rename — 2026-09-02
 
 The GitHub repository is now `RickGarner/Aegis-9`. The solution and WPF project

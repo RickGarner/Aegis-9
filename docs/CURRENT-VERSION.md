@@ -1,5 +1,14 @@
 # A.E.G.I.S.-9 canonical version
 
+## Planning update — 2026-09-03
+
+A separate movable/resizable Operations Monitoring Center is now approved as
+the unified read-only monitoring and navigation surface. Implementation has not
+started. Existing MoveIT, Server, FreeFlow, Qualys, and Workflow windows remain
+authoritative. Read `docs/OPERATIONS-MONITORING-CENTER-PLAN.md`, then the
+Enterprise evaluation and selective-adoption plan in the sibling
+`Aegis-Platform` repository before changing monitoring architecture.
+
 ## Read this first
 
 As of 2026-08-31, active development is on the Git branch:
