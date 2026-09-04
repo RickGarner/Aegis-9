@@ -193,6 +193,9 @@ public partial class OperationsMonitoringCenterWindow : Window
 
     private async void RefreshButton_Click(object sender, RoutedEventArgs e) => await RefreshAsync();
 
+    private void NotificationsButton_Click(object sender, RoutedEventArgs e)
+        => new NotificationHistoryWindow { Owner = this }.Show();
+
     private void LayoutModeComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (!_layoutReady) return;

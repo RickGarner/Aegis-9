@@ -1,0 +1,26 @@
+<Window x:Class="Aegis.Desktop.NotificationHistoryWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="A.E.G.I.S.-9 · Workflow Notification History"
+        Width="1080" Height="620" MinWidth="820" MinHeight="460"
+        WindowStartupLocation="CenterOwner" Background="#030A0F" Foreground="#D9F7FF">
+  <Grid Margin="22">
+    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+    <DockPanel Margin="0,0,0,14">
+      <StackPanel><TextBlock Text="WORKFLOW DELIVERY OUTBOX" Foreground="#4DE7FF" FontSize="24" FontWeight="Light"/><TextBlock Text="Read-only delivery history. Only terminally failed records may be explicitly requeued." Foreground="#6A9BA9" Margin="0,4,0,0"/></StackPanel>
+      <Button DockPanel.Dock="Right" Content="REFRESH" Click="RefreshButton_Click" Background="#D0112733" Foreground="#4DE7FF" BorderBrush="#6638C9EA" Padding="12,7"/>
+    </DockPanel>
+    <ListView x:Name="NotificationsList" Grid.Row="1" Background="Transparent" Foreground="#D9F7FF" BorderBrush="#6638C9EA">
+      <ListView.View><GridView>
+        <GridViewColumn Header="Status" DisplayMemberBinding="{Binding Status}" Width="90"/>
+        <GridViewColumn Header="Subject" DisplayMemberBinding="{Binding Subject}" Width="270"/>
+        <GridViewColumn Header="Attempts" DisplayMemberBinding="{Binding Attempts}" Width="75"/>
+        <GridViewColumn Header="Created" DisplayMemberBinding="{Binding CreatedAt}" Width="150"/>
+        <GridViewColumn Header="Sent" DisplayMemberBinding="{Binding SentAt}" Width="150"/>
+        <GridViewColumn Header="Last error" DisplayMemberBinding="{Binding LastError}" Width="250"/>
+        <GridViewColumn Header="Action" Width="90"><GridViewColumn.CellTemplate><DataTemplate><Button Content="RETRY" Tag="{Binding Id}" IsEnabled="{Binding CanRetry}" Click="RetryButton_Click" Background="#D0112733" Foreground="#4DE7FF" BorderBrush="#6638C9EA" Padding="7,3"/></DataTemplate></GridViewColumn.CellTemplate></GridViewColumn>
+      </GridView></ListView.View>
+    </ListView>
+    <TextBlock x:Name="StatusText" Grid.Row="2" Text="NOT LOADED" Foreground="#6A9BA9" Margin="0,12,0,0"/>
+  </Grid>
+</Window>

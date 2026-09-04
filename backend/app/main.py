@@ -25,11 +25,12 @@ from app.monitoring import (
     MonitoringStore,
 )
 from app.operations_monitoring import MonitorDescriptor, OperationsMonitoringSnapshot, OperationsSummary, collect_operations_snapshot
-from app.storage import ApprovalState, FileEntry, JarvisStore, SessionState, Workflow, WorkflowImportResult, WorkflowRun, WorkflowRunEvent, WorkflowTransferPackage, WorkflowTransition
+from app.storage import ApprovalState, FileEntry, JarvisStore, NotificationOutboxItem, SessionState, Workflow, WorkflowImportResult, WorkflowRun, WorkflowRunEvent, WorkflowTransferPackage, WorkflowTransition
 from app.supervisor import TopologyReconciliation, WorkflowCapacity, WorkflowWindowPlacement, get_workflow_capacity
 from app.workflow_execution import WorkflowExecutionError, WorkflowExecutionManager
 from app.workflow_runner import WorkflowTestEvidence, WorkflowTestRunner
 from app.workflow_scheduler import ScheduleError, is_due, prerequisites_met
+from app.workflow_notifications import WorkflowNotificationWorker
 
 
 class ChatRequest(BaseModel):
@@ -195,6 +196,8 @@ async def lifespan(app: FastAPI):
     app.state.store.initialize()
     app.state.store.recover_interrupted_workflow_tests()
     app.state.store.recover_interrupted_workflow_runs()
+    app.state.store.recover_processing_notifications()
+    app.state.workflow_notifications = WorkflowNotificationWorker(app.state.store, settings)
     app.state.workflow_execution = WorkflowExecutionManager(
         app.state.store, settings.workflow_artifact_root, settings.workflow_action_catalog_path,
         settings.workflow_execution_timeout_seconds, settings.workflow_test_output_limit,
@@ -259,14 +262,22 @@ async def lifespan(app: FastAPI):
                     app.state.store.update_workflow_scheduler_status(workflow.id, "blocked", str(error))
                     app.state.store.record_workflow_scheduler_event(workflow.id, f"schedule blocked: {error}", "warning")
 
+    async def workflow_notification_loop() -> None:
+        while True:
+            await asyncio.sleep(15)
+            await asyncio.to_thread(app.state.workflow_notifications.deliver_one)
+
     monitoring_task = asyncio.create_task(monitoring_loop())
     workflow_scheduler_task = asyncio.create_task(workflow_scheduler_loop())
+    workflow_notification_task = asyncio.create_task(workflow_notification_loop())
     app.state.monitoring_task = monitoring_task
     app.state.workflow_scheduler_task = workflow_scheduler_task
+    app.state.workflow_notification_task = workflow_notification_task
     yield
     monitoring_task.cancel()
     workflow_scheduler_task.cancel()
-    await asyncio.gather(monitoring_task, workflow_scheduler_task, return_exceptions=True)
+    workflow_notification_task.cancel()
+    await asyncio.gather(monitoring_task, workflow_scheduler_task, workflow_notification_task, return_exceptions=True)
 
 
 app = FastAPI(title="A.E.G.I.S.-9 API", version="0.1.0", lifespan=lifespan)
@@ -792,6 +803,26 @@ async def list_workflow_run_events(run_id: int, after_sequence: int = 0, store: 
     if store.get_workflow_run(run_id) is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workflow run was not found.")
     return store.get_workflow_run_events(run_id, after_sequence)
+
+
+@app.get("/api/notifications", response_model=list[NotificationOutboxItem])
+async def notification_history(
+    category: str | None = None,
+    limit: int = 100,
+    store: JarvisStore = Depends(get_store),
+) -> list[NotificationOutboxItem]:
+    return store.get_notification_outbox_items(category, limit)
+
+
+@app.post("/api/notifications/{item_id}/retry", response_model=NotificationOutboxItem)
+async def retry_notification(item_id: int, store: JarvisStore = Depends(get_store)) -> NotificationOutboxItem:
+    item = store.retry_notification_outbox_item(item_id)
+    if item is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Only a failed notification can be retried.",
+        )
+    return item
 
 
 @app.post("/api/workflow-runs/{run_id}/cancel", response_model=WorkflowRun)

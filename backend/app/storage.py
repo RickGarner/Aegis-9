@@ -116,6 +116,19 @@ class WorkflowNotificationState(BaseModel):
     sent_at: str | None = None
 
 
+class NotificationOutboxItem(BaseModel):
+    id: int
+    category: str
+    subject: str
+    payload: dict
+    status: str
+    attempts: int
+    available_at: str
+    created_at: str
+    sent_at: str | None = None
+    last_error: str = ""
+
+
 class WorkflowTransferPackage(BaseModel):
     schema_version: int = 1
     exported_at: str
@@ -977,6 +990,90 @@ class JarvisStore:
                     sent_at=row["sent_at"],
                 )
         return states
+
+    def claim_notification_outbox_item(self) -> NotificationOutboxItem | None:
+        with self._connect() as connection:
+            row = connection.execute(
+                """SELECT * FROM notification_outbox
+                WHERE status='pending' AND available_at <= CURRENT_TIMESTAMP
+                ORDER BY id LIMIT 1"""
+            ).fetchone()
+            if row is None:
+                return None
+            updated = connection.execute(
+                "UPDATE notification_outbox SET status='processing',attempts=attempts+1 WHERE id=? AND status='pending'",
+                (row["id"],),
+            )
+            if updated.rowcount != 1:
+                return None
+            claimed = connection.execute("SELECT * FROM notification_outbox WHERE id=?", (row["id"],)).fetchone()
+        values = dict(claimed)
+        values["payload"] = json.loads(values.pop("payload_json") or "{}")
+        return NotificationOutboxItem(**values)
+
+    def complete_notification_outbox_item(self, item_id: int) -> bool:
+        with self._connect() as connection:
+            updated = connection.execute(
+                """UPDATE notification_outbox SET status='sent',sent_at=CURRENT_TIMESTAMP,last_error=''
+                WHERE id=? AND status='processing'""",
+                (item_id,),
+            )
+        return updated.rowcount == 1
+
+    def fail_notification_outbox_item(self, item_id: int, error: str, max_attempts: int, retry_seconds: int) -> str | None:
+        with self._connect() as connection:
+            row = connection.execute("SELECT attempts FROM notification_outbox WHERE id=? AND status='processing'", (item_id,)).fetchone()
+            if row is None:
+                return None
+            terminal = int(row["attempts"]) >= max_attempts
+            next_status = "failed" if terminal else "pending"
+            connection.execute(
+                """UPDATE notification_outbox SET status=?,last_error=?,
+                available_at=datetime('now', ?) WHERE id=?""",
+                (next_status, error[:2048], f"+{retry_seconds} seconds", item_id),
+            )
+        return next_status
+
+    def recover_processing_notifications(self) -> int:
+        with self._connect() as connection:
+            updated = connection.execute(
+                "UPDATE notification_outbox SET status='pending',last_error='Delivery was interrupted by a backend restart.' WHERE status='processing'"
+            )
+        return updated.rowcount
+
+    def get_notification_outbox_items(self, category: str | None = None, limit: int = 100) -> list[NotificationOutboxItem]:
+        safe_limit = max(1, min(limit, 500))
+        with self._connect() as connection:
+            if category:
+                rows = connection.execute(
+                    "SELECT * FROM notification_outbox WHERE category=? ORDER BY id DESC LIMIT ?",
+                    (category, safe_limit),
+                ).fetchall()
+            else:
+                rows = connection.execute("SELECT * FROM notification_outbox ORDER BY id DESC LIMIT ?", (safe_limit,)).fetchall()
+        items: list[NotificationOutboxItem] = []
+        for row in rows:
+            values = dict(row)
+            try:
+                values["payload"] = json.loads(values.pop("payload_json") or "{}")
+            except json.JSONDecodeError:
+                values["payload"] = {}
+            items.append(NotificationOutboxItem(**values))
+        return items
+
+    def retry_notification_outbox_item(self, item_id: int) -> NotificationOutboxItem | None:
+        with self._connect() as connection:
+            updated = connection.execute(
+                """UPDATE notification_outbox SET status='pending',attempts=0,available_at=CURRENT_TIMESTAMP,
+                sent_at=NULL,last_error='' WHERE id=? AND status='failed'""",
+                (item_id,),
+            )
+            if updated.rowcount != 1:
+                return None
+            row = connection.execute("SELECT * FROM notification_outbox WHERE id=?", (item_id,)).fetchone()
+        values = dict(row)
+        values["payload"] = json.loads(values.pop("payload_json") or "{}")
+        return NotificationOutboxItem(**values)
 
     def get_workflow_run_events(self, run_id: int, after_sequence: int = 0) -> list[WorkflowRunEvent]:
         with self._connect() as connection:

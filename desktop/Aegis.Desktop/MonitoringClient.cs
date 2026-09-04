@@ -36,6 +36,17 @@ public sealed class MonitoringClient
             ?? throw new InvalidOperationException("Operations monitoring API returned an empty response.");
     }
 
+    public async Task<List<NotificationOutboxItem>> GetNotificationHistoryAsync(CancellationToken cancellationToken)
+        => await _httpClient.GetFromJsonAsync<List<NotificationOutboxItem>>("api/notifications?category=workflow-run&limit=200", JsonOptions, cancellationToken) ?? [];
+
+    public async Task<NotificationOutboxItem> RetryNotificationAsync(int itemId, CancellationToken cancellationToken)
+    {
+        using var response = await _httpClient.PostAsync($"api/notifications/{itemId}/retry", null, cancellationToken);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<NotificationOutboxItem>(JsonOptions, cancellationToken)
+            ?? throw new InvalidOperationException("Notification retry returned an empty response.");
+    }
+
     public async Task<bool> CheckHealthAsync(CancellationToken cancellationToken)
     {
         try
@@ -713,6 +724,21 @@ public sealed class WorkflowOperationsStatus
         }
     }
     public string ScheduleSummary => $"{Trigger} · {Timezone}";
+}
+
+public sealed class NotificationOutboxItem
+{
+    public int Id { get; set; }
+    public string Category { get; set; } = string.Empty;
+    public string Subject { get; set; } = string.Empty;
+    public Dictionary<string, object?> Payload { get; set; } = [];
+    public string Status { get; set; } = string.Empty;
+    public int Attempts { get; set; }
+    public string AvailableAt { get; set; } = string.Empty;
+    public string CreatedAt { get; set; } = string.Empty;
+    public string? SentAt { get; set; }
+    public string LastError { get; set; } = string.Empty;
+    public bool CanRetry => Status.Equals("failed", StringComparison.OrdinalIgnoreCase);
 }
 
 public sealed class OperationsSummary

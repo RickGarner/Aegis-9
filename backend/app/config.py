@@ -140,6 +140,9 @@ class Settings(BaseSettings):
     alert_email_from: str = Field(default="servermonitor@bsoc.local", validation_alias="JARVIS_ALERT_EMAIL_FROM")
     alert_email_to: str = Field(default="admin@bsoc.local", validation_alias="JARVIS_ALERT_EMAIL_TO")
     alert_email_ssl: bool = Field(default=False, validation_alias="JARVIS_ALERT_EMAIL_SSL")
+    workflow_notification_delivery_enabled: bool = Field(default=False, validation_alias="JARVIS_WORKFLOW_NOTIFICATION_DELIVERY_ENABLED")
+    workflow_notification_max_attempts: int = Field(default=5, ge=1, le=20, validation_alias="JARVIS_WORKFLOW_NOTIFICATION_MAX_ATTEMPTS")
+    workflow_notification_retry_seconds: int = Field(default=60, ge=15, le=86400, validation_alias="JARVIS_WORKFLOW_NOTIFICATION_RETRY_SECONDS")
 
     @model_validator(mode="after")
     def resolve_provider_base_url(self) -> "Settings":
