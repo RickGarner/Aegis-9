@@ -33,6 +33,10 @@ class WorkflowExecutionManager:
         artifact = self._runner.prepare(workflow.transfer_id, workflow.revision, workflow.language, workflow.implementation_text)
         if artifact.sha256 != workflow.artifact_sha256:
             raise WorkflowExecutionError("Prepared artifact hash does not match the supervisor-approved artifact.")
+        if workflow.language.casefold() != "powershell":
+            raise WorkflowExecutionError(
+                f"Production execution for {workflow.language} artifacts is disabled until an approved isolated executor is configured."
+            )
         catalog = json.loads(self._catalog_path.read_text(encoding="utf-8"))
         match = re.search(r"workflowType\s*=\s*['\"]([^'\"]+)", artifact.source_text, re.IGNORECASE)
         profile_name = match.group(1) if match else ""

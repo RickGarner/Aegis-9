@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Threading;
 
 namespace Aegis.Desktop;
 
@@ -12,8 +13,10 @@ public partial class OperationsMonitoringCenterWindow : Window
     private bool _refreshing;
     private bool _layoutReady;
     private string? _selectedMonitorId;
+    private readonly DispatcherTimer _refreshTimer = new() { Interval = TimeSpan.FromSeconds(15) };
 
     public event EventHandler<MonitorWindowKind>? OpenMonitorRequested;
+    public event EventHandler<int>? OpenWorkflowRequested;
 
     public OperationsMonitoringCenterWindow(UserPreferences preferences)
     {
@@ -24,9 +27,15 @@ public partial class OperationsMonitoringCenterWindow : Window
         {
             _layoutReady = true;
             await RefreshAsync();
+            _refreshTimer.Start();
         };
+        _refreshTimer.Tick += async (_, _) => await RefreshAsync();
         Closing += (_, _) => SaveLayout();
-        Closed += (_, _) => _refreshCancellation?.Cancel();
+        Closed += (_, _) =>
+        {
+            _refreshTimer.Stop();
+            _refreshCancellation?.Cancel();
+        };
     }
 
     private void RestoreLayout()
@@ -83,6 +92,8 @@ public partial class OperationsMonitoringCenterWindow : Window
             ConnectionStateText.Text = "REFRESHING";
             var snapshot = await _client.GetOperationsMonitoringAsync(_refreshCancellation.Token);
             AlertsList.ItemsSource = snapshot.Alerts;
+            WorkflowsList.ItemsSource = snapshot.Workflows;
+            WorkflowCountText.Text = $"{snapshot.Workflows.Count} WORKFLOW{(snapshot.Workflows.Count == 1 ? "" : "S")} · {snapshot.Workflows.Count(item => item.RequiresAction)} REQUIRE ACTION";
             UpdateSummary(snapshot.Summary);
             var resources = snapshot.Monitors.Select(monitor => OperationsResourceCard.Create(
                 monitor,
@@ -167,6 +178,17 @@ public partial class OperationsMonitoringCenterWindow : Window
             _ => MonitorWindowKind.ServerStatus,
         };
         OpenMonitorRequested?.Invoke(this, kind);
+    }
+
+    private void OpenWorkflowButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: int workflowId }) OpenWorkflowRequested?.Invoke(this, workflowId);
+    }
+
+    private void WorkflowsList_MouseDoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if (WorkflowsList.SelectedItem is WorkflowOperationsStatus workflow)
+            OpenWorkflowRequested?.Invoke(this, workflow.WorkflowId);
     }
 
     private async void RefreshButton_Click(object sender, RoutedEventArgs e) => await RefreshAsync();

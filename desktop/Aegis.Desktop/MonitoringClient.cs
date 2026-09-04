@@ -668,6 +668,51 @@ public sealed class OperationsMonitoringSnapshot
     public List<OperationsMonitorDescriptor> Monitors { get; set; } = [];
     public List<OperationsObservation> Observations { get; set; } = [];
     public List<OperationsAlert> Alerts { get; set; } = [];
+    public List<WorkflowOperationsStatus> Workflows { get; set; } = [];
+}
+
+public sealed class WorkflowOperationsStatus
+{
+    public int WorkflowId { get; set; }
+    public string TransferId { get; set; } = string.Empty;
+    public string Title { get; set; } = string.Empty;
+    public string LifecycleState { get; set; } = string.Empty;
+    public string ApprovalStage { get; set; } = string.Empty;
+    public int Revision { get; set; }
+    public string Language { get; set; } = string.Empty;
+    public string Trigger { get; set; } = string.Empty;
+    public string Timezone { get; set; } = string.Empty;
+    public string SchedulerStatus { get; set; } = string.Empty;
+    public string? SchedulerLastEvaluatedAtUtc { get; set; }
+    public string DeferredReason { get; set; } = string.Empty;
+    public string? LastRunAtUtc { get; set; }
+    public bool RequiresAction { get; set; }
+    public string NavigationTarget { get; set; } = string.Empty;
+    public int? LatestRunId { get; set; }
+    public string LatestRunStatus { get; set; } = "never_run";
+    public int? LatestRunAttempt { get; set; }
+    public string? LatestRunStartedAtUtc { get; set; }
+    public string? LatestRunCompletedAtUtc { get; set; }
+    public string LatestRunError { get; set; } = string.Empty;
+    public string NotificationStatus { get; set; } = "not_created";
+    public int NotificationAttempts { get; set; }
+    public string NotificationError { get; set; } = string.Empty;
+    public string ActionSummary
+    {
+        get
+        {
+            var action = RequiresAction ? "ACTION REQUIRED" : "NO ACTION REQUIRED";
+            var run = LatestRunId is null ? "No execution recorded" : $"Run {LatestRunId}: {LatestRunStatus}, attempt {LatestRunAttempt}";
+            var notification = NotificationStatus == "not_created"
+                ? "Notification not created"
+                : $"Notification {NotificationStatus}, {NotificationAttempts} attempt(s)";
+            var error = string.IsNullOrWhiteSpace(LatestRunError) ? NotificationError : LatestRunError;
+            return string.IsNullOrWhiteSpace(error)
+                ? $"{action} · {run} · {notification}"
+                : $"{action} · {run} · {notification} · {error}";
+        }
+    }
+    public string ScheduleSummary => $"{Trigger} · {Timezone}";
 }
 
 public sealed class OperationsSummary

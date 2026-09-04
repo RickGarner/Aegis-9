@@ -57,10 +57,85 @@ class OperationalMonitoringTests(unittest.TestCase):
 
         payload = build_operations_snapshot(dashboard).model_dump(by_alias=True)
 
-        self.assertEqual({"contractVersion", "generatedAtUtc", "summary", "monitors", "observations", "alerts"}, set(payload))
+        self.assertEqual({"contractVersion", "generatedAtUtc", "summary", "monitors", "observations", "alerts", "workflows"}, set(payload))
         self.assertIn("overallState", payload["summary"])
         self.assertIn("collectorState", payload["monitors"][0])
         self.assertIn("validUntilUtc", payload["observations"][0])
+
+    def test_operations_snapshot_includes_actionable_workflow_scheduler_status(self):
+        captured_at = "2026-09-03T12:00:00Z"
+        dashboard = MonitoringDashboard(
+            generated_at=captured_at,
+            moveit=MoveItMonitor(status="healthy", adapter="moveit-rest", last_checked_at=captured_at, detail="Ready"),
+            server=ServerMonitor(status="healthy", last_checked_at=captured_at, detail="Ready"),
+            freeflow=FreeFlowMonitor(status="healthy", last_checked_at=captured_at, detail="Ready"),
+            qualys=QualysMonitor(status="healthy", last_checked_at=captured_at, detail="Ready"),
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            store = JarvisStore(Path(directory) / "aegis.db")
+            store.initialize()
+            workflow = store.create_workflow("Awaiting approval", "", [], "powershell")
+            with store._connect() as connection:
+                connection.execute(
+                    "UPDATE workflows SET state='supervisor_pending', approval_stage='supervisor_pending', "
+                    "scheduler_status='deferred', scheduler_last_deferred_reason='Required host is unavailable' WHERE id=?",
+                    (workflow.id,),
+                )
+            workflow = store.get_workflow(workflow.id)
+
+            snapshot = build_operations_snapshot(dashboard, workflows=[workflow])
+
+        self.assertEqual(1, len(snapshot.workflows))
+        status = snapshot.workflows[0]
+        self.assertEqual("supervisor_pending", status.lifecycle_state)
+        self.assertEqual("deferred", status.scheduler_status)
+        self.assertEqual("Required host is unavailable", status.deferred_reason)
+        self.assertTrue(status.requires_action)
+        self.assertEqual(f"aegis://workflows/{workflow.id}", status.navigation_target)
+
+    def test_operations_snapshot_includes_latest_run_and_notification_delivery(self):
+        captured_at = "2026-09-03T12:00:00Z"
+        dashboard = MonitoringDashboard(
+            generated_at=captured_at,
+            moveit=MoveItMonitor(status="healthy", adapter="moveit-rest", last_checked_at=captured_at, detail="Ready"),
+            server=ServerMonitor(status="healthy", last_checked_at=captured_at, detail="Ready"),
+            freeflow=FreeFlowMonitor(status="healthy", last_checked_at=captured_at, detail="Ready"),
+            qualys=QualysMonitor(status="healthy", last_checked_at=captured_at, detail="Ready"),
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            store = JarvisStore(Path(directory) / "aegis.db")
+            store.initialize()
+            workflow = store.create_workflow("Run visibility", "", [], "powershell")
+            with store._connect() as connection:
+                cursor = connection.execute(
+                    """INSERT INTO workflow_runs(workflow_id,revision,artifact_sha256,trigger,status,attempt,requested_by,
+                    completed_at,error) VALUES(?,?,?,?,?,?,?,CURRENT_TIMESTAMP,?)""",
+                    (workflow.id, 1, "abc", "scheduled", "failed", 2, "scheduler", "Test failure"),
+                )
+                run_id = int(cursor.lastrowid)
+                connection.execute(
+                    """INSERT INTO notification_outbox(category,subject,payload_json,status,attempts,last_error)
+                    VALUES('workflow-run','failed',?,'pending',1,'SMTP unavailable')""",
+                    (json.dumps({"workflow_id": workflow.id, "run_id": run_id}),),
+                )
+            latest_runs = store.get_latest_workflow_runs()
+            notifications = store.get_latest_workflow_notification_states()
+
+            snapshot = build_operations_snapshot(
+                dashboard,
+                workflows=[store.get_workflow(workflow.id)],
+                latest_runs=latest_runs,
+                notification_states=notifications,
+            )
+
+        status = snapshot.workflows[0]
+        self.assertEqual(run_id, status.latest_run_id)
+        self.assertEqual("failed", status.latest_run_status)
+        self.assertEqual(2, status.latest_run_attempt)
+        self.assertEqual("Test failure", status.latest_run_error)
+        self.assertEqual("pending", status.notification_status)
+        self.assertEqual(1, status.notification_attempts)
+        self.assertEqual("SMTP unavailable", status.notification_error)
 
     def test_operations_snapshot_retains_last_good_target_but_marks_collector_failure(self):
         captured_at = "2026-09-03T12:00:00Z"

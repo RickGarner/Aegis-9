@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from app.storage import JarvisStore
-from app.workflow_execution import WorkflowExecutionManager
+from app.workflow_execution import WorkflowExecutionError, WorkflowExecutionManager
 from app.workflow_runner import WorkflowTestRunner
 from app.workflow_scheduler import is_due, prerequisites_met
 
@@ -68,6 +68,62 @@ class WorkflowExecutionTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(is_due(workflow, datetime(2026, 9, 1, 8, 29, tzinfo=timezone.utc)))
         self.assertTrue(is_due(workflow, datetime(2026, 9, 1, 8, 30, tzinfo=timezone.utc)))
         self.assertFalse(is_due(workflow, datetime(2026, 10, 1, 8, 30, tzinfo=timezone.utc)))
+
+    def test_csharp_production_execution_fails_closed(self) -> None:
+        root = Path(tempfile.mkdtemp(prefix="aegis-csharp-execution-"))
+        store = JarvisStore(root / "jarvis.db")
+        store.initialize()
+        workflow = store.create_workflow("C# execution", "", [], "csharp")
+        with store._connect() as connection:
+            connection.execute("UPDATE workflows SET state='plan_approved',approval_stage='plan_approved' WHERE id=?", (workflow.id,))
+        workflow = store.save_workflow_implementation(
+            workflow.id,
+            "```csharp\n// workflowType = 'safe-csharp'\nConsole.WriteLine(\"test\");\n```",
+            "test",
+            "model",
+        )
+        runner = WorkflowTestRunner(root / "artifacts")
+        artifact = runner.prepare(workflow.transfer_id, workflow.revision, workflow.language, workflow.implementation_text)
+        store.save_prepared_artifact(workflow.id, artifact.sha256, artifact.manifest.model_dump())
+        with store._connect() as connection:
+            connection.execute("UPDATE workflows SET state='supervisor_pending',approval_stage='supervisor_pending',latest_test_status='passed' WHERE id=?", (workflow.id,))
+        store.set_workflow_schedule(workflow.id, {"trigger": "manual", "expression": "", "timezone": "UTC"})
+        workflow = store.approve_workflow_for_production(workflow.id, "test-supervisor")
+        catalog = root / "catalog.json"
+        catalog.write_text(json.dumps({"profiles": {}}), encoding="utf-8")
+        manager = WorkflowExecutionManager(store, root / "artifacts", catalog, 20, 10_000)
+
+        with self.assertRaisesRegex(WorkflowExecutionError, "isolated executor"):
+            manager.validate(workflow)
+
+    def test_scheduler_events_are_deduplicated(self) -> None:
+        root = Path(tempfile.mkdtemp(prefix="aegis-scheduler-events-"))
+        store = JarvisStore(root / "jarvis.db")
+        store.initialize()
+        workflow = store.create_workflow("Deferred workflow", "", [], "powershell")
+
+        self.assertTrue(store.record_workflow_scheduler_event(workflow.id, "scheduled run deferred: prerequisite unavailable"))
+        self.assertFalse(store.record_workflow_scheduler_event(workflow.id, "scheduled run deferred: prerequisite unavailable"))
+        self.assertTrue(store.record_workflow_scheduler_event(workflow.id, "schedule blocked: invalid timezone"))
+        with store._connect() as connection:
+            count = connection.execute(
+                "SELECT COUNT(*) AS value FROM activity_logs WHERE event_type='workflow-scheduler'"
+            ).fetchone()["value"]
+        self.assertEqual(2, count)
+
+    def test_scheduler_status_is_durable_and_validated(self) -> None:
+        root = Path(tempfile.mkdtemp(prefix="aegis-scheduler-status-"))
+        store = JarvisStore(root / "jarvis.db")
+        store.initialize()
+        workflow = store.create_workflow("Scheduled status", "", [], "powershell")
+
+        updated = store.update_workflow_scheduler_status(workflow.id, "deferred", "Required host is unavailable")
+        self.assertEqual("deferred", updated.scheduler_status)
+        self.assertEqual("Required host is unavailable", updated.scheduler_last_deferred_reason)
+        self.assertTrue(updated.scheduler_last_evaluated_at)
+        self.assertEqual("deferred", store.get_workflow(workflow.id).scheduler_status)
+        with self.assertRaisesRegex(ValueError, "Unsupported scheduler status"):
+            store.update_workflow_scheduler_status(workflow.id, "made-up")
 
 
 if __name__ == "__main__":

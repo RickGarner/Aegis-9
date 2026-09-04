@@ -244,14 +244,19 @@ async def lifespan(app: FastAPI):
             for workflow in app.state.store.get_workflows():
                 try:
                     if not is_due(workflow):
+                        if workflow.state == "scheduled":
+                            app.state.store.update_workflow_scheduler_status(workflow.id, "waiting")
                         continue
                     allowed, detail = await asyncio.to_thread(prerequisites_met, workflow.schedule)
                     if not allowed:
+                        app.state.store.update_workflow_scheduler_status(workflow.id, "deferred", detail)
                         app.state.store.record_workflow_scheduler_event(workflow.id, f"scheduled run deferred: {detail}", "warning")
                         continue
                     await app.state.workflow_execution.start(workflow, "scheduled", "A.E.G.I.S.-9 scheduler")
+                    app.state.store.update_workflow_scheduler_status(workflow.id, "queued")
                     app.state.store.record_workflow_scheduler_event(workflow.id, "scheduled run queued after approval and prerequisite revalidation.", "success")
                 except (OSError, ScheduleError, WorkflowExecutionError, ValueError) as error:
+                    app.state.store.update_workflow_scheduler_status(workflow.id, "blocked", str(error))
                     app.state.store.record_workflow_scheduler_event(workflow.id, f"schedule blocked: {error}", "warning")
 
     monitoring_task = asyncio.create_task(monitoring_loop())

@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from pydantic.alias_generators import to_camel
 
 from app.monitoring import MonitoringAlert, MonitoringCollector, MonitoringDashboard
+from app.storage import Workflow, WorkflowNotificationState, WorkflowRun
 
 
 NormalizedState = Literal[
@@ -107,6 +108,33 @@ class OperationsAlert(ContractModel):
     evidence: list[EvidenceReference] = Field(default_factory=list)
 
 
+class WorkflowOperationsStatus(ContractModel):
+    workflow_id: int
+    transfer_id: str
+    title: str
+    lifecycle_state: str
+    approval_stage: str
+    revision: int
+    language: str
+    trigger: str
+    timezone: str
+    scheduler_status: str
+    scheduler_last_evaluated_at_utc: str | None = None
+    deferred_reason: str = ""
+    last_run_at_utc: str | None = None
+    requires_action: bool = False
+    navigation_target: str
+    latest_run_id: int | None = None
+    latest_run_status: str = "never_run"
+    latest_run_attempt: int | None = None
+    latest_run_started_at_utc: str | None = None
+    latest_run_completed_at_utc: str | None = None
+    latest_run_error: str = ""
+    notification_status: str = "not_created"
+    notification_attempts: int = 0
+    notification_error: str = ""
+
+
 class OperationsMonitoringSnapshot(ContractModel):
     contract_version: Literal["1.0"] = "1.0"
     generated_at_utc: str
@@ -114,6 +142,7 @@ class OperationsMonitoringSnapshot(ContractModel):
     monitors: list[MonitorDescriptor]
     observations: list[MonitorObservation]
     alerts: list[OperationsAlert]
+    workflows: list[WorkflowOperationsStatus] = Field(default_factory=list)
 
 
 MONITORS = (
@@ -128,6 +157,9 @@ def build_operations_snapshot(
     dashboard: MonitoringDashboard,
     previous: OperationsMonitoringSnapshot | None = None,
     now: datetime | None = None,
+    workflows: list[Workflow] | None = None,
+    latest_runs: dict[int, WorkflowRun] | None = None,
+    notification_states: dict[int, WorkflowNotificationState] | None = None,
 ) -> OperationsMonitoringSnapshot:
     monitors: list[MonitorDescriptor] = []
     observations: list[MonitorObservation] = []
@@ -182,6 +214,14 @@ def build_operations_snapshot(
         monitors=monitors,
         observations=observations,
         alerts=[normalize_alert(alert) for alert in dashboard.alerts],
+        workflows=[
+            normalize_workflow(
+                workflow,
+                (latest_runs or {}).get(workflow.id),
+                (notification_states or {}).get(workflow.id),
+            )
+            for workflow in (workflows or [])
+        ],
     )
 
 
@@ -193,11 +233,54 @@ def collect_operations_snapshot(monitoring: MonitoringCollector) -> OperationsMo
             previous = OperationsMonitoringSnapshot.model_validate_json(previous_json)
         except ValueError:
             previous = None
-    snapshot = build_operations_snapshot(monitoring.collect(), previous=previous)
+    snapshot = build_operations_snapshot(
+        monitoring.collect(),
+        previous=previous,
+        workflows=monitoring.store.get_workflows(),
+        latest_runs=monitoring.store.get_latest_workflow_runs(),
+        notification_states=monitoring.store.get_latest_workflow_notification_states(),
+    )
     monitoring.store.save_operations_snapshot(
         snapshot.model_dump_json(by_alias=True), snapshot.generated_at_utc, snapshot.contract_version
     )
     return snapshot
+
+
+def normalize_workflow(
+    workflow: Workflow,
+    latest_run: WorkflowRun | None = None,
+    notification: WorkflowNotificationState | None = None,
+) -> WorkflowOperationsStatus:
+    schedule = workflow.schedule
+    return WorkflowOperationsStatus(
+        workflow_id=workflow.id,
+        transfer_id=workflow.transfer_id,
+        title=workflow.title,
+        lifecycle_state=workflow.state,
+        approval_stage=workflow.approval_stage,
+        revision=workflow.revision,
+        language=workflow.language,
+        trigger=str(schedule.get("trigger") or "manual"),
+        timezone=str(schedule.get("timezone") or "UTC"),
+        scheduler_status=workflow.scheduler_status,
+        scheduler_last_evaluated_at_utc=normalize_optional_timestamp(workflow.scheduler_last_evaluated_at),
+        deferred_reason=workflow.scheduler_last_deferred_reason,
+        last_run_at_utc=normalize_optional_timestamp(workflow.last_run_at),
+        requires_action=workflow.state in {
+            "needs_clarification", "design_review", "plan_review", "implementation_review",
+            "test_failed", "test_passed", "user_accepted", "supervisor_pending", "failed",
+        },
+        navigation_target=f"aegis://workflows/{workflow.id}",
+        latest_run_id=latest_run.id if latest_run else None,
+        latest_run_status=latest_run.status if latest_run else "never_run",
+        latest_run_attempt=latest_run.attempt if latest_run else None,
+        latest_run_started_at_utc=normalize_optional_timestamp(latest_run.started_at) if latest_run else None,
+        latest_run_completed_at_utc=normalize_optional_timestamp(latest_run.completed_at) if latest_run else None,
+        latest_run_error=latest_run.error if latest_run else "",
+        notification_status=notification.status if notification else "not_created",
+        notification_attempts=notification.attempts if notification else 0,
+        notification_error=notification.last_error if notification else "",
+    )
 
 
 def retain_last_known_good(
@@ -294,6 +377,10 @@ def normalize_timestamp(value: str) -> str:
     if parsed.tzinfo is None:
         parsed = parsed.replace(tzinfo=timezone.utc)
     return parsed.astimezone(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def normalize_optional_timestamp(value: str | None) -> str | None:
+    return normalize_timestamp(value) if value else None
 
 
 def add_seconds(value: str, seconds: int) -> str:

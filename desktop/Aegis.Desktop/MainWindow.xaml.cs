@@ -934,6 +934,7 @@ public partial class MainWindow : Window
             MonitorWindowKind.Qualys => "Qualys Vulnerabilities",
             _ => "Server Status"
         });
+        window.OpenWorkflowRequested += (_, workflowId) => new WorkflowWindow(workflowId) { Owner = this }.Show();
         window.Show();
     }
 
