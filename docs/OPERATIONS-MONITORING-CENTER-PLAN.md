@@ -1,6 +1,6 @@
 # A.E.G.I.S.-9 Operations Monitoring Center plan
 
-**Status:** Approved product direction; implementation not started  
+**Status:** Phase 0 / Increment 1 in progress; preview disabled by default
 **Added:** 2026-09-02  
 **Owner:** A.E.G.I.S.-9  
 **Related plan:** Aegis Platform `docs/ENTERPRISE-AI-SELECTIVE-ADOPTION-PLAN.md`
@@ -280,12 +280,13 @@ Recommended combined order:
 
 - [ ] Approve normalized state and alert contracts.
 - [ ] Approve initial layout and navigation behavior.
-- [ ] Add feature flag and WPF window shell.
-- [ ] Add aggregation endpoints and persistence migration.
-- [ ] Register existing MoveIT monitor.
-- [ ] Register existing Windows Server monitor.
-- [ ] Register existing FreeFlow monitor.
-- [ ] Register existing Qualys monitor.
+- [x] Add feature flag and WPF window shell.
+- [x] Add normalized snapshot, summary, and collector-health endpoints.
+- [x] Add last-known-good snapshot persistence migration.
+- [x] Register existing MoveIT monitor in the normalization layer.
+- [x] Register existing Windows Server monitor in the normalization layer.
+- [x] Register existing FreeFlow monitor in the normalization layer.
+- [x] Register existing Qualys monitor in the normalization layer.
 - [ ] Add workflow/schedule aggregation.
 - [ ] Add backend/provider/runtime health.
 - [ ] Add authenticated Developer Studio status.
@@ -293,3 +294,80 @@ Recommended combined order:
 - [ ] Add incident acknowledgement and notification delivery state.
 - [ ] Complete accessibility, performance, topology, and failure testing.
 - [ ] Record acceptance evidence and enable by default.
+
+## Phase 0 implementation record — 2026-09-03
+
+The first read-only shell is implemented as
+`OperationsMonitoringCenterWindow`. It provides summary placeholders, alert
+display, bounded asynchronous refresh, compact/standard/wallboard modes,
+topology-safe bounds restoration, and navigation to the four existing
+specialized monitors. The existing `/api/monitoring/dashboard` response is used
+only as a temporary compatibility source; collectors and production actions
+were not changed.
+
+The shell is guarded by `operationsMonitoringCenter.enabled` in the desktop
+`appsettings.json`. The default remains `false` until the normalized contract,
+layout, and failure-state behavior are accepted. Aegis Platform owns the draft
+`contracts/operations-monitoring-v1.schema.json` schema and empty-state fixture.
+
+Baseline evidence:
+
+- A.E.G.I.S.-9 solution build succeeds on the fresh canonical clone.
+- Backend tests are pending workstation dependency bootstrap; the clone has no
+  `.venv` and the global Python environment does not contain `pytest`.
+- Aegis Developer Studio is clean but unbootstrapped (`node_modules` absent).
+- No existing monitor collector or workflow behavior was modified.
+
+### Normalized aggregation update — 2026-09-03
+
+The backend now exposes three additive, read-only endpoints while preserving the
+legacy `/api/monitoring` response:
+
+- `GET /api/operations/monitoring` — versioned snapshot matching the Platform
+  contract
+- `GET /api/operations/summary` — normalized state counts and overall state
+- `GET /api/operations/collectors` — configuration and collector health
+
+The normalization layer registers the existing MoveIT, Windows Server,
+FreeFlow, and Qualys adapters without changing collection behavior. It reports
+target state separately from collector state; for example, an unconfigured
+credential produces an `unknown` target and a `misconfigured` collector rather
+than a healthy target. The preview WPF client now consumes the versioned
+snapshot endpoint.
+
+At the initial aggregation checkpoint, 45 backend tests passed, the WPF solution
+built, and an isolated live server returned contract version `1.0` with four
+descriptors and four observations. Persistence was completed in the following
+increment.
+
+### Last-known-good and staleness update — 2026-09-03
+
+Normalized snapshots now persist in `operations_monitoring_snapshots` with a
+bounded retention limit of 2,500 records. The latest compatible snapshot loads
+on the next collection, including after a backend restart. Invalid or older
+payloads fail safely and do not block a current collection.
+
+When a collector fails or becomes misconfigured, the normalizer may retain its
+last valid target evidence while preserving the current non-healthy collector
+state and diagnostic code. Evidence beyond `validUntilUtc` is marked `stale` in
+both its observation and monitor descriptor. Overall status incorporates both
+target and collector state, so retained healthy evidence cannot make a failed,
+stale, unauthorized, or misconfigured collector appear globally healthy.
+
+Verification now includes 48 passing backend tests, zero-error WPF compilation,
+a live version `1.0` endpoint response, and persisted snapshots in the runtime
+SQLite database.
+
+### Normalized Systems view update — 2026-09-03
+
+The preview's Systems panel now projects the normalized descriptors and
+observations into selectable resource cards instead of static navigation
+buttons. Each card displays target state, collector state, evidence freshness,
+active-alert count, and severity-aware status color. Selection shows
+configuration state, observation timing, and the normalized evidence summary.
+Operators can double-click a card or use **Open Authoritative Monitor** to reach
+the existing specialized window; no action authority was added.
+
+The selected monitor survives refresh when it remains present. Large resource
+sets use WPF item virtualization, and failure refreshes retain the prior visible
+snapshot with an explicit unavailable or timeout message.

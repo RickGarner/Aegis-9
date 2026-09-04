@@ -280,6 +280,16 @@ class JarvisStore:
                     server_json TEXT NOT NULL
                 );
 
+                CREATE TABLE IF NOT EXISTS operations_monitoring_snapshots (
+                    id INTEGER PRIMARY KEY,
+                    captured_at TEXT NOT NULL,
+                    contract_version TEXT NOT NULL,
+                    snapshot_json TEXT NOT NULL
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_operations_monitoring_snapshots_captured
+                    ON operations_monitoring_snapshots(captured_at DESC);
+
                 CREATE TABLE IF NOT EXISTS monitoring_alerts (
                     id INTEGER PRIMARY KEY,
                     source TEXT NOT NULL,

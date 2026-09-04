@@ -54,6 +54,9 @@ public partial class MainWindow : Window
             _speechService);
 
         InitializeComponent();
+        OperationsMonitoringCenterButton.Visibility = _desktopOptions.OperationsMonitoringCenter.Enabled
+            ? Visibility.Visible
+            : Visibility.Collapsed;
         DeveloperStudioPanel.Initialize(_preferences, _developerStudioService);
         DeveloperStudioPanel.CloseRequested += (_, _) => CloseDeveloperStudio();
         DeveloperStudioPanel.StatusChanged += (_, status) => ConnectionText.Text = status;
@@ -920,6 +923,19 @@ public partial class MainWindow : Window
     private void OpenFreeFlowWindow_Click(object sender, RoutedEventArgs e) => OpenMonitorWindow("Xerox FreeFlow Core");
     private void OpenQualysWindow_Click(object sender, RoutedEventArgs e) => OpenMonitorWindow("Qualys Vulnerabilities");
     private void OpenServerWindow_Click(object sender, RoutedEventArgs e) => OpenMonitorWindow("Server Status");
+
+    private void OpenOperationsMonitoringCenter_Click(object sender, RoutedEventArgs e)
+    {
+        var window = new OperationsMonitoringCenterWindow(_preferences) { Owner = this };
+        window.OpenMonitorRequested += (_, kind) => OpenMonitorWindow(kind switch
+        {
+            MonitorWindowKind.MoveIt => "MoveIT Automation",
+            MonitorWindowKind.FreeFlow => "Xerox FreeFlow Core",
+            MonitorWindowKind.Qualys => "Qualys Vulnerabilities",
+            _ => "Server Status"
+        });
+        window.Show();
+    }
 
     private void OpenMonitorWindow(string title)
     {

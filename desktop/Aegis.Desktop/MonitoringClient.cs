@@ -28,6 +28,14 @@ public sealed class MonitoringClient
             ?? throw new InvalidOperationException("Monitoring API returned an empty response.");
     }
 
+    public async Task<OperationsMonitoringSnapshot> GetOperationsMonitoringAsync(CancellationToken cancellationToken)
+    {
+        using var response = await _httpClient.GetAsync("api/operations/monitoring", cancellationToken);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<OperationsMonitoringSnapshot>(JsonOptions, cancellationToken)
+            ?? throw new InvalidOperationException("Operations monitoring API returned an empty response.");
+    }
+
     public async Task<bool> CheckHealthAsync(CancellationToken cancellationToken)
     {
         try
@@ -650,4 +658,64 @@ public sealed class MonitoringAlert
     public string Severity { get; set; } = string.Empty;
     public string Title { get; set; } = string.Empty;
     public string Detail { get; set; } = string.Empty;
+}
+
+public sealed class OperationsMonitoringSnapshot
+{
+    public string ContractVersion { get; set; } = string.Empty;
+    public string GeneratedAtUtc { get; set; } = string.Empty;
+    public OperationsSummary Summary { get; set; } = new();
+    public List<OperationsMonitorDescriptor> Monitors { get; set; } = [];
+    public List<OperationsObservation> Observations { get; set; } = [];
+    public List<OperationsAlert> Alerts { get; set; } = [];
+}
+
+public sealed class OperationsSummary
+{
+    public string OverallState { get; set; } = "unknown";
+    public OperationsStateCounts Counts { get; set; } = new();
+}
+
+public sealed class OperationsStateCounts
+{
+    public int Healthy { get; set; }
+    public int Degraded { get; set; }
+    public int Critical { get; set; }
+    public int Unreachable { get; set; }
+    public int Unauthorized { get; set; }
+    public int Misconfigured { get; set; }
+    public int Unknown { get; set; }
+    public int Disabled { get; set; }
+}
+
+public sealed class OperationsMonitorDescriptor
+{
+    public string MonitorId { get; set; } = string.Empty;
+    public string DisplayName { get; set; } = string.Empty;
+    public string ConfigurationState { get; set; } = "unconfigured";
+    public string CollectorState { get; set; } = "unknown";
+    public int CollectionIntervalSeconds { get; set; }
+    public int StaleAfterSeconds { get; set; }
+}
+
+public sealed class OperationsObservation
+{
+    public string ObservationId { get; set; } = string.Empty;
+    public string MonitorId { get; set; } = string.Empty;
+    public string ResourceId { get; set; } = string.Empty;
+    public string State { get; set; } = "unknown";
+    public string CollectorState { get; set; } = "unknown";
+    public string Summary { get; set; } = string.Empty;
+    public string CollectedAtUtc { get; set; } = string.Empty;
+    public string ValidUntilUtc { get; set; } = string.Empty;
+}
+
+public sealed class OperationsAlert
+{
+    public string AlertId { get; set; } = string.Empty;
+    public string MonitorId { get; set; } = string.Empty;
+    public string Severity { get; set; } = string.Empty;
+    public string Title { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public string LifecycleState { get; set; } = string.Empty;
 }

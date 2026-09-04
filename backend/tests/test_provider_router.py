@@ -15,6 +15,25 @@ def settings() -> Settings:
 
 
 class ProviderDiscoveryTests(unittest.IsolatedAsyncioTestCase):
+    async def test_dmr_is_the_first_provider_validated(self) -> None:
+        router = OpenAICompatibleProvider(settings())
+
+        endpoints = router._endpoints("remote")
+
+        self.assertEqual(("dmr", "http://10.30.75.229:12434/engines/v1/models"), (endpoints[0].provider, endpoints[0].catalog_url))
+
+    async def test_explicit_primary_model_wins_general_routing_when_available(self) -> None:
+        router = OpenAICompatibleProvider(settings())
+        router._settings.model = "docker.io/ai/qwen3-coder:30b-a3b-q4_K_M"
+        router._candidates = [
+            ProviderRoute("remote", "dmr", router._settings.model, "http://dmr/chat"),
+            ProviderRoute("remote", "lmstudio", "meta-llama-llama-3.1-70b-instruct", "http://lmstudio/chat"),
+        ]
+
+        ranked = router._ranked_candidates("general")
+
+        self.assertEqual("dmr", ranked[0].provider)
+
     async def test_chat_response_exposes_route_and_failover_contract(self) -> None:
         response = ChatResponse(
             model="local-model",

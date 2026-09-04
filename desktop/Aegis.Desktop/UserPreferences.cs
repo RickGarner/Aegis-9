@@ -21,6 +21,12 @@ public sealed class UserPreferences
     public bool EnableVoiceResponses { get; set; } = true;
     public string DeveloperStudioSelectedRepository { get; set; } = "";
     public List<string> DeveloperStudioRecentRepositories { get; set; } = [];
+    public double? OperationsCenterLeft { get; set; }
+    public double? OperationsCenterTop { get; set; }
+    public double OperationsCenterWidth { get; set; } = 1320;
+    public double OperationsCenterHeight { get; set; } = 780;
+    public bool OperationsCenterMaximized { get; set; }
+    public string OperationsCenterLayoutMode { get; set; } = "Standard";
 
     private static string PreferencesPath => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Aegis-9", "settings.json");
 

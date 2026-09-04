@@ -724,6 +724,25 @@ class MonitoringStore:
             )
         return int(cursor.lastrowid)
 
+    def save_operations_snapshot(self, snapshot_json: str, captured_at: str, contract_version: str = "1.0") -> int:
+        with self._connection_factory() as connection:
+            cursor = connection.execute(
+                "INSERT INTO operations_monitoring_snapshots (captured_at, contract_version, snapshot_json) VALUES (?, ?, ?)",
+                (captured_at, contract_version, snapshot_json),
+            )
+            connection.execute(
+                "DELETE FROM operations_monitoring_snapshots WHERE id NOT IN "
+                "(SELECT id FROM operations_monitoring_snapshots ORDER BY id DESC LIMIT 2500)"
+            )
+        return int(cursor.lastrowid)
+
+    def get_latest_operations_snapshot(self) -> str | None:
+        with self._connection_factory() as connection:
+            row = connection.execute(
+                "SELECT snapshot_json FROM operations_monitoring_snapshots ORDER BY id DESC LIMIT 1"
+            ).fetchone()
+        return str(row["snapshot_json"]) if row else None
+
     def ensure_alert(self, source: str, severity: Severity, title: str, detail: str, active: bool) -> bool:
         created = False
         with self._connection_factory() as connection:

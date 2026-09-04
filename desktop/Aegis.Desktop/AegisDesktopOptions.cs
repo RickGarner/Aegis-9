@@ -8,6 +8,7 @@ public sealed class AegisDesktopOptions
     public AvatarOptions Avatar { get; set; } = new();
     public SpeechOptions Speech { get; set; } = new();
     public DeveloperStudioOptions DeveloperStudio { get; set; } = new();
+    public OperationsMonitoringCenterOptions OperationsMonitoringCenter { get; set; } = new();
 
     public static AegisDesktopOptions Load()
     {
@@ -48,6 +49,12 @@ public sealed class AegisDesktopOptions
             {
                 options.DeveloperStudio.FoundationPath = developerStudio.TryGetProperty("foundationPath", out var foundationPath) ? foundationPath.GetString() ?? options.DeveloperStudio.FoundationPath : options.DeveloperStudio.FoundationPath;
                 options.DeveloperStudio.ExecutableRelativePath = developerStudio.TryGetProperty("executableRelativePath", out var executableRelativePath) ? executableRelativePath.GetString() ?? options.DeveloperStudio.ExecutableRelativePath : options.DeveloperStudio.ExecutableRelativePath;
+            }
+
+            if (root.TryGetProperty("operationsMonitoringCenter", out var operationsMonitoringCenter))
+            {
+                options.OperationsMonitoringCenter.Enabled = operationsMonitoringCenter.TryGetProperty("enabled", out var enabled)
+                    && enabled.GetBoolean();
             }
 
             return options;
@@ -106,4 +113,10 @@ public sealed class DeveloperStudioOptions
 {
     public string FoundationPath { get; set; } = @"D:\Aegis\Aegis-Developer-Studio";
     public string ExecutableRelativePath { get; set; } = @".build\electron\Aegis Developer Studio.exe";
+}
+
+public sealed class OperationsMonitoringCenterOptions
+{
+    // Phase 0 is an observational preview. Enable explicitly for acceptance testing.
+    public bool Enabled { get; set; }
 }

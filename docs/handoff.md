@@ -263,6 +263,29 @@ Core project files:
 
 Native monitoring is now visible, but the following items remain:
 
+Phase 0 of the Operations Monitoring Center began on 2026-09-03. The native
+read-only preview shell, feature flag, retained layout, safe window restoration,
+and specialized-monitor navigation are implemented. It remains disabled by
+default. Versioned snapshot, summary, and collector-health endpoints now
+normalize the four existing collectors without rewriting them, and the preview
+client consumes the normalized snapshot. The fresh clone is bootstrapped;
+45 backend tests pass. Next, review the draft Platform contract and shell
+layout, then add durable last-known-good normalized snapshot persistence and
+explicit staleness testing.
+
+The persistence/staleness increment was subsequently completed on 2026-09-03.
+Normalized snapshots survive backend restarts with bounded retention, invalid
+stored payloads fail safely, prior valid target evidence can be retained during
+collector failure, and expired evidence is explicitly stale. Overall status
+includes collector health. The full backend suite now has 48 passing tests and
+the running API has persisted version `1.0` snapshots successfully.
+
+The normalized Systems view is also implemented. It replaces the preview's
+static monitor buttons with selectable, virtualized resource cards showing
+target state, collector state, configuration, freshness, alert count, evidence
+summary, and links to the authoritative specialized monitor windows. Visual
+acceptance remains pending; the committed feature default is still off.
+
 1. Confirm the MOVEit execution-history endpoint for this installation. The known REST history candidates returned 404; task catalog and task detail work.
 2. Confirm recent MOVEit log retention/access. The remote log root is reachable, but the newest files currently observed are older than five days.
 3. Connect the five remote starter servers through the existing ServerMonitoring agent/hub feed; the native table currently reports them as `Agent not connected`.

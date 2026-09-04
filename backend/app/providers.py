@@ -208,6 +208,7 @@ class OpenAICompatibleProvider:
     def _endpoints(self, location: str) -> list[ProviderEndpoint]:
         host = self._settings.remote_provider_host if location == "remote" else self._settings.local_provider_host
         return [
+            ProviderEndpoint(location, "dmr", f"http://{host}:12434/engines/v1/models", f"http://{host}:12434/engines/v1/chat/completions"),
             ProviderEndpoint(location, "lmstudio", f"http://{host}:1234/v1/models", f"http://{host}:1234/v1/chat/completions"),
             ProviderEndpoint(location, "ollama", f"http://{host}:11434/api/tags", f"http://{host}:11434/v1/chat/completions"),
             ProviderEndpoint(location, "litellm", f"http://{host}:4000/v1/models", f"http://{host}:4000/v1/chat/completions", self._settings.litellm_api_key),
@@ -292,7 +293,7 @@ class OpenAICompatibleProvider:
         if task != "vision" and any(token in name for token in ("vl", "vision")):
             role_score -= 15
         if route.model == self._settings.model:
-            role_score += 25
+            role_score += 75
         hardware_score = 0
         if route.location == "local" and route.size_bytes > 0:
             if self._gpu_vram_mb > 0 and route.size_bytes <= self._gpu_vram_mb * 1024 * 1024 * 0.90:

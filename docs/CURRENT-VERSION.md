@@ -3,9 +3,15 @@
 ## Planning update — 2026-09-03
 
 A separate movable/resizable Operations Monitoring Center is now approved as
-the unified read-only monitoring and navigation surface. Implementation has not
-started. Existing MoveIT, Server, FreeFlow, Qualys, and Workflow windows remain
-authoritative. Read `docs/OPERATIONS-MONITORING-CENTER-PLAN.md`, then the
+the unified read-only monitoring and navigation surface. Its Phase 0 shell is
+implemented behind a disabled-by-default feature flag and is connected to the
+versioned read-only normalized aggregation endpoint. Normalized snapshots are
+durable with bounded retention and explicit last-known-good/staleness behavior.
+The preview Systems panel now presents selectable normalized resource cards
+with target/collector state, freshness, alerts, configuration, and navigation.
+Existing MoveIT, Server, FreeFlow, Qualys,
+and Workflow windows remain authoritative. Read
+`docs/OPERATIONS-MONITORING-CENTER-PLAN.md`, then the
 Enterprise evaluation and selective-adoption plan in the sibling
 `Aegis-Platform` repository before changing monitoring architecture.
 

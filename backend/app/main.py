@@ -24,6 +24,7 @@ from app.monitoring import (
     MonitoringDashboard,
     MonitoringStore,
 )
+from app.operations_monitoring import MonitorDescriptor, OperationsMonitoringSnapshot, OperationsSummary, collect_operations_snapshot
 from app.storage import ApprovalState, FileEntry, JarvisStore, SessionState, Workflow, WorkflowImportResult, WorkflowRun, WorkflowRunEvent, WorkflowTransferPackage, WorkflowTransition
 from app.supervisor import TopologyReconciliation, WorkflowCapacity, WorkflowWindowPlacement, get_workflow_capacity
 from app.workflow_execution import WorkflowExecutionError, WorkflowExecutionManager
@@ -230,12 +231,12 @@ async def lifespan(app: FastAPI):
         settings.upload_dir,
         settings,
     )
-    app.state.monitoring.collect()
+    collect_operations_snapshot(app.state.monitoring)
 
     async def monitoring_loop() -> None:
         while True:
             await asyncio.sleep(settings.moveit_task_poll_seconds)
-            app.state.monitoring.collect()
+            collect_operations_snapshot(app.state.monitoring)
 
     async def workflow_scheduler_loop() -> None:
         while True:
@@ -365,6 +366,27 @@ async def monitoring_dashboard(
     monitoring: MonitoringCollector = Depends(get_monitoring),
 ) -> MonitoringDashboard:
     return monitoring.collect()
+
+
+@app.get("/api/operations/monitoring", response_model=OperationsMonitoringSnapshot)
+async def operations_monitoring_snapshot(
+    monitoring: MonitoringCollector = Depends(get_monitoring),
+) -> OperationsMonitoringSnapshot:
+    return collect_operations_snapshot(monitoring)
+
+
+@app.get("/api/operations/summary", response_model=OperationsSummary)
+async def operations_monitoring_summary(
+    monitoring: MonitoringCollector = Depends(get_monitoring),
+) -> OperationsSummary:
+    return collect_operations_snapshot(monitoring).summary
+
+
+@app.get("/api/operations/collectors", response_model=list[MonitorDescriptor])
+async def operations_monitoring_collectors(
+    monitoring: MonitoringCollector = Depends(get_monitoring),
+) -> list[MonitorDescriptor]:
+    return collect_operations_snapshot(monitoring).monitors
 
 
 @app.post("/api/monitoring/actions", response_model=MonitoringActionResult, status_code=status.HTTP_202_ACCEPTED)

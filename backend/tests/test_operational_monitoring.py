@@ -2,15 +2,122 @@ import json
 import sqlite3
 import tempfile
 import unittest
+from datetime import datetime, timezone
 from pathlib import Path
 from subprocess import CompletedProcess
 from unittest.mock import Mock, patch
 
 from app.config import Settings
-from app.monitoring import FreeFlowAdapter, LocalServerAdapter, MonitoringStore, MoveItAdapter, MoveItTask, QualysAdapter
+from app.monitoring import (
+    FreeFlowAdapter, FreeFlowMonitor, LocalServerAdapter, MonitoringAlert,
+    MonitoringDashboard, MonitoringStore, MoveItAdapter, MoveItMonitor,
+    MoveItTask, QualysAdapter, QualysMonitor, ServerMonitor,
+)
+from app.operations_monitoring import OperationsMonitoringSnapshot, build_operations_snapshot
+from app.storage import JarvisStore
 
 
 class OperationalMonitoringTests(unittest.TestCase):
+    def test_operations_snapshot_separates_target_and_collector_state(self):
+        captured_at = "2026-09-03T12:00:00+00:00"
+        dashboard = MonitoringDashboard(
+            generated_at=captured_at,
+            moveit=MoveItMonitor(status="unavailable", adapter="moveit-rest", last_checked_at=captured_at, detail="MoveIT credentials are not configured."),
+            server=ServerMonitor(status="warning", last_checked_at=captured_at, detail="One automatic service requires attention."),
+            freeflow=FreeFlowMonitor(status="healthy", last_checked_at=captured_at, detail="Both portals responded."),
+            qualys=QualysMonitor(status="error", last_checked_at=captured_at, detail="Urgent findings detected."),
+            alerts=[MonitoringAlert(id=7, source="qualys", severity="error", title="Urgent finding", detail="Review required", status="active", created_at=captured_at)],
+        )
+
+        snapshot = build_operations_snapshot(dashboard)
+        moveit = next(item for item in snapshot.monitors if item.monitor_id == "moveit")
+        moveit_observation = next(item for item in snapshot.observations if item.monitor_id == "moveit")
+
+        self.assertEqual("1.0", snapshot.contract_version)
+        self.assertEqual("critical", snapshot.summary.overall_state)
+        self.assertEqual(1, snapshot.summary.counts.healthy)
+        self.assertEqual(1, snapshot.summary.counts.degraded)
+        self.assertEqual(1, snapshot.summary.counts.critical)
+        self.assertEqual(1, snapshot.summary.counts.unknown)
+        self.assertEqual("unconfigured", moveit.configuration_state)
+        self.assertEqual("misconfigured", moveit.collector_state)
+        self.assertEqual("unknown", moveit_observation.state)
+        self.assertEqual("collector.misconfigured", moveit_observation.diagnostic_code)
+        self.assertEqual("critical", snapshot.alerts[0].severity)
+
+    def test_operations_snapshot_uses_platform_contract_aliases(self):
+        captured_at = "2026-09-03T12:00:00Z"
+        dashboard = MonitoringDashboard(
+            generated_at=captured_at,
+            moveit=MoveItMonitor(status="healthy", adapter="moveit-rest", last_checked_at=captured_at, detail="Ready"),
+            server=ServerMonitor(status="healthy", last_checked_at=captured_at, detail="Ready"),
+            freeflow=FreeFlowMonitor(status="healthy", last_checked_at=captured_at, detail="Ready"),
+            qualys=QualysMonitor(status="healthy", last_checked_at=captured_at, detail="Ready"),
+        )
+
+        payload = build_operations_snapshot(dashboard).model_dump(by_alias=True)
+
+        self.assertEqual({"contractVersion", "generatedAtUtc", "summary", "monitors", "observations", "alerts"}, set(payload))
+        self.assertIn("overallState", payload["summary"])
+        self.assertIn("collectorState", payload["monitors"][0])
+        self.assertIn("validUntilUtc", payload["observations"][0])
+
+    def test_operations_snapshot_retains_last_good_target_but_marks_collector_failure(self):
+        captured_at = "2026-09-03T12:00:00Z"
+        healthy = MonitoringDashboard(
+            generated_at=captured_at,
+            moveit=MoveItMonitor(status="healthy", adapter="moveit-rest", last_checked_at=captured_at, detail="Last run succeeded"),
+            server=ServerMonitor(status="healthy", last_checked_at=captured_at, detail="Ready"),
+            freeflow=FreeFlowMonitor(status="healthy", last_checked_at=captured_at, detail="Ready"),
+            qualys=QualysMonitor(status="healthy", last_checked_at=captured_at, detail="Ready"),
+        )
+        previous = build_operations_snapshot(healthy, now=datetime(2026, 9, 3, 12, 0, tzinfo=timezone.utc))
+        failed_at = "2026-09-03T12:01:00Z"
+        failed = healthy.model_copy(deep=True)
+        failed.generated_at = failed_at
+        failed.moveit = MoveItMonitor(status="unavailable", adapter="moveit-rest", last_checked_at=failed_at, detail="MoveIT credentials are not configured.")
+
+        snapshot = build_operations_snapshot(failed, previous=previous, now=datetime(2026, 9, 3, 12, 1, tzinfo=timezone.utc))
+        observation = next(item for item in snapshot.observations if item.monitor_id == "moveit")
+
+        self.assertEqual("healthy", observation.state)
+        self.assertEqual("misconfigured", observation.collector_state)
+        self.assertEqual(captured_at, observation.collected_at_utc)
+        self.assertIn("Last known target evidence", observation.summary)
+        self.assertEqual("misconfigured", snapshot.summary.overall_state)
+
+    def test_expired_evidence_is_marked_stale(self):
+        captured_at = "2026-09-03T12:00:00Z"
+        dashboard = MonitoringDashboard(
+            generated_at=captured_at,
+            moveit=MoveItMonitor(status="healthy", adapter="moveit-rest", last_checked_at=captured_at, detail="Ready"),
+            server=ServerMonitor(status="healthy", last_checked_at=captured_at, detail="Ready"),
+            freeflow=FreeFlowMonitor(status="healthy", last_checked_at=captured_at, detail="Ready"),
+            qualys=QualysMonitor(status="healthy", last_checked_at=captured_at, detail="Ready"),
+        )
+
+        snapshot = build_operations_snapshot(dashboard, now=datetime(2026, 9, 3, 12, 20, tzinfo=timezone.utc))
+
+        self.assertTrue(all(item.collector_state == "stale" for item in snapshot.observations))
+        self.assertTrue(all(item.collector_state == "stale" for item in snapshot.monitors))
+        self.assertEqual("unknown", snapshot.summary.overall_state)
+
+    def test_normalized_snapshot_persists_across_store_instances(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = JarvisStore(Path(directory) / "aegis.db")
+            store.initialize()
+            monitoring_store = MonitoringStore(store._connect)
+            payload = OperationsMonitoringSnapshot(
+                generated_at_utc="2026-09-03T12:00:00Z",
+                summary={"overall_state": "unknown", "counts": {}},
+                monitors=[], observations=[], alerts=[],
+            ).model_dump_json(by_alias=True)
+
+            monitoring_store.save_operations_snapshot(payload, "2026-09-03T12:00:00Z")
+            reloaded = MonitoringStore(store._connect).get_latest_operations_snapshot()
+
+            self.assertEqual("1.0", OperationsMonitoringSnapshot.model_validate_json(reloaded).contract_version)
+
     def test_freeflow_hosts_are_visible_before_urls_are_configured(self):
         with tempfile.TemporaryDirectory() as directory:
             inventory = Path(directory) / "freeflow.json"

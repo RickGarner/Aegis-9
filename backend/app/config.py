@@ -9,6 +9,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 WORK_LMSTUDIO_BASE_URL = "http://10.30.75.229:1234/v1"
 HOME_LMSTUDIO_BASE_URL = "http://127.0.0.1:1234/v1"
+DMR_BASE_URL = "http://10.30.75.229:12434/engines/v1"
 
 
 def _work_lmstudio_is_reachable() -> bool:
@@ -30,15 +31,16 @@ class Settings(BaseSettings):
         default="auto",
         validation_alias="JARVIS_ENVIRONMENT",
     )
-    provider: str = Field(default="lmstudio", validation_alias="JARVIS_PROVIDER")
+    provider: str = Field(default="dmr", validation_alias="JARVIS_PROVIDER")
     provider_base_url: str | None = Field(
         default=None,
         validation_alias="JARVIS_PROVIDER_BASE_URL",
     )
     model: str = Field(
-        default="qwen3-coder-30b-a3b-instruct",
+        default="docker.io/ai/qwen3-coder:30b-a3b-q4_K_M",
         validation_alias="JARVIS_MODEL",
     )
+    dmr_base_url: str = Field(default=DMR_BASE_URL, validation_alias="JARVIS_DMR_BASE_URL")
     lmstudio_base_url: str = Field(default="http://127.0.0.1:1234/v1", validation_alias="JARVIS_LMSTUDIO_BASE_URL")
     ollama_base_url: str = Field(default="http://127.0.0.1:11434", validation_alias="JARVIS_OLLAMA_BASE_URL")
     litellm_base_url: str = Field(default="http://127.0.0.1:4000/v1", validation_alias="JARVIS_LITELLM_BASE_URL")
@@ -54,7 +56,7 @@ class Settings(BaseSettings):
     )
     provider_retry_count: int = Field(default=1, ge=0, le=3, validation_alias="JARVIS_PROVIDER_RETRY_COUNT")
     provider_preference: str = Field(
-        default="lmstudio,ollama,litellm",
+        default="dmr,lmstudio,ollama,litellm",
         validation_alias="JARVIS_PROVIDER_PREFERENCE",
     )
     fallback_model: str | None = Field(
@@ -149,7 +151,14 @@ class Settings(BaseSettings):
             self.workflow_artifact_root = (Path(__file__).resolve().parents[2] / self.workflow_artifact_root).resolve()
         if not self.workflow_action_catalog_path.is_absolute():
             self.workflow_action_catalog_path = (Path(__file__).resolve().parents[2] / self.workflow_action_catalog_path).resolve()
-        if self.provider_base_url is not None or self.provider != "lmstudio":
+        if self.provider_base_url is not None:
+            return self
+
+        if self.provider == "dmr":
+            self.provider_base_url = self.dmr_base_url
+            return self
+
+        if self.provider != "lmstudio":
             return self
 
         if self.environment == "work" or (
