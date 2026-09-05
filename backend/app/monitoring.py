@@ -631,8 +631,9 @@ class QualysAdapter:
 
 
 class MonitoringCollector:
-    def __init__(self, store: "MonitoringStore", audit_root: Path, settings: Settings) -> None:
+    def __init__(self, store: "MonitoringStore", audit_root: Path, settings: Settings, workflow_store=None) -> None:
         self.store = store
+        self.workflow_store = workflow_store
         self.audit_root = audit_root
         self.moveit = MoveItAdapter(settings)
         self.server = LocalServerAdapter(settings)

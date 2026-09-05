@@ -56,11 +56,15 @@ class Settings(BaseSettings):
     )
     provider_retry_count: int = Field(default=1, ge=0, le=3, validation_alias="JARVIS_PROVIDER_RETRY_COUNT")
     provider_preference: str = Field(
-        default="dmr,lmstudio,ollama,litellm",
+        default="dmr,ollama",
         validation_alias="JARVIS_PROVIDER_PREFERENCE",
     )
+    tool_capable_models: str = Field(
+        default="dmr/docker.io/ai/qwen3-coder:30b-a3b-q4_K_M,dmr/docker.io/ai/qwen3:8b-q4_K_M,ollama/llama3.1:8b,ollama/llama3.2:latest",
+        validation_alias="JARVIS_TOOL_CAPABLE_MODELS",
+    )
     fallback_model: str | None = Field(
-        default="qwen2.5-coder-7b-instruct",
+        default="llama3.1:8b",
         validation_alias="JARVIS_FALLBACK_MODEL",
     )
     request_timeout_seconds: float = Field(

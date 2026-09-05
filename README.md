@@ -37,7 +37,7 @@ If you need the web dashboard, use `D:\Jarvis_Web` instead. The two folders do n
 
 - Cinematic A.E.G.I.S.-9 WPF command center with a cohesive dark operations layout
 - Cyber-lupine WebView2 avatar runtime with local head, bust, rigged, and warrior GLB assets
-- Adaptive provider discovery and routing across local/remote LM Studio, Ollama, and LiteLLM
+- DMR-primary provider discovery with Ollama failover and a verified native-tool-call model allowlist
 - Local voice input through Faster-Whisper with WPF microphone capture
 - Local Kokoro speech output with offline Windows speech fallback
 - Reproducible Windows workstation bootstrap and validation under `deployment/windows/`
@@ -63,8 +63,9 @@ Copy `.env.example` to `.env` if it does not already exist, and adjust provider 
 
 For a clean Windows computer, use the reproducible workstation bootstrap in
 `deployment/windows/Install-Aegis9Workstation.ps1`. It installs the required
-.NET/Python/WebView2 runtimes and configures Ollama, LiteLLM, LM Studio llmster,
-and Kokoro as auto-start local services. See `deployment/windows/README.md` for
+.NET/Python/WebView2 runtimes and configures Ollama and Kokoro as auto-start
+local services. Docker Desktop with Model Runner is the required primary AI
+runtime; legacy LM Studio/LiteLLM setup is opt-in only. See `deployment/windows/README.md` for
 model profiles, disk requirements, validation, and troubleshooting.
 
 Build and launch the native Windows shell (it starts its own backend automatically):

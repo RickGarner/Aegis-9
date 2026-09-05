@@ -37,7 +37,7 @@ Evidence and historical detail are in
 **Status: Complete.**
 
 Delivered: FastAPI backend, native .NET 8 WPF cinematic command center,
-provider-neutral local chat through LM Studio/Ollama/LiteLLM-compatible endpoints,
+provider-neutral local chat through DMR-primary/Ollama-failover endpoints,
 health and fallback routing, SQLite persistence, session restoration, logs,
 backend auto-start, and readiness handling.
 
@@ -96,12 +96,16 @@ Delivered:
 - severity-first read-only Qualys collector foundation
 - durable, deduplicated alerts
 
+Delivered since the original plan: the enabled movable/resizable read-only
+Operations Monitoring Center, normalized monitor/observation/alert contracts,
+window/layout persistence, detail navigation, and aggregation of existing
+collectors plus workflow/schedule state.
+
 Remaining:
 
-- implement the read-only Operations Monitoring Center shell, normalized
-  monitor/observation/alert contracts, layout persistence, and detail navigation
-- aggregate existing monitors, workflows, schedules, backend/providers, and
-  collector health without rewriting the specialized collectors
+- aggregate A.E.G.I.S. backend/provider/voice/dependency health and authenticated
+  Developer Studio status
+- persist filters, sorting, and selection across topology changes
 - adopt the Enterprise AI operations-catalog concepts only after the initial
   Aegis-native aggregation surface is accepted
 
@@ -168,10 +172,10 @@ behavior, and persistent research/task context.
 
 ## Phase 9 — Aegis Developer Studio
 
-**Status: In progress. Launcher implemented; runtime acceptance and bridge pending.**
+**Status: In progress. Product rename and repository-tool priorities 1–6 are complete; bridge and broader runtime acceptance remain.**
 
-WolfForge already provides a branded Code - OSS app; Local AI through Ollama, LM
-Studio, LiteLLM, dual and custom providers; capability routing; repository-aware
+Aegis Developer Studio provides a branded Code - OSS app; Local AI through
+DMR-primary/Ollama-failover routing; capability-aware repository
 plan/implement/review/test roles; approved edits; repository/project maps,
 memory, context, diagnostics, Git/impact/build ownership and symbol tools; project
 plans; proactive suggestions; explicit proceed gates; protected paths; recovery;
@@ -186,12 +190,10 @@ Remaining milestones:
 1. Live-accept launch/focus/reuse with the `development-v2` IDE build.
 2. Add an authenticated local bridge for version, session, repository,
    provider/model, activity, and approval state.
-3. Add governed rename/move/delete, real project scaffolding/conversion,
-   build/test evidence, and workflow handoff.
+3. Complete conversion pipelines, build/test evidence exchange, and workflow handoff.
 4. Complete product-wide Local-Only Mode, telemetry/auth audit, outbound policy,
    and a blocked-cloud-egress acceptance test.
-5. Validate packaging and multi-computer setup, then deliberately migrate the
-   WolfForge identity to Aegis Developer Studio.
+5. Validate packaging and multi-computer setup.
 
 ## Phase 10 — Security, stability, packaging, and release
 
@@ -212,18 +214,16 @@ workflow isolation, authorization, packaging, and recovery pass documented tests
 
 ## Current execution order
 
-1. Build the read-only Operations Monitoring Center shell and normalized
-   monitoring contracts.
-2. Aggregate existing monitors, workflow/schedule state, and collector health.
-3. Implement the read-only authenticated A.E.G.I.S./Developer Studio bridge and
+1. Commit, push, and clean-machine validate the 2026-09-05 baselines.
+2. Implement the read-only authenticated A.E.G.I.S./Developer Studio bridge and
    display its status in the Monitoring Center.
-4. Add authenticated roles, tamper-evident audit, global kill switch, grounded
+3. Add authenticated roles, tamper-evident audit, global kill switch, grounded
    output policy, and the default-deny adapter registry.
-5. Complete Qualys, FreeFlow, MoveIT, server, and notification acceptance; then
+4. Complete Qualys, FreeFlow, MoveIT, server, and notification acceptance; then
    adopt approved Enterprise operations-catalog and monitoring enhancements.
-6. Add workflow sandboxing, managed secrets, and signing.
-7. Connect Developer Studio build/test evidence to immutable A.E.G.I.S. workflows.
-8. Finish Developer Studio agent/MCP evidence, project execution, and Local-Only controls.
-9. Add the managed knowledge/RAG increment after its architecture decision.
-10. Resume research, broader automation, preference memory, advanced workspaces,
+5. Add workflow sandboxing, managed secrets, and signing.
+6. Connect Developer Studio build/test evidence to immutable A.E.G.I.S. workflows.
+7. Finish Developer Studio agent/MCP evidence, conversion execution, and Local-Only controls.
+8. Add the managed knowledge/RAG increment after its architecture decision.
+9. Resume research, broader automation, preference memory, advanced workspaces,
    and final voice/lip-sync acceptance.

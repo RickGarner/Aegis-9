@@ -5,7 +5,8 @@ param(
     [ValidateSet('None','Core','Full')] [string]$ModelProfile = 'Core',
     [string]$LmStudioModel = 'ibm/granite-4-micro',
     [PSCredential]$LmStudioServiceCredential,
-    [switch]$SkipLmStudioService
+    [switch]$SkipLmStudioService,
+    [switch]$InstallLegacyProviders
 )
 
 $ErrorActionPreference = 'Stop'
@@ -195,7 +196,9 @@ New-Item -ItemType Directory -Force -Path $ollamaModels | Out-Null
 Install-WinSWService -Name 'Ollama' -DisplayName 'Ollama Local Model Service' -Application $ollama -WorkingDirectory $ollamaDirectory -Arguments 'serve' -Environment @("OLLAMA_MODELS=$ollamaModels","OLLAMA_HOST=127.0.0.1:11434")
 Start-Service Ollama
 
-Write-Host 'Installing LiteLLM service...'
+$masterKey = ''
+if ($InstallLegacyProviders) {
+Write-Host 'Installing optional legacy LiteLLM service...'
 $liteDirectory = Join-Path $serviceRoot 'LiteLLM'
 New-Item -ItemType Directory -Force -Path $liteDirectory | Out-Null
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'services\litellm\config.yaml') -Destination (Join-Path $liteDirectory 'config.yaml') -Force
@@ -211,6 +214,7 @@ $currentAccount = [Security.Principal.WindowsIdentity]::GetCurrent().Name
 $masterKey = (Get-Content -LiteralPath $masterKeyPath -Raw).Trim()
 Install-WinSWService -Name 'LiteLLM' -DisplayName 'LiteLLM Local AI Gateway' -Application $liteExecutable -WorkingDirectory $liteDirectory -Arguments "--config `"$liteDirectory\config.yaml`" --host 127.0.0.1 --port 4000" -Environment @('PYTHONUTF8=1','PYTHONIOENCODING=utf-8',"LITELLM_MASTER_KEY=$masterKey")
 Start-Service LiteLLM
+}
 
 Write-Host 'Installing Kokoro speech service...'
 $kokoroDirectory = Join-Path $serviceRoot 'Kokoro'
@@ -225,7 +229,7 @@ Invoke-Download 'https://github.com/thewh1teagle/kokoro-onnx/releases/download/m
 Install-WinSWService -Name 'Aegis9Kokoro' -DisplayName 'A.E.G.I.S.-9 Kokoro Neural Speech' -Application $kokoroPython -WorkingDirectory $kokoroDirectory -Arguments "-m uvicorn app:app --app-dir `"$kokoroDirectory`" --host 127.0.0.1 --port 5050 --no-use-colors" -Environment @("KOKORO_MODEL_ROOT=$kokoroModels","KOKORO_CACHE_ROOT=$kokoroModels\cache")
 Start-Service Aegis9Kokoro
 
-if (-not $SkipLmStudioService) {
+if ($InstallLegacyProviders -and -not $SkipLmStudioService) {
     Write-Host 'Installing LM Studio llmster headless runtime...'
     $lmInstaller = Join-Path $downloadRoot 'lmstudio-install.ps1'
     Invoke-Download 'https://lmstudio.ai/install.ps1' $lmInstaller
@@ -250,8 +254,8 @@ if (-not $SkipLmStudioService) {
 }
 
 if ($ModelProfile -ne 'None') {
-    $ollamaCoreModels = @('llama3.2:latest','qwen2.5-coder:7b','qwen3-vl:4b','nomic-embed-text:latest')
-    $ollamaFullModels = @('gpt-oss:20b','devstral-small-2:24b','qwen3-vl:8b','qwen3-coder:30b','embeddinggemma:latest','qwen2.5-coder:14b','deepseek-coder-v2:16b','deepseek-coder:6.7b')
+    $ollamaCoreModels = @('llama3.1:8b','llama3.2:latest')
+    $ollamaFullModels = @()
     $models = if ($ModelProfile -eq 'Full') { $ollamaCoreModels + $ollamaFullModels } else { $ollamaCoreModels }
     foreach ($model in $models | Select-Object -Unique) {
         Write-Host "Pulling Ollama model $model"
@@ -271,7 +275,10 @@ if (-not (Test-Path -LiteralPath $dotEnv)) { Copy-Item -LiteralPath (Join-Path $
 Set-DotEnvValue $dotEnv 'JARVIS_LMSTUDIO_BASE_URL' 'http://127.0.0.1:1234/v1'
 Set-DotEnvValue $dotEnv 'JARVIS_OLLAMA_BASE_URL' 'http://127.0.0.1:11434'
 Set-DotEnvValue $dotEnv 'JARVIS_LITELLM_BASE_URL' 'http://127.0.0.1:4000/v1'
-Set-DotEnvValue $dotEnv 'JARVIS_LITELLM_API_KEY' $masterKey
+if ($masterKey) { Set-DotEnvValue $dotEnv 'JARVIS_LITELLM_API_KEY' $masterKey }
+Set-DotEnvValue $dotEnv 'JARVIS_PROVIDER' 'dmr'
+Set-DotEnvValue $dotEnv 'JARVIS_PROVIDER_PREFERENCE' 'dmr,ollama'
+Set-DotEnvValue $dotEnv 'JARVIS_TOOL_CAPABLE_MODELS' 'dmr/docker.io/ai/qwen3-coder:30b-a3b-q4_K_M,dmr/docker.io/ai/qwen3:8b-q4_K_M,ollama/llama3.1:8b,ollama/llama3.2:latest'
 Set-DotEnvValue $dotEnv 'JARVIS_PROVIDER_DISCOVERY_ENABLED' 'true'
 Set-DotEnvValue $dotEnv 'JARVIS_WHISPER_MODEL' 'small.en'
 Set-DotEnvValue $dotEnv 'JARVIS_WHISPER_DEVICE' 'auto'

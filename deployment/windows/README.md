@@ -1,5 +1,9 @@
 # A.E.G.I.S.-9 Windows workstation bootstrap
 
+## Current provider policy — 2026-09-05
+
+Docker Model Runner is the required primary AI runtime. Ollama is installed as the only active failover, using the verified `llama3.1:8b` and `llama3.2:latest` tool-capable models. LiteLLM and LM Studio are legacy/experimental components and are skipped by default; use `-InstallLegacyProviders` only for controlled compatibility testing. Older inventory, sizing, and troubleshooting notes below that describe them as default services are superseded by this policy.
+
 > This bootstrap belongs to the canonical `feature/cinematic-jarvis-ui`
 > branch. Confirm that branch before running it. The older `main` branch does
 > not contain the current cinematic UI/runtime stack. See

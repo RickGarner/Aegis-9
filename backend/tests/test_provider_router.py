@@ -11,6 +11,7 @@ def settings() -> Settings:
         JARVIS_PROVIDER_BASE_URL="http://127.0.0.1:1234/v1",
         JARVIS_PROVIDER_DISCOVERY_ENABLED=True,
         JARVIS_LITELLM_API_KEY="sk-test",
+        JARVIS_MODEL="docker.io/ai/qwen3:8b-q4_K_M",
     )
 
 
@@ -21,6 +22,33 @@ class ProviderDiscoveryTests(unittest.IsolatedAsyncioTestCase):
         endpoints = router._endpoints("remote")
 
         self.assertEqual(("dmr", "http://10.30.75.229:12434/engines/v1/models"), (endpoints[0].provider, endpoints[0].catalog_url))
+
+    async def test_only_dmr_and_ollama_are_active_provider_endpoints(self) -> None:
+        router = OpenAICompatibleProvider(settings())
+
+        self.assertEqual(["dmr", "ollama"], [endpoint.provider for endpoint in router._endpoints("local")])
+
+    async def test_provider_priority_keeps_dmr_ahead_of_higher_scoring_ollama(self) -> None:
+        router = OpenAICompatibleProvider(settings())
+        router._candidates = [
+            ProviderRoute("local", "ollama", "llama3.1:8b", "http://ollama/chat"),
+            ProviderRoute("local", "dmr", "docker.io/ai/qwen3:8b-q4_K_M", "http://dmr/chat"),
+        ]
+
+        self.assertEqual(["dmr", "ollama"], [route.provider for route in router._ranked_candidates("general")])
+
+    async def test_tool_capability_allowlist_rejects_unverified_models(self) -> None:
+        router = OpenAICompatibleProvider(settings())
+
+        self.assertEqual(
+            [True, True, False, False],
+            [
+                router._is_tool_capable(ProviderRoute("local", "dmr", "docker.io/ai/qwen3:8b-q4_K_M", "http://chat")),
+                router._is_tool_capable(ProviderRoute("local", "ollama", "llama3.1:8b", "http://chat")),
+                router._is_tool_capable(ProviderRoute("local", "ollama", "qwen2.5-coder:7b", "http://chat")),
+                router._is_tool_capable(ProviderRoute("local", "lmstudio", "unknown", "http://chat")),
+            ],
+        )
 
     async def test_explicit_primary_model_wins_general_routing_when_available(self) -> None:
         router = OpenAICompatibleProvider(settings())
@@ -66,7 +94,7 @@ class ProviderDiscoveryTests(unittest.IsolatedAsyncioTestCase):
         router = OpenAICompatibleProvider(settings())
         router._candidates = [
             ProviderRoute("local", "ollama", "deepseek-r1:8b", "http://reason"),
-            ProviderRoute("local", "lmstudio", "qwen2.5-coder:7b", "http://code"),
+            ProviderRoute("local", "ollama", "qwen2.5-coder:7b", "http://code"),
         ]
         self.assertEqual("deepseek-r1:8b", router._ranked_candidates("reasoning")[0].model)
         self.assertEqual("qwen2.5-coder:7b", router._ranked_candidates("code")[0].model)

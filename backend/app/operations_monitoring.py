@@ -226,6 +226,7 @@ def build_operations_snapshot(
 
 
 def collect_operations_snapshot(monitoring: MonitoringCollector) -> OperationsMonitoringSnapshot:
+    workflow_store = monitoring.workflow_store
     previous = None
     previous_json = monitoring.store.get_latest_operations_snapshot()
     if previous_json:
@@ -236,9 +237,9 @@ def collect_operations_snapshot(monitoring: MonitoringCollector) -> OperationsMo
     snapshot = build_operations_snapshot(
         monitoring.collect(),
         previous=previous,
-        workflows=monitoring.store.get_workflows(),
-        latest_runs=monitoring.store.get_latest_workflow_runs(),
-        notification_states=monitoring.store.get_latest_workflow_notification_states(),
+        workflows=workflow_store.get_workflows() if workflow_store else [],
+        latest_runs=workflow_store.get_latest_workflow_runs() if workflow_store else {},
+        notification_states=workflow_store.get_latest_workflow_notification_states() if workflow_store else {},
     )
     monitoring.store.save_operations_snapshot(
         snapshot.model_dump_json(by_alias=True), snapshot.generated_at_utc, snapshot.contract_version

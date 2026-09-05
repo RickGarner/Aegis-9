@@ -1,6 +1,6 @@
 # A.E.G.I.S.-9 and Aegis Developer Studio Implementation Checklist
 
-**Updated:** 2026-09-03
+**Updated:** 2026-09-05
 
 `[x]` means implemented with current evidence. `[ ]` includes incomplete,
 configuration-blocked, or live-acceptance work. Cross-product items are labeled
@@ -9,11 +9,11 @@ configuration-blocked, or live-acceptance work. Cross-product items are labeled
 ## Repository and continuity safety
 
 - [x] Identify the canonical A.E.G.I.S. cinematic branch.
-- [x] Identify WolfForge `development-v2` as the Developer Studio active branch.
+- [x] Identify Aegis Developer Studio `development-v2` as the active IDE branch.
 - [x] Keep the two products in separate repositories.
 - [x] Preserve older A.E.G.I.S. `main` and WolfForge v1 as recovery points.
 - [x] Add a cross-project status audit and source-of-truth order.
-- [ ] Reconcile stale older handoff text whenever its feature area changes.
+- [x] Reconcile stale roadmap/checklist status through the 2026-09-05 checkpoint.
 - [ ] Define A.E.G.I.S. release promotion/merge criteria.
 
 ## A.E.G.I.S.-9 foundation and providers
@@ -22,13 +22,15 @@ configuration-blocked, or live-acceptance work. Cross-product items are labeled
 - [x] Native .NET 8 WPF cinematic command center.
 - [x] Local chat, logs, SQLite, and state restoration.
 - [x] Backend auto-start and health/readiness handling.
-- [x] LM Studio, Ollama, and LiteLLM-compatible providers.
+- [x] DMR-primary and Ollama-failover providers; retain LM Studio/LiteLLM as inactive compatibility code.
 - [x] Provider discovery, health, adaptive routing, and fallback.
+- [x] Standardize family routing on DMR primary and Ollama-only failover.
+- [x] Exclude providers and models without verified native tool calling.
 - [x] Windows dependency manifest, installer, validator, and service templates.
-- [x] Current backend suite: 43 tests passing on 2026-09-02.
-- [x] Current WPF solution: build succeeds with 0 errors on 2026-09-02.
+- [x] Current backend suite: 66 tests passing on 2026-09-05.
+- [x] Current WPF solution: build succeeds with 0 errors on 2026-09-05.
 - [ ] Validate model profiles across different CPU/GPU hardware.
-- [ ] Validate services and LM Studio credentials after reboot.
+- [ ] Validate DMR primary, Ollama failover, and local services after reboot.
 - [ ] Complete clean-machine production installer/package acceptance.
 
 ## File intake and research
@@ -63,16 +65,16 @@ configuration-blocked, or live-acceptance work. Cross-product items are labeled
 - [x] Local/remote Windows CPU, memory, disk, filesystem, and service checks.
 - [x] Approve the separate movable/resizable Operations Monitoring Center
   direction and document its contracts, increments, safety, and acceptance plan.
-- [ ] Implement the feature-flagged native Monitoring Center window shell.
-- [ ] Add normalized monitor, resource, observation, alert, and collector-health
+- [x] Implement and enable the native read-only Monitoring Center window shell.
+- [x] Add normalized monitor, resource, observation, alert, and collector-health
   contracts plus aggregation endpoints.
-- [ ] Aggregate MoveIT, Server, FreeFlow, and Qualys without replacing their
+- [x] Aggregate MoveIT, Server, FreeFlow, and Qualys without replacing their
   specialized windows or collectors.
-- [ ] Add workflow, approval, prerequisite, and schedule status.
+- [x] Add workflow, approval, prerequisite, and schedule status.
 - [ ] Add A.E.G.I.S. backend, provider, voice/runtime, and dependency health.
 - [ ] Add authenticated Developer Studio/bridge status.
-- [ ] Persist validated window bounds, layout mode, filters, sorting, and
-  selection across monitor-topology changes.
+- [x] Persist validated window bounds and layout mode.
+- [ ] Persist filters, sorting, and selection across monitor-topology changes.
 - [ ] Add incident acknowledgement, assignment, escalation, recovery, and
   notification-delivery state.
 - [ ] Complete accessibility, performance, stale-data, failure-isolation, and
@@ -153,29 +155,31 @@ configuration-blocked, or live-acceptance work. Cross-product items are labeled
 - [ ] General assistant orchestration outside the workflow subsystem.
 - [ ] Durable user workspaces and cross-panel context/drag behavior.
 
-## Developer Studio — WolfForge foundation
+## Aegis Developer Studio foundation
 
 - [x] Approve name, responsibility split, and separate Code - OSS foundation.
 - [x] Preserve upstream architecture and create v1/v2 branch safety.
-- [x] WolfForge branding and Windows/Welcome identity.
+- [x] Aegis Developer Studio branding and Windows/Welcome identity, with the former WolfForge line retained only for recovery history.
 - [x] Product-owned Local AI without mandatory Copilot authentication.
-- [x] Ollama/LM Studio/LiteLLM/dual/custom providers.
+- [x] DMR-primary/Ollama-failover active routing plus inactive compatibility providers.
 - [x] Discovery, streaming, cancellation, health, fallback, and capability routing.
 - [x] Plan/implement/review/test roles and approved atomic edits.
 - [x] Repository/project maps, memory, context, diagnostics, Git, impact,
   build/test ownership, and symbol tools.
 - [x] Project plans, proactive suggestions, and explicit proceed gate.
 - [x] Protected paths, recovery fixture, benchmarks, and release matrix.
-- [x] Current Local AI suite: 47 tests passing on 2026-09-02.
-- [x] Current deterministic release matrix: all 8 checks passing.
+- [x] Repository tool priorities 1–6: guarded edits/filesystem, bounded inspection, typed validation, read-only Git, and progressive context/tool budgeting.
+- [x] Current Local AI suite: 69 tests passing on 2026-09-05.
+- [x] Current deterministic release matrix: all 10 checks passing.
 - [ ] Live native-agent handoff validation.
 - [ ] Live MCP discovery/approval/result/failure/cancel validation.
 - [ ] Persistent dependency/import index, multi-root and unsaved context.
 - [ ] Diff annotations, inline findings, secret/branch/conflict assistance.
-- [ ] Governed rename/move/delete and multi-file rollback.
-- [ ] Actual C#/WPF/WinForms/PowerShell project scaffolding.
+- [x] Governed rename/move/delete and multi-file rollback.
+- [x] Governed C#/WPF/WinForms/PowerShell project scaffolding foundation.
 - [ ] VB.NET→C#, VB.NET→PowerShell, and C#→PowerShell conversion with repair.
-- [ ] Provider hardening, broader benchmarks, and explicit release criteria.
+- [x] DMR-first tool-capable provider filtering, failover, and preflight context budgeting.
+- [ ] Broader model/hardware benchmarks and explicit release criteria.
 
 ## A.E.G.I.S. ↔ Developer Studio integration
 
@@ -191,7 +195,7 @@ configuration-blocked, or live-acceptance work. Cross-product items are labeled
 - [ ] Return build/test output, hashes, and repair history to that exact revision.
 - [ ] Keep final user/supervisor promotion authority in A.E.G.I.S.
 - [ ] Package and validate the two-product setup on a clean computer.
-- [ ] Rename WolfForge only after bridge and packaging stability.
+- [x] Rename the active product and repository to Aegis Developer Studio while retaining recovery refs.
 
 ## Cross-product Local-Only Mode and security
 
@@ -209,7 +213,7 @@ configuration-blocked, or live-acceptance work. Cross-product items are labeled
 ## Release readiness
 
 - [x] Current A.E.G.I.S. backend tests and WPF build pass.
-- [x] Current WolfForge tests and release matrix pass.
+- [x] Current Aegis Developer Studio tests and release matrix pass.
 - [x] Clean-machine setup and transfer boundaries are documented.
 - [ ] Define a combined release acceptance matrix.
 - [ ] Complete voice/avatar and monitoring/notification acceptance.

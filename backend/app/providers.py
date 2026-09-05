@@ -121,7 +121,7 @@ class OpenAICompatibleProvider:
                 self._recommendation = self._build_recommendation([])
                 return self._health()
 
-            self._candidates.sort(key=lambda route: self._score(route, "general"), reverse=True)
+            self._candidates.sort(key=lambda route: (self._provider_priority(route), self._score(route, "general")), reverse=True)
             self._active = self._candidates[0]
             self._location = self._active.location
             self._status = "ready"
@@ -207,18 +207,20 @@ class OpenAICompatibleProvider:
 
     def _endpoints(self, location: str) -> list[ProviderEndpoint]:
         host = self._settings.remote_provider_host if location == "remote" else self._settings.local_provider_host
-        return [
+        endpoints = [
             ProviderEndpoint(location, "dmr", f"http://{host}:12434/engines/v1/models", f"http://{host}:12434/engines/v1/chat/completions"),
-            ProviderEndpoint(location, "lmstudio", f"http://{host}:1234/v1/models", f"http://{host}:1234/v1/chat/completions"),
             ProviderEndpoint(location, "ollama", f"http://{host}:11434/api/tags", f"http://{host}:11434/v1/chat/completions"),
-            ProviderEndpoint(location, "litellm", f"http://{host}:4000/v1/models", f"http://{host}:4000/v1/chat/completions", self._settings.litellm_api_key),
         ]
+        preference = [item.strip().lower() for item in self._settings.provider_preference.split(",") if item.strip()]
+        return sorted((endpoint for endpoint in endpoints if endpoint.provider in preference), key=lambda endpoint: preference.index(endpoint.provider))
 
     async def _scan_location(self, location: str) -> list[ProviderRoute]:
         results = await asyncio.gather(*(self._probe(endpoint) for endpoint in self._endpoints(location)))
         return [route for routes in results for route in routes if not self._is_embedding(route.model)]
 
     async def _scan_configured_provider(self) -> list[ProviderRoute]:
+        if self._settings.provider not in {"dmr", "ollama"}:
+            return []
         base = str(self._settings.provider_base_url).rstrip("/")
         if not base:
             return []
@@ -242,7 +244,9 @@ class OpenAICompatibleProvider:
             model = item.get("name") if endpoint.provider == "ollama" else item.get("id")
             if not isinstance(model, str) or not model.strip():
                 continue
-            routes.append(ProviderRoute(endpoint.location, endpoint.provider, model.strip(), endpoint.chat_url, endpoint.api_key, int(item.get("size") or 0)))
+            route = ProviderRoute(endpoint.location, endpoint.provider, model.strip(), endpoint.chat_url, endpoint.api_key, int(item.get("size") or 0))
+            if self._is_tool_capable(route):
+                routes.append(route)
         return routes
 
     async def _try_routes(self, routes: list[ProviderRoute], messages: Sequence[ChatMessage], errors: list[str]) -> tuple[str, ProviderRoute] | None:
@@ -263,7 +267,7 @@ class OpenAICompatibleProvider:
         return None
 
     def _ranked_candidates(self, task: str) -> list[ProviderRoute]:
-        ranked = sorted(self._candidates, key=lambda route: self._score(route, task), reverse=True)
+        ranked = sorted(self._candidates, key=lambda route: (self._provider_priority(route), self._score(route, task)), reverse=True)
         best_per_provider: list[ProviderRoute] = []
         selected_providers: set[str] = set()
         for route in ranked:
@@ -272,6 +276,15 @@ class OpenAICompatibleProvider:
             best_per_provider.append(route)
             selected_providers.add(route.provider)
         return best_per_provider
+
+    def _provider_priority(self, route: ProviderRoute) -> int:
+        preference = [item.strip().lower() for item in self._settings.provider_preference.split(",") if item.strip()]
+        return len(preference) - preference.index(route.provider) if route.provider in preference else 0
+
+    def _is_tool_capable(self, route: ProviderRoute) -> bool:
+        allowed = {item.strip().lower() for item in self._settings.tool_capable_models.split(",") if item.strip()}
+        model = route.model.lower()
+        return model in allowed or f"{route.provider}/{model}" in allowed
 
     def _score(self, route: ProviderRoute, task: str) -> float:
         name = route.model.lower()

@@ -233,6 +233,7 @@ async def lifespan(app: FastAPI):
         MonitoringStore(app.state.store._connect),
         settings.upload_dir,
         settings,
+        workflow_store=app.state.store,
     )
     collect_operations_snapshot(app.state.monitoring)
 

@@ -117,6 +117,5 @@ public sealed class DeveloperStudioOptions
 
 public sealed class OperationsMonitoringCenterOptions
 {
-    // Phase 0 is an observational preview. Enable explicitly for acceptance testing.
-    public bool Enabled { get; set; }
+    public bool Enabled { get; set; } = true;
 }

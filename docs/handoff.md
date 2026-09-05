@@ -1,5 +1,17 @@
 # A.E.G.I.S.-9 Handoff
 
+## Monitoring Center launcher correction — 2026-09-05
+
+GitHub contained the complete read-only Operations Monitoring Center window and backend contract but only the earlier disabled preview launcher. The intended entry point has been restored locally: `MONITORING` is visible in the main window's top-right command bar, the feature defaults to enabled, and preview labels were removed. Live acceptance returned contract `1.0`, four read-only monitor descriptors, and four observations; the monitoring workflow list matched the authoritative workflow API. The desktop build and all 66 backend tests pass.
+
+## DMR-primary provider policy — 2026-09-05
+
+AI routing is standardized across the Aegis family: Docker Model Runner is primary and Ollama is the only active failover provider. A.E.G.I.S.-9 discovery now scans only those two providers, hard-prioritizes DMR regardless of task scoring, and filters discovered models through the verified native-tool-call allowlist in `JARVIS_TOOL_CAPABLE_MODELS`. The active laptop configuration selects local DMR `docker.io/ai/qwen3:8b-q4_K_M` and Ollama `llama3.1:8b` as the fallback model.
+
+LM Studio and LiteLLM are removed from active discovery. Locally installed but noncompliant Ollama models are not uninstalled; they are excluded from application routing. See `docs/provider-architecture.md` for the authoritative allowlist and live evidence.
+
+Validation on this machine: live A.E.G.I.S.-9 discovery selected local DMR `docker.io/ai/qwen3:8b-q4_K_M` and admitted only that model plus Ollama `llama3.1:8b` and `llama3.2:latest`; all **66/66** backend tests passed and the WPF solution built with zero errors. The workstation installer parses successfully and installs legacy LM Studio/LiteLLM services only with explicit `-InstallLegacyProviders`.
+
 ## Operations Monitoring Center and selective adoption — 2026-09-03
 
 A.E.G.I.S.-9 will add a separate movable, resizable, expandable Operations

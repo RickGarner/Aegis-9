@@ -1,5 +1,23 @@
 # Provider Architecture and Local Model Strategy
 
+## Authoritative Runtime Policy — 2026-09-05
+
+The Aegis family now uses one active provider chain:
+
+1. **Primary:** Docker Model Runner (DMR).
+2. **Secondary/failover:** Ollama.
+
+Only models verified to return native structured tool calls are admitted. The current allowlist is:
+
+- DMR `docker.io/ai/qwen3-coder:30b-a3b-q4_K_M`
+- DMR `docker.io/ai/qwen3:8b-q4_K_M`
+- Ollama `llama3.1:8b` (preferred failover model)
+- Ollama `llama3.2:latest`
+
+Live testing on the laptop rejected `qwen2.5-coder:7b` because it returned tool-shaped JSON as ordinary text; `deepseek-coder:latest` and `codellama:latest` rejected tool requests. They remain installed locally but are excluded from Aegis routing. LM Studio and LiteLLM are no longer active discovery/failover providers. Their compatibility code may remain for controlled future evaluation, but production/default routing must not select them.
+
+The older provider recommendations below are retained as design history and are superseded by this policy.
+
 ## Goal
 
 Keep Jarvis local-first while allowing the same application to run on both the home workstation and the AI workstation at work without changing the application logic.

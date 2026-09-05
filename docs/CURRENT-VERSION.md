@@ -1,5 +1,9 @@
 # A.E.G.I.S.-9 canonical version
 
+## Operations Monitoring Center launcher restoration — 2026-09-05
+
+The read-only Operations Monitoring Center is enabled by default and launched from the `MONITORING` button in the main window's top-right command bar. The obsolete collapsed preview launcher was removed from the left infrastructure panel. The movable/resizable center continues to refresh normalized collector, alert, and workflow status without gaining production-action authority.
+
 ## Planning update — 2026-09-03
 
 A separate movable/resizable Operations Monitoring Center is now approved as
@@ -91,8 +95,8 @@ Set-ExecutionPolicy -Scope Process Bypass
 .\deployment\windows\Install-Aegis9Workstation.ps1 -ModelProfile Core
 ```
 
-The bootstrap configures Python, .NET 8, WebView2, Ollama, LiteLLM, Kokoro
-ONNX, LM Studio llmster, models, repository dependencies, `.env`, and Windows
+The bootstrap configures Python, .NET 8, WebView2, tool-capable Ollama failover models, Kokoro
+ONNX, repository dependencies, `.env`, and Windows
 services. See `deployment/windows/README.md` before running it.
 
 Validate after installation or after moving to another computer:
@@ -110,8 +114,8 @@ Then launch the current UI:
 ## Verified cinematic state on 2026-08-30
 
 - Cinematic WPF UI and cyber-lupine avatar assets are present.
-- Adaptive local/remote provider discovery is implemented.
-- Ollama, LM Studio, and LiteLLM routing code is present.
+- DMR-primary local/remote provider discovery is implemented with Ollama as the only active failover.
+- LM Studio and LiteLLM compatibility code remains present but is excluded from active/default discovery.
 - Kokoro output and Windows offline speech fallback are integrated.
 - Local Faster-Whisper voice input is implemented.
 - The solution builds successfully on a third Windows workstation.

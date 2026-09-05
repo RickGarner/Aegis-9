@@ -1,5 +1,7 @@
 # A.E.G.I.S.-9 and Aegis Developer Studio: Development Status
 
+> **2026-09-05 checkpoint:** This remains the detailed 2026-09-02 audit, but later work supersedes several status lines below. A.E.G.I.S.-9 now has an enabled top-right read-only Operations Monitoring Center with normalized collector/alert/workflow aggregation, DMR-primary/Ollama-only-failover routing, and 66 passing backend tests. The active IDE and repository are named Aegis Developer Studio; Local AI repository-tool Priorities 1–6 are complete with 69 passing tests and 10 passing release checks. Use `docs/roadmap.md`, `docs/implementation-checklist.md`, and the Developer Studio `LOCAL-AI-TOOL-ROADMAP.md` for current status.
+
 > **2026-09-03 planning addendum:** A.E.G.I.S.-9 will add a separate movable,
 > resizable Operations Monitoring Center that aggregates existing specialized
 > monitors, alerts, workflows/schedules, runtime health, collector health, and
