@@ -1,5 +1,152 @@
 # A.E.G.I.S.-9 Handoff
 
+## Clean-machine verification checkpoint — 2026-09-05
+
+The commits below are the synchronized baseline for the next computer. Perform
+this verification from three separate sibling clones; do not combine the
+repositories or validate from the older `D:\Jarvis-Desktop` checkout.
+
+| Product | Repository | Branch | Required baseline commit |
+|---|---|---|---|
+| A.E.G.I.S.-9 | `RickGarner/Aegis-9` | `feature/workflow-automation-monitoring-2026-08-31` | `a00b2bf42110af1a63c1ebaf1e2b2148f6b752bf` |
+| Aegis Developer Studio | `RickGarner/Aegis-Developer-Studio` | `development-v2` | `76ba8e17ad38ffad2824aad123285153e8abea58` |
+| Aegis Platform | `RickGarner/Aegis-Platform` | `main` | `74ee810d5efddf6c56f185502cdce775249d1875` |
+
+### 1. Clone or update the repositories
+
+Create `D:\Aegis` if needed. For a fresh checkout, clone each repository into
+the matching folder:
+
+```powershell
+New-Item -ItemType Directory -Force D:\Aegis | Out-Null
+Set-Location D:\Aegis
+git clone --branch feature/workflow-automation-monitoring-2026-08-31 https://github.com/RickGarner/Aegis-9.git Aegis-9
+git clone --branch development-v2 https://github.com/RickGarner/Aegis-Developer-Studio.git Aegis-Developer-Studio
+git clone --branch main https://github.com/RickGarner/Aegis-Platform.git Aegis-Platform
+```
+
+For an existing checkout, fetch, switch to the branch listed above, and use a
+fast-forward-only pull. Do not reset or delete local work; stop and reconcile it
+if `git status --short` is not empty.
+
+```powershell
+Set-Location D:\Aegis\Aegis-9
+git fetch origin --prune
+git switch feature/workflow-automation-monitoring-2026-08-31
+git pull --ff-only origin feature/workflow-automation-monitoring-2026-08-31
+git status --short --branch
+git rev-parse HEAD
+
+Set-Location D:\Aegis\Aegis-Developer-Studio
+git fetch origin --prune
+git switch development-v2
+git pull --ff-only origin development-v2
+git status --short --branch
+git rev-parse HEAD
+
+Set-Location D:\Aegis\Aegis-Platform
+git fetch origin --prune
+git switch main
+git pull --ff-only origin main
+git status --short --branch
+git rev-parse HEAD
+```
+
+Each branch must contain its required baseline commit and each working tree
+must be clean before continuing. The A.E.G.I.S.-9 branch will also contain the
+newer documentation-only commit that added this procedure. Verify containment
+with `git merge-base --is-ancestor <required-commit> HEAD`; exit code zero is a
+pass.
+
+### 2. Prepare and verify A.E.G.I.S.-9
+
+Read `deployment/windows/README.md` before provisioning. Docker Desktop with
+Docker Model Runner is the primary model runtime; Ollama is the only active
+failover. LM Studio and LiteLLM are compatibility-only and must not be enabled
+for this acceptance run. Preserve a machine-specific `.env` locally and never
+commit it.
+
+On a machine that still needs prerequisites, run the installer from an elevated
+PowerShell window. Omit `-InstallLegacyProviders`:
+
+```powershell
+Set-Location D:\Aegis\Aegis-9
+Set-ExecutionPolicy -Scope Process Bypass
+.\deployment\windows\Install-Aegis9Workstation.ps1 -ModelProfile Core
+```
+
+Then run the authoritative repository gates:
+
+```powershell
+Set-Location D:\Aegis\Aegis-9
+dotnet restore Aegis-9.sln
+dotnet build Aegis-9.sln --no-restore
+$env:PYTHONPATH = Join-Path (Get-Location) 'backend'
+.\.venv\Scripts\python.exe -m pytest backend\tests -q
+```
+
+Expected result: the solution builds with zero errors and **66/66** backend
+tests pass. `Test-Aegis9Workstation.ps1` still contains legacy LM Studio and
+LiteLLM service checks, so it is not the authoritative DMR-primary acceptance
+gate for this checkpoint.
+
+Confirm Docker Desktop/DMR and Ollama are reachable, then launch:
+
+```powershell
+docker model list
+Invoke-RestMethod http://127.0.0.1:11434/api/tags
+Start-Process .\desktop\Aegis.Desktop\bin\Debug\net8.0-windows\Aegis.Desktop.exe
+```
+
+In the UI, confirm the cinematic A.E.G.I.S.-9 shell opens, the backend reaches
+ready state, `MONITORING` appears in the top-right command bar, and the
+read-only Operations Monitoring Center opens and refreshes. Also launch Aegis
+Developer Studio through A.E.G.I.S.-9 and confirm the existing window is
+focused or a new Studio window opens.
+
+### 3. Prepare and verify Aegis Developer Studio
+
+Use the Node version specified by `.nvmrc`, install dependencies on a fresh
+clone, repair native modules, and install Playwright Chromium if they are not
+already present:
+
+```powershell
+Set-Location D:\Aegis\Aegis-Developer-Studio
+npm install
+.\scripts\repair-native-modules.ps1
+npx playwright install chromium
+npm --prefix extensions/local-ai test
+npm --prefix extensions/local-ai run release-matrix
+npm run gulp compile-extensions-build
+```
+
+Expected result: **69/69** Local AI tests pass, the release matrix passes
+**10/10**, and the full extension build completes with zero errors. Launch the
+development workbench using `.\scripts\code.bat`. Confirm Docker Model Runner
+is selected ahead of Ollama, an unverified/non-tool-capable model is not offered
+for tool work, and a simple read-only repository request produces a structured
+tool call rather than plain-text pretend execution.
+
+### 4. Verify Aegis Platform and record acceptance
+
+Aegis Platform is the shared contracts/documentation repository, not a
+standalone application. Confirm its `main` checkout is clean and review
+`docs/ARCHITECTURE.md` for the DMR-primary/Ollama-failover family policy.
+
+Record the following in the appropriate latest handoff/implementation log
+before beginning new development:
+
+- computer name, Windows version, verification date, and all three commit IDs;
+- Docker Desktop/DMR and Ollama versions plus the tested model names;
+- A.E.G.I.S.-9 build/test results and visual monitoring-launch result;
+- Developer Studio test, release-matrix, build, launch, and tool-call results;
+- any failed command, relevant log path, and whether the failure is an
+  environment/setup issue or a reproducible product defect.
+
+Do not advance the baseline or start feature work until the three checkouts are
+clean and the failures, if any, are documented. A successful report completes
+Step 5 of the 2026-09-05 immediate checkpoint.
+
 ## Monitoring Center launcher correction — 2026-09-05
 
 GitHub contained the complete read-only Operations Monitoring Center window and backend contract but only the earlier disabled preview launcher. The intended entry point has been restored locally: `MONITORING` is visible in the main window's top-right command bar, the feature defaults to enabled, and preview labels were removed. Live acceptance returned contract `1.0`, four read-only monitor descriptors, and four observations; the monitoring workflow list matched the authoritative workflow API. The desktop build and all 66 backend tests pass.
