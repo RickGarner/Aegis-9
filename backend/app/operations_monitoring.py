@@ -201,6 +201,47 @@ def build_operations_snapshot(
         monitors[-1].collector_state = observation.collector_state
         states.append(observation.state)
 
+    if dashboard.developer_studio is not None:
+        source = dashboard.developer_studio
+        target_state, collector_state, configuration_state = normalize_status(source.status, source.detail)
+        monitors.append(MonitorDescriptor(
+            monitor_id="developer-studio",
+            display_name="Aegis Developer Studio",
+            source_type="developer-studio",
+            criticality="medium",
+            collection_interval_seconds=15,
+            stale_after_seconds=30,
+            adapter_id="authenticated-loopback-bridge-v1",
+            configuration_state=configuration_state,
+            collector_state=collector_state,
+            supported_resource_types=["development-environment"],
+            supported_signal_types=["status", "repository", "provider", "activity"],
+        ))
+        collected_at = normalize_timestamp(source.last_checked_at)
+        metrics = {
+            "productVersion": source.product_version,
+            "sessionId": source.session_id,
+            "provider": source.provider,
+            "model": source.model,
+            "activity": source.activity,
+            "repositoryCount": len(source.repositories),
+        }
+        observations.append(MonitorObservation(
+            observation_id=str(uuid5(NAMESPACE_URL, f"aegis:developer-studio:{collected_at}")),
+            monitor_id="developer-studio",
+            resource_id="developer-studio:session",
+            resource_type="development-environment",
+            collected_at_utc=collected_at,
+            valid_until_utc=add_seconds(collected_at, 30),
+            state=target_state,
+            source_state=source.status,
+            summary=source.detail[:2048],
+            diagnostic_code=diagnostic_code(collector_state),
+            collector_state=collector_state,
+            metrics=metrics,
+        ))
+        states.append(target_state)
+
     counts = OperationsStateCounts(**{state: states.count(state) for state in OperationsStateCounts.model_fields})
     summary_states = list(states)
     summary_states.extend(

@@ -1,5 +1,10 @@
 # Jarvis Visual Studio 2022 Handoff
 
+> **2026-09-06 continuity note:** The product is now A.E.G.I.S.-9. Use
+> `docs/handoff.md` as the latest project-wide checkpoint. Current validation is
+> 97 backend tests plus a clean WPF build. This document remains the Visual
+> Studio-specific setup reference.
+
 > **Branch requirement:** Before opening the solution, run `git fetch origin`
 > and confirm `git branch --show-current` returns
 > `feature/workflow-automation-monitoring-2026-08-31`. `main` contains the older pre-cinematic UI.

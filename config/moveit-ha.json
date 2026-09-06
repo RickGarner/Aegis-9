@@ -1,0 +1,60 @@
+{
+  "enabled": true,
+  "mode": "observe",
+  "pairId": "production-moveit-ha",
+  "preferredPrimary": {
+    "name": "BSOAUTALB001",
+    "hostname": "BSOAUTALB001",
+    "nodeNumber": 1
+  },
+  "preferredSecondary": {
+    "name": "BSOAUTALB002",
+    "hostname": "BSOAUTALB002",
+    "nodeNumber": 2
+  },
+  "database": {
+    "type": "mssql",
+    "sharedDatabaseRequired": true,
+    "server": "",
+    "database": "",
+    "requireSuppressDbRep": true
+  },
+  "monitoring": {
+    "pollIntervalSeconds": 10,
+    "requestTimeoutSeconds": 5,
+    "consecutiveFailuresForUnhealthy": 3,
+    "consecutiveSuccessesForRecovered": 3,
+    "preferredPrimaryStabilitySeconds": 900
+  },
+  "failback": {
+    "enabled": false,
+    "cooldownMinutes": 60,
+    "maximumAutomaticAttemptsPerIncident": 1,
+    "drainTimeoutMinutes": 30,
+    "serviceStopTimeoutSeconds": 120,
+    "serviceStartTimeoutSeconds": 180,
+    "postPrimaryStartValidationSeconds": 60,
+    "postPairValidationSeconds": 120,
+    "requireNoRunningTasks": true,
+    "requireSharedSqlValidation": true,
+    "requireRuntimeRoleValidation": true,
+    "requirePartnerCommunication": true
+  },
+  "safety": {
+    "failClosed": true,
+    "globalKillSwitchHonored": true,
+    "maintenanceModePreventsFailback": true,
+    "manualLockoutSupported": true,
+    "requireExclusiveLock": true
+  },
+  "environmentProfile": {
+    "moveitVersion": "",
+    "serviceName": "",
+    "webAdminUrl": "",
+    "runtimeRoleQuery": "",
+    "gracefulShutdownMethod": "",
+    "clearAdminReplicationMethod": "",
+    "runningTaskQuery": "",
+    "winRmValidated": false
+  }
+}

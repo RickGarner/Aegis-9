@@ -18,7 +18,7 @@ class WorkflowExecutionTests(unittest.IsolatedAsyncioTestCase):
         store.initialize()
         workflow = store.create_workflow("Safe execution", "Emit structured output", [], "powershell")
         with store._connect() as connection:
-            connection.execute("UPDATE workflows SET state='plan_approved',approval_stage='plan_approved' WHERE id=?", (workflow.id,))
+            connection.execute("UPDATE workflows SET state='test_plan_approved',approval_stage='test_plan_approved',test_plan_text='Approved tests' WHERE id=?", (workflow.id,))
         workflow = store.save_workflow_implementation(
             workflow.id, "```powershell\n$workflowType = 'safe-test'\nWrite-Output '{\"ok\":true}'\n```", "test", "model",
         )
@@ -75,7 +75,7 @@ class WorkflowExecutionTests(unittest.IsolatedAsyncioTestCase):
         store.initialize()
         workflow = store.create_workflow("C# execution", "", [], "csharp")
         with store._connect() as connection:
-            connection.execute("UPDATE workflows SET state='plan_approved',approval_stage='plan_approved' WHERE id=?", (workflow.id,))
+            connection.execute("UPDATE workflows SET state='test_plan_approved',approval_stage='test_plan_approved',test_plan_text='Approved tests' WHERE id=?", (workflow.id,))
         workflow = store.save_workflow_implementation(
             workflow.id,
             "```csharp\n// workflowType = 'safe-csharp'\nConsole.WriteLine(\"test\");\n```",

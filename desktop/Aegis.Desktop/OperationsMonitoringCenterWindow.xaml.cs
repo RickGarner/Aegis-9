@@ -154,7 +154,7 @@ public partial class OperationsMonitoringCenterWindow : Window
         SelectedFreshnessText.Text = resource.Freshness;
         SelectedAlertText.Text = resource.AlertSummary;
         DetailText.Text = resource.Summary;
-        OpenSelectedDetailsButton.IsEnabled = true;
+        OpenSelectedDetailsButton.IsEnabled = !resource.MonitorId.Equals("developer-studio", StringComparison.OrdinalIgnoreCase);
         OpenSelectedDetailsButton.Tag = resource.MonitorId;
     }
 
@@ -170,6 +170,7 @@ public partial class OperationsMonitoringCenterWindow : Window
 
     private void OpenMonitor(string monitorId)
     {
+        if (monitorId.Equals("developer-studio", StringComparison.OrdinalIgnoreCase)) return;
         var kind = monitorId.ToLowerInvariant() switch
         {
             "moveit" => MonitorWindowKind.MoveIt,

@@ -54,6 +54,9 @@ class Workflow(BaseModel):
     plan_text: str = ""
     plan_provider: str = ""
     plan_model: str = ""
+    test_plan_text: str = ""
+    test_plan_provider: str = ""
+    test_plan_model: str = ""
     implementation_text: str = ""
     implementation_provider: str = ""
     implementation_model: str = ""
@@ -216,6 +219,9 @@ class JarvisStore:
                     plan_text TEXT NOT NULL DEFAULT '',
                     plan_provider TEXT NOT NULL DEFAULT '',
                     plan_model TEXT NOT NULL DEFAULT '',
+                    test_plan_text TEXT NOT NULL DEFAULT '',
+                    test_plan_provider TEXT NOT NULL DEFAULT '',
+                    test_plan_model TEXT NOT NULL DEFAULT '',
                     implementation_text TEXT NOT NULL DEFAULT '',
                     implementation_provider TEXT NOT NULL DEFAULT '',
                     implementation_model TEXT NOT NULL DEFAULT '',
@@ -377,6 +383,9 @@ class JarvisStore:
             ("plan_text", "TEXT NOT NULL DEFAULT ''"),
             ("plan_provider", "TEXT NOT NULL DEFAULT ''"),
             ("plan_model", "TEXT NOT NULL DEFAULT ''"),
+            ("test_plan_text", "TEXT NOT NULL DEFAULT ''"),
+            ("test_plan_provider", "TEXT NOT NULL DEFAULT ''"),
+            ("test_plan_model", "TEXT NOT NULL DEFAULT ''"),
             ("implementation_text", "TEXT NOT NULL DEFAULT ''"),
             ("implementation_provider", "TEXT NOT NULL DEFAULT ''"),
             ("implementation_model", "TEXT NOT NULL DEFAULT ''"),
@@ -492,7 +501,7 @@ class JarvisStore:
 
     @staticmethod
     def _workflow_columns() -> str:
-        return "id, transfer_id, title, description, attachment_ids, state, monitor_slot, language, revision, approval_stage, schedule_json, archived, last_run_at, scheduler_status, scheduler_last_evaluated_at, scheduler_last_deferred_reason, plan_text, plan_provider, plan_model, implementation_text, implementation_provider, implementation_model, clarification_questions_json, clarification_answers_json, artifact_sha256, permission_manifest_json, latest_test_status, latest_test_evidence_sha256, latest_test_summary, supervisor_approved_by, supervisor_approved_at, supervisor_revision, supervisor_artifact_sha256, supervisor_manifest_sha256, supervisor_schedule_sha256, created_at, updated_at"
+        return "id, transfer_id, title, description, attachment_ids, state, monitor_slot, language, revision, approval_stage, schedule_json, archived, last_run_at, scheduler_status, scheduler_last_evaluated_at, scheduler_last_deferred_reason, plan_text, plan_provider, plan_model, test_plan_text, test_plan_provider, test_plan_model, implementation_text, implementation_provider, implementation_model, clarification_questions_json, clarification_answers_json, artifact_sha256, permission_manifest_json, latest_test_status, latest_test_evidence_sha256, latest_test_summary, supervisor_approved_by, supervisor_approved_at, supervisor_revision, supervisor_artifact_sha256, supervisor_manifest_sha256, supervisor_schedule_sha256, created_at, updated_at"
 
     @staticmethod
     def _workflow_from_row(row: sqlite3.Row) -> Workflow:
@@ -519,7 +528,7 @@ class JarvisStore:
             if current is None or current["state"] not in {"design_review", "needs_clarification", "plan_review"}:
                 return None
             connection.execute(
-                """UPDATE workflows SET state='draft', approval_stage='draft', plan_text='', plan_provider='', plan_model='',
+                """UPDATE workflows SET state='draft', approval_stage='draft', plan_text='', plan_provider='', plan_model='', test_plan_text='', test_plan_provider='', test_plan_model='',
                 clarification_questions_json='[]', clarification_answers_json='{}', updated_at=CURRENT_TIMESTAMP WHERE id=?""",
                 (workflow_id,),
             )
@@ -610,6 +619,7 @@ class JarvisStore:
                 incoming.transfer_id, incoming.title, incoming.description, json.dumps(attachment_ids), imported_state,
                 monitor_slot, incoming.language, incoming.revision, incoming.approval_stage, json.dumps(incoming.schedule),
                 int(incoming.archived), incoming.last_run_at, incoming.plan_text, incoming.plan_provider, incoming.plan_model,
+                incoming.test_plan_text, incoming.test_plan_provider, incoming.test_plan_model,
                 incoming.implementation_text, incoming.implementation_provider, incoming.implementation_model,
                 json.dumps(incoming.clarification_questions), json.dumps(incoming.clarification_answers),
                 incoming.artifact_sha256, json.dumps(incoming.permission_manifest), incoming.latest_test_status,
@@ -621,7 +631,7 @@ class JarvisStore:
                 connection.execute(
                     """UPDATE workflows SET transfer_id=?, title=?, description=?, attachment_ids=?, state=?, monitor_slot=?,
                     language=?, revision=?, approval_stage=?, schedule_json=?, archived=?, last_run_at=?, plan_text=?, plan_provider=?,
-                    plan_model=?, implementation_text=?, implementation_provider=?, implementation_model=?, clarification_questions_json=?,
+                    plan_model=?, test_plan_text=?, test_plan_provider=?, test_plan_model=?, implementation_text=?, implementation_provider=?, implementation_model=?, clarification_questions_json=?,
                     clarification_answers_json=?, artifact_sha256=?, permission_manifest_json=?, latest_test_status=?,
                     latest_test_evidence_sha256=?, latest_test_summary=?, supervisor_approved_by='',
                     supervisor_approved_at=NULL, supervisor_revision=NULL, supervisor_artifact_sha256='',
@@ -633,10 +643,11 @@ class JarvisStore:
                 cursor = connection.execute(
                     """INSERT INTO workflows (transfer_id, title, description, attachment_ids, state, monitor_slot, language,
                     revision, approval_stage, schedule_json, archived, last_run_at, plan_text, plan_provider, plan_model,
+                    test_plan_text, test_plan_provider, test_plan_model,
                     implementation_text, implementation_provider, implementation_model, clarification_questions_json,
                     clarification_answers_json, artifact_sha256, permission_manifest_json, latest_test_status,
                     latest_test_evidence_sha256, latest_test_summary, created_at, updated_at)
-                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                     values,
                 )
                 workflow_id = cursor.lastrowid
@@ -667,7 +678,7 @@ class JarvisStore:
             if current is None or current["state"] in {"running", "paused"}:
                 return None
             connection.execute(
-                "UPDATE workflows SET title = ?, description = ?, attachment_ids = ?, language = ?, revision = revision + 1, state = 'draft', approval_stage = 'draft', schedule_json = '{}', plan_text = '', plan_provider = '', plan_model = '', implementation_text = '', implementation_provider = '', implementation_model = '', clarification_questions_json = '[]', clarification_answers_json = '{}', artifact_sha256='', permission_manifest_json='{}', latest_test_status='', latest_test_evidence_sha256='', latest_test_summary='', supervisor_approved_by='', supervisor_approved_at=NULL, supervisor_revision=NULL, supervisor_artifact_sha256='', supervisor_manifest_sha256='', supervisor_schedule_sha256='', updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                "UPDATE workflows SET title = ?, description = ?, attachment_ids = ?, language = ?, revision = revision + 1, state = 'draft', approval_stage = 'draft', schedule_json = '{}', plan_text = '', plan_provider = '', plan_model = '', test_plan_text='', test_plan_provider='', test_plan_model='', implementation_text = '', implementation_provider = '', implementation_model = '', clarification_questions_json = '[]', clarification_answers_json = '{}', artifact_sha256='', permission_manifest_json='{}', latest_test_status='', latest_test_evidence_sha256='', latest_test_summary='', supervisor_approved_by='', supervisor_approved_at=NULL, supervisor_revision=NULL, supervisor_artifact_sha256='', supervisor_manifest_sha256='', supervisor_schedule_sha256='', updated_at = CURRENT_TIMESTAMP WHERE id = ?",
                 (title, description, json.dumps(attachment_ids), language, workflow_id),
             )
             connection.execute("INSERT INTO activity_logs (event_type, message, tone) VALUES (?, ?, ?)", ("workflow", f"Workflow '{title}' revised; prior approvals invalidated.", "warning"))
@@ -695,7 +706,7 @@ class JarvisStore:
             if current is None or current["state"] not in {"draft", "rejected", "plan_review"}:
                 return None
             next_state = "needs_clarification" if questions else "plan_review" if finalizing else "design_review"
-            connection.execute("UPDATE workflows SET plan_text = ?, plan_provider = ?, plan_model = ?, implementation_text = '', implementation_provider = '', implementation_model = '', clarification_questions_json = ?, artifact_sha256='', permission_manifest_json='{}', latest_test_status='', latest_test_evidence_sha256='', latest_test_summary='', state = ?, approval_stage = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", (content, provider, model, json.dumps(questions), next_state, next_state, workflow_id))
+            connection.execute("UPDATE workflows SET plan_text = ?, plan_provider = ?, plan_model = ?, test_plan_text='', test_plan_provider='', test_plan_model='', implementation_text = '', implementation_provider = '', implementation_model = '', clarification_questions_json = ?, artifact_sha256='', permission_manifest_json='{}', latest_test_status='', latest_test_evidence_sha256='', latest_test_summary='', state = ?, approval_stage = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", (content, provider, model, json.dumps(questions), next_state, next_state, workflow_id))
             message = f"Final plan for '{current['title']}' is ready for approval or rejection." if finalizing and not questions else f"Plan designed for '{current['title']}' by {provider}/{model}."
             connection.execute("INSERT INTO activity_logs (event_type, message, tone) VALUES (?, ?, ?)", ("workflow-ready" if finalizing and not questions else "workflow-ai", message, "success" if finalizing and not questions else "info"))
             row = connection.execute(f"SELECT {self._workflow_columns()} FROM workflows WHERE id = ?", (workflow_id,)).fetchone()
@@ -733,11 +744,29 @@ class JarvisStore:
     def save_workflow_implementation(self, workflow_id: int, content: str, provider: str, model: str) -> Workflow | None:
         with self._connect() as connection:
             current = connection.execute("SELECT title, state FROM workflows WHERE id = ? AND archived = 0", (workflow_id,)).fetchone()
-            if current is None or current["state"] != "plan_approved":
+            if current is None or current["state"] != "test_plan_approved":
                 return None
             connection.execute("UPDATE workflows SET implementation_text = ?, implementation_provider = ?, implementation_model = ?, state = 'implementation_review', approval_stage = 'implementation_review', artifact_sha256='', permission_manifest_json='{}', latest_test_status='', latest_test_evidence_sha256='', latest_test_summary='', updated_at = CURRENT_TIMESTAMP WHERE id = ?", (content, provider, model, workflow_id))
             connection.execute("INSERT INTO activity_logs (event_type, message, tone) VALUES (?, ?, ?)", ("workflow-ai", f"Implementation generated for '{current['title']}' by {provider}/{model}.", "info"))
             row = connection.execute(f"SELECT {self._workflow_columns()} FROM workflows WHERE id = ?", (workflow_id,)).fetchone()
+        return self._workflow_from_row(row)
+
+    def save_workflow_test_plan(self, workflow_id: int, content: str, provider: str, model: str) -> Workflow | None:
+        if not content.strip():
+            return None
+        with self._connect() as connection:
+            current = connection.execute("SELECT title,state FROM workflows WHERE id=? AND archived=0", (workflow_id,)).fetchone()
+            if current is None or current["state"] != "plan_approved":
+                return None
+            connection.execute(
+                "UPDATE workflows SET test_plan_text=?,test_plan_provider=?,test_plan_model=?,state='test_plan_review',approval_stage='test_plan_review',updated_at=CURRENT_TIMESTAMP WHERE id=?",
+                (content.strip(), provider, model, workflow_id),
+            )
+            connection.execute(
+                "INSERT INTO activity_logs(event_type,message,tone) VALUES(?,?,?)",
+                ("workflow-test-plan", f"Non-production test plans generated for '{current['title']}' by {provider}/{model}; user approval is required before implementation.", "info"),
+            )
+            row = connection.execute(f"SELECT {self._workflow_columns()} FROM workflows WHERE id=?", (workflow_id,)).fetchone()
         return self._workflow_from_row(row)
 
     def revise_workflow_implementation(self, workflow_id: int, content: str, actor: str, reason: str) -> Workflow | None:

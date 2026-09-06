@@ -1,14 +1,17 @@
 import asyncio
+import json
 import re
 import subprocess
-from collections.abc import Sequence
+from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
+from typing import Any
 
 import httpx
 import psutil
 from pydantic import BaseModel, Field
 
 from app.config import Settings
+from app.tool_qualification import ToolQualificationReport, ToolQualificationStore
 
 
 class ChatMessage(BaseModel):
@@ -94,6 +97,8 @@ class OpenAICompatibleProvider:
         self._location = ""
         self._ram_bytes = psutil.virtual_memory().total
         self._gpu_name, self._gpu_vram_mb = self._detect_gpu()
+        self._tool_qualification: dict[ProviderRoute, ToolQualificationReport | bool] = {}
+        self._tool_qualification_store = ToolQualificationStore(settings.tool_qualification_store_path)
 
     async def discover(self, force: bool = False) -> ProviderHealth:
         async with self._lock:
@@ -194,6 +199,62 @@ class OpenAICompatibleProvider:
             raise ValueError(f"Unsupported routing task: {task}")
         return await self.chat(messages, task_override=task)
 
+    async def chat_for_task_with_tools(
+        self,
+        task: str,
+        messages: Sequence[ChatMessage],
+        tools: Sequence[dict[str, Any]],
+        executor: Callable[[str, dict[str, Any]], Awaitable[str]],
+        max_turns: int = 8,
+    ) -> RoutedChatResult:
+        if task not in {"reasoning", "code"}:
+            raise ValueError("Workflow tools are supported only for reasoning and code tasks.")
+        if not tools or not 1 <= max_turns <= 12:
+            raise ValueError("A bounded workflow tool catalog and turn limit are required.")
+        if not self._candidates:
+            await self.discover()
+        allowed_names = {
+            function.get("name")
+            for tool in tools
+            if isinstance(tool, dict) and isinstance((function := tool.get("function")), dict) and isinstance(function.get("name"), str)
+        }
+        if not allowed_names:
+            raise ValueError("The workflow tool catalog does not contain valid function definitions.")
+        initial = self._active
+        errors: list[str] = []
+        ranked = await self._qualified_tool_routes(self._ranked_candidates(task), errors)
+        result = await self._try_tool_routes(ranked, messages, tools, allowed_names, executor, max_turns, errors)
+        if result is None and self._location == "remote":
+            local_candidates = await self._scan_location("local")
+            if local_candidates:
+                self._candidates = local_candidates
+                self._location = "local"
+                ranked = await self._qualified_tool_routes(self._ranked_candidates(task), errors)
+                result = await self._try_tool_routes(ranked, messages, tools, allowed_names, executor, max_turns, errors)
+        if result is None:
+            raise ProviderError("All tool-capable workflow routes failed. " + " | ".join(errors))
+        content, route = result
+        self._active = route
+        self._status = "ready"
+        self._detail = f"Active tool route: {route.location} {route.provider} · {route.model}."
+        location_changed = initial is not None and initial.location == "remote" and route.location == "local"
+        route_changed = initial is not None and initial != route
+        return RoutedChatResult(
+            content=content,
+            route=route,
+            failover=ProviderFailover(
+                occurred=route_changed,
+                requires_acknowledgement=location_changed,
+                previous_location=initial.location if initial else "",
+                previous_provider=initial.provider if initial else "",
+                previous_model=initial.model if initial else "",
+                active_location=route.location,
+                active_provider=route.provider,
+                active_model=route.model,
+                reason="The remote tool route did not complete the request. " + " | ".join(errors) if location_changed else "",
+            ),
+        )
+
     def _health(self) -> ProviderHealth:
         return ProviderHealth(
             available=self._active is not None and self._status == "ready",
@@ -264,6 +325,131 @@ class OpenAICompatibleProvider:
                 except (httpx.HTTPError, KeyError, IndexError, TypeError, ValueError) as error:
                     if attempt == self._settings.provider_retry_count:
                         errors.append(f"{route.location}/{route.provider}/{route.model}: {str(error) or error.__class__.__name__}")
+        return None
+
+    async def _qualified_tool_routes(self, routes: list[ProviderRoute], errors: list[str]) -> list[ProviderRoute]:
+        qualified: list[ProviderRoute] = []
+        for route in routes:
+            result = self._tool_qualification.get(route)
+            if result is None:
+                result = self._tool_qualification_store.get(route.provider, route.model, route.location, route.chat_url)
+            if result is None:
+                result = await self._probe_tool_route(route)
+                self._tool_qualification[route] = result
+            if result is True or isinstance(result, ToolQualificationReport) and result.qualified:
+                qualified.append(route)
+            else:
+                reason = result.failure_reason if isinstance(result, ToolQualificationReport) else "provider failed the structured workflow-tool qualification probe"
+                errors.append(f"{route.location}/{route.provider}/{route.model}: {reason}")
+        return qualified
+
+    async def _probe_tool_route(self, route: ProviderRoute) -> ToolQualificationReport:
+        tool = {
+            "type": "function",
+            "function": {
+                "name": "aegis_tool_capability_probe",
+                "description": "Return a numbered step for a local, non-production capability test.",
+                "parameters": {"type": "object", "additionalProperties": False, "properties": {"step": {"type": "integer", "enum": [1, 2]}}, "required": ["step"]},
+            },
+        }
+        conversation: list[dict[str, Any]] = [
+            {"role": "system", "content": "Local capability test. Call aegis_tool_capability_probe with step 1. After its result call it with step 2. After the second result reply exactly AEGIS_TOOL_PROBE_COMPLETE."},
+            {"role": "user", "content": "Begin the capability test."},
+        ]
+        expected_step = 1
+        native = False
+        arguments_valid = False
+        sequential = False
+        continuation = False
+        failure_reason = ""
+        try:
+            for _ in range(3):
+                payload = {"model": route.model, "messages": conversation, "tools": [tool], "tool_choice": "auto", "stream": False, "max_tokens": 128}
+                async with httpx.AsyncClient(timeout=self._settings.request_timeout_seconds) as client:
+                    response = await client.post(route.chat_url, json=payload, headers=self._headers(route.api_key))
+                    response.raise_for_status()
+                    message = response.json()["choices"][0]["message"]
+                calls = message.get("tool_calls") or []
+                if expected_step <= 2:
+                    if len(calls) != 1 or not isinstance(calls[0], dict) or not isinstance(calls[0].get("function"), dict):
+                        failure_reason = f"Expected one native tool call for step {expected_step}."
+                        break
+                    native = True
+                    call = calls[0]
+                    function = call["function"]
+                    arguments = json.loads(function.get("arguments") or "{}")
+                    if function.get("name") != "aegis_tool_capability_probe" or arguments != {"step": expected_step} or not isinstance(call.get("id"), str):
+                        failure_reason = f"Invalid tool name, ID, or arguments for step {expected_step}."
+                        break
+                    arguments_valid = True
+                    if expected_step == 2:
+                        sequential = True
+                    conversation.append({"role": "assistant", "content": message.get("content"), "tool_calls": calls})
+                    conversation.append({"role": "tool", "tool_call_id": call["id"], "name": function["name"], "content": json.dumps({"acceptedStep": expected_step})})
+                    expected_step += 1
+                    continue
+                continuation = isinstance(message.get("content"), str) and "AEGIS_TOOL_PROBE_COMPLETE" in message["content"]
+                if not continuation:
+                    failure_reason = "Provider did not continue with the required completion after tool results."
+                break
+        except (httpx.HTTPError, KeyError, IndexError, TypeError, ValueError, json.JSONDecodeError) as error:
+            failure_reason = str(error) or error.__class__.__name__
+        return self._tool_qualification_store.save(
+            route.provider, route.model, route.location, route.chat_url,
+            native=native, arguments=arguments_valid, sequential=sequential,
+            continuation=continuation, failure_reason=failure_reason,
+        )
+
+    async def _try_tool_routes(
+        self,
+        routes: list[ProviderRoute],
+        messages: Sequence[ChatMessage],
+        tools: Sequence[dict[str, Any]],
+        allowed_names: set[str],
+        executor: Callable[[str, dict[str, Any]], Awaitable[str]],
+        max_turns: int,
+        errors: list[str],
+    ) -> tuple[str, ProviderRoute] | None:
+        for route in routes:
+            conversation: list[dict[str, Any]] = [message.model_dump() for message in messages]
+            try:
+                for _ in range(max_turns):
+                    payload = {"model": route.model, "messages": conversation, "tools": list(tools), "tool_choice": "auto", "stream": False, "max_tokens": self._settings.max_response_tokens}
+                    async with httpx.AsyncClient(timeout=self._settings.request_timeout_seconds) as client:
+                        response = await client.post(route.chat_url, json=payload, headers=self._headers(route.api_key))
+                        response.raise_for_status()
+                        message = response.json()["choices"][0]["message"]
+                    if not isinstance(message, dict):
+                        raise ValueError("invalid assistant message")
+                    raw_calls = message.get("tool_calls") or []
+                    if raw_calls:
+                        conversation.append({"role": "assistant", "content": message.get("content"), "tool_calls": raw_calls})
+                        for raw_call in raw_calls:
+                            if not isinstance(raw_call, dict) or not isinstance(raw_call.get("id"), str) or not isinstance(raw_call.get("function"), dict):
+                                raise ValueError("invalid structured tool call")
+                            function = raw_call["function"]
+                            name = function.get("name")
+                            if name not in allowed_names:
+                                raise ValueError(f"model requested unoffered tool '{name}'")
+                            try:
+                                arguments = json.loads(function.get("arguments") or "{}")
+                            except (TypeError, json.JSONDecodeError) as error:
+                                raise ValueError(f"tool '{name}' returned invalid JSON arguments") from error
+                            if not isinstance(arguments, dict):
+                                raise ValueError(f"tool '{name}' arguments must be an object")
+                            try:
+                                tool_content = await executor(name, arguments)
+                            except Exception as error:
+                                tool_content = f"Tool denied or failed: {error}"
+                            conversation.append({"role": "tool", "tool_call_id": raw_call["id"], "name": name, "content": tool_content[:100000]})
+                        continue
+                    content = message.get("content")
+                    if isinstance(content, str) and content.strip():
+                        return content.strip(), route
+                    raise ValueError("empty response")
+                raise ValueError(f"bounded tool-use limit ({max_turns}) reached")
+            except (httpx.HTTPError, KeyError, IndexError, TypeError, ValueError) as error:
+                errors.append(f"{route.location}/{route.provider}/{route.model}: {str(error) or error.__class__.__name__}")
         return None
 
     def _ranked_candidates(self, task: str) -> list[ProviderRoute]:

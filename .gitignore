@@ -28,6 +28,7 @@ logs/
 storage/
 *.aegisworkflow
 workspace/
+/Workflows/
 
 # Local migration/install bundles and recovery copies
 /--project

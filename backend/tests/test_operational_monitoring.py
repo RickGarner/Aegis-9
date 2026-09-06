@@ -9,7 +9,7 @@ from unittest.mock import Mock, patch
 
 from app.config import Settings
 from app.monitoring import (
-    FreeFlowAdapter, FreeFlowMonitor, LocalServerAdapter, MonitoringAlert,
+    DeveloperStudioBridgeAdapter, DeveloperStudioMonitor, FreeFlowAdapter, FreeFlowMonitor, LocalServerAdapter, MonitoringAlert,
     MonitoringDashboard, MonitoringStore, MoveItAdapter, MoveItMonitor,
     MoveItTask, QualysAdapter, QualysMonitor, ServerMonitor,
 )
@@ -18,6 +18,69 @@ from app.storage import JarvisStore
 
 
 class OperationalMonitoringTests(unittest.TestCase):
+    @patch("app.monitoring.httpx.get")
+    def test_developer_studio_bridge_uses_authenticated_read_only_status(self, get: Mock):
+        response = Mock(status_code=200)
+        response.json.return_value = {
+            "protocolVersion": "1.0",
+            "source": "aegis-developer-studio",
+            "type": "status",
+            "sessionId": "session-1",
+            "payload": {
+                "productVersion": "1.134.0",
+                "sessionId": "session-1",
+                "repositoryPaths": [r"D:\Aegis\Aegis-9"],
+                "provider": "dockerModelRunner",
+                "model": "docker.io/ai/qwen3:8b-q4_K_M",
+                "activity": "active",
+            },
+        }
+        get.return_value = response
+
+        monitor = DeveloperStudioBridgeAdapter(Settings(AEGIS_BRIDGE_TOKEN="a" * 32)).collect("2026-09-05T20:00:00Z")
+
+        self.assertEqual(
+            ("healthy", "1.134.0", "dockerModelRunner", [r"D:\Aegis\Aegis-9"]),
+            (monitor.status, monitor.product_version, monitor.provider, monitor.repositories),
+        )
+        headers = get.call_args.kwargs["headers"]
+        self.assertEqual(64, len(headers["X-Aegis-Signature"]))
+
+    def test_developer_studio_bridge_fails_closed_without_shared_secret(self):
+        monitor = DeveloperStudioBridgeAdapter(Settings(AEGIS_BRIDGE_TOKEN="")).collect("2026-09-05T20:00:00Z")
+        self.assertEqual(("unavailable", "Developer Studio bridge credentials are not configured."), (monitor.status, monitor.detail))
+
+    def test_developer_studio_bridge_fails_closed_when_adapter_policy_is_missing(self):
+        with tempfile.TemporaryDirectory() as directory:
+            settings = Settings(
+                AEGIS_BRIDGE_TOKEN="a" * 32,
+                JARVIS_SECURITY_CONTROL_POLICY_PATH=Path(directory) / "missing-security-policy.json",
+            )
+            monitor = DeveloperStudioBridgeAdapter(settings).collect("2026-09-05T20:00:00Z")
+
+        self.assertEqual("unavailable", monitor.status)
+        self.assertIn("blocked by security policy", monitor.detail)
+
+    def test_operations_snapshot_includes_developer_studio_bridge_status(self):
+        captured_at = "2026-09-05T20:00:00Z"
+        dashboard = MonitoringDashboard(
+            generated_at=captured_at,
+            moveit=MoveItMonitor(status="healthy", adapter="moveit-rest", last_checked_at=captured_at, detail="Ready"),
+            server=ServerMonitor(status="healthy", last_checked_at=captured_at, detail="Ready"),
+            freeflow=FreeFlowMonitor(status="healthy", last_checked_at=captured_at, detail="Ready"),
+            qualys=QualysMonitor(status="healthy", last_checked_at=captured_at, detail="Ready"),
+            developer_studio=DeveloperStudioMonitor(
+                status="healthy", last_checked_at=captured_at, detail="Authenticated session is active.",
+                product_version="1.134.0", session_id="session-1", provider="dockerModelRunner", model="qwen3", activity="active",
+            ),
+        )
+
+        snapshot = build_operations_snapshot(dashboard)
+        monitor = next(item for item in snapshot.monitors if item.monitor_id == "developer-studio")
+        observation = next(item for item in snapshot.observations if item.monitor_id == "developer-studio")
+
+        self.assertEqual(("healthy", True, "dockerModelRunner"), (monitor.collector_state, monitor.read_only, observation.metrics["provider"]))
+
     def test_operations_snapshot_separates_target_and_collector_state(self):
         captured_at = "2026-09-03T12:00:00+00:00"
         dashboard = MonitoringDashboard(

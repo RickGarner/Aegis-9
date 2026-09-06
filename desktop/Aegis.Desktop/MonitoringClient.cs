@@ -219,6 +219,13 @@ public sealed class MonitoringClient
         return await response.Content.ReadFromJsonAsync<Workflow>(JsonOptions, cancellationToken) ?? throw new InvalidOperationException("Workflow implementation returned an empty response.");
     }
 
+    public async Task<Workflow> GenerateWorkflowTestPlansAsync(int workflowId, CancellationToken cancellationToken)
+    {
+        using var response = await _httpClient.PostAsync($"api/workflows/{workflowId}/generate-test-plans", null, cancellationToken);
+        await EnsureSuccessWithDetailAsync(response, "Workflow test-plan design", cancellationToken);
+        return await response.Content.ReadFromJsonAsync<Workflow>(JsonOptions, cancellationToken) ?? throw new InvalidOperationException("Workflow test-plan API returned an empty response.");
+    }
+
     public async Task<Workflow> AnswerWorkflowQuestionAsync(int workflowId, string questionId, string answer, CancellationToken cancellationToken)
     {
         using var response = await _httpClient.PutAsJsonAsync($"api/workflows/{workflowId}/clarifications/{Uri.EscapeDataString(questionId)}", new { answer }, JsonOptions, cancellationToken);
@@ -442,6 +449,9 @@ public sealed class Workflow
     [JsonPropertyName("plan_text")] public string PlanText { get; set; } = string.Empty;
     [JsonPropertyName("plan_provider")] public string PlanProvider { get; set; } = string.Empty;
     [JsonPropertyName("plan_model")] public string PlanModel { get; set; } = string.Empty;
+    [JsonPropertyName("test_plan_text")] public string TestPlanText { get; set; } = string.Empty;
+    [JsonPropertyName("test_plan_provider")] public string TestPlanProvider { get; set; } = string.Empty;
+    [JsonPropertyName("test_plan_model")] public string TestPlanModel { get; set; } = string.Empty;
     [JsonPropertyName("implementation_text")] public string ImplementationText { get; set; } = string.Empty;
     [JsonPropertyName("implementation_provider")] public string ImplementationProvider { get; set; } = string.Empty;
     [JsonPropertyName("implementation_model")] public string ImplementationModel { get; set; } = string.Empty;

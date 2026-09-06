@@ -1,5 +1,215 @@
 # A.E.G.I.S.-9 Handoff
 
+## Nightly checkpoint — 2026-09-06
+
+This is the latest continuity checkpoint for the A.E.G.I.S.-9 repository. The
+active branch remains `feature/workflow-automation-monitoring-2026-08-31`.
+Backend acceptance is **97/97 tests**, and the WPF desktop builds with zero
+warnings and zero errors when built to an unlocked output directory.
+
+### MOVEit HA auto-failback foundation
+
+The repository now includes the supplied
+`AEGIS9_MOVEit_HA_AutoFailback_Implementation_Handoff.md` and an initial safe
+implementation under `backend/app/moveit_ha/`. The configured preferred pair
+is `BSOAUTALB001` primary and `BSOAUTALB002` secondary. The implementation
+currently provides typed contracts, deterministic fail-closed state evaluation,
+recovery stability timing, split-brain/ambiguity rejection, durable local status,
+observe-only configuration, and `GET /api/monitoring/moveit-ha`.
+
+Automatic failback is deliberately disabled. The privileged adapter refuses all
+operations until the exact installed MOVEit version, authoritative runtime-role
+query, shared SQL identity, service/admin interfaces, Clear Admin Rep mechanism,
+running-task query, and WinRM/JEA boundary are validated on the internal network.
+No MOVEit host was contacted and no production change was attempted from home.
+Use `docs/moveit-ha-implementation-status.md` for tomorrow's discovery checklist.
+
+### Governed workflow and test lifecycle
+
+Workflow Center now applies the MOVEit-style engineering procedure to every
+workflow: read-only discovery, explicit facts/assumptions/non-goals, architecture,
+deterministic gates, least privilege, phased rollout, test design, rollback,
+acceptance criteria, and operations handoff. The enforced sequence is:
+
+1. final workflow plan and explicit user approval;
+2. separate AI-designed non-production test plans and explicit user approval;
+3. implementation of only the approved workflow and approved tests;
+4. implementation review and bounded non-production execution;
+5. retained plan identity, output, results, hashes, and evidence;
+6. user acceptance of the test results;
+7. schedule/start/stop/condition binding and user promotion request;
+8. independent supervisor approval of the exact tested revision before production.
+
+Implementation generation fails closed unless both plan gates are recorded.
+Material revisions invalidate downstream evidence and approvals. See
+`docs/WORKFLOW-CENTER-GOVERNED-BUILD-PROCESS.md`.
+
+Every workflow revision automatically receives
+`Workflows/<WorkflowName>_vNNN/USER-MANUAL.md` and detailed redacted
+`TEST-RESULTS.md`. Daily lifecycle events are appended to
+`Workflows/Logs/<WorkflowName>_YYYYMMDD.log`. The runtime tree is intentionally
+Git-ignored because it can contain internal operational information. Existing
+workflows receive a manual at startup if one is missing.
+
+### Tomorrow's recommended verification
+
+1. Pull this branch on the internal-network machine and run the backend suite and
+   WPF build.
+2. Create a disposable workflow and visually verify workflow-plan approval,
+   test-plan approval, implementation review, safe test, result acceptance,
+   schedule, user promotion request, and supervisor gate in that order.
+3. Confirm the revision folder, user manual, test-results document, and daily log.
+4. Complete only the read-only MOVEit discovery fields listed in
+   `docs/moveit-ha-implementation-status.md`; keep `mode=observe` and
+   `failback.enabled=false`.
+5. Do not bind or test privileged failback operations against production until
+   exact-version methods and a non-production acceptance environment are approved.
+
+## Provider-neutral workflow design tools — 2026-09-06
+
+A.E.G.I.S.-9 workflow planning and post-plan implementation generation now use
+the provider-neutral structured tool pattern being established in Developer
+Studio. The model is offered only `get_workflow_request`,
+`list_workflow_attachments`, and `read_workflow_attachment`. Requests pass
+through the security-control registry; attached text is returned in bounded
+slices, unrelated file IDs are rejected, unoffered tools fail closed, tool
+errors support controlled model recovery, and the loop has a bounded turn
+limit. No production execution adapter is exposed during workflow creation.
+
+This replaces automatic injection of every attachment into the initial planning
+prompt. The model retrieves only the authoritative context it needs, reducing
+context pressure and making DMR/Ollama tool behavior observable. Backend
+acceptance passes **81/81** tests plus Python compilation.
+
+The first live wire-format checkpoint passed on this machine. Local DMR
+`docker.io/ai/qwen3:8b-q4_K_M` and Ollama `llama3.1:8b` each produced the
+requested native function call, serialized the required JSON argument, accepted
+the returned tool result, and continued with a final assistant response. This
+was followed by the stronger qualification checkpoint below.
+
+That next core qualification increment is now implemented. Before a provider
+route receives workflow tools, A.E.G.I.S.-9 runs and caches a two-step native
+structured-call probe. A failed route is removed and the next qualified route
+is tried. Live DMR/Qwen and Ollama/Llama 3.1 each completed steps 1 and 2 in
+order and returned the required completion response. Automated coverage proves
+qualification caching and removal of a failed DMR route in favor of qualified
+Ollama. Cancellation/context stress and an induced live failover remain broader
+acceptance items.
+
+Qualification evidence is now durable rather than an in-memory boolean.
+Versioned per-provider/model/location reports are written under ignored local
+`storage/tool-capability-reports.json`, bound to a SHA-256 endpoint identity,
+and expire after 24 hours when successful or five minutes when failed. Reports
+record native calls, argument validity, sequential calls, continuation, and a
+bounded failure reason; malformed, stale, or endpoint-mismatched records never
+authorize a route. `scripts/probe-tool-providers.py` regenerates the local DMR
+and Ollama evidence. Its live run qualified both configured models through
+2026-09-07. Backend acceptance is now **84/84** tests.
+
+## Developer Studio Copilot-style tool priority — 2026-09-06
+
+The supplied `AEGIS_PRIORITY_COPILOT_STYLE_AGENT_TOOL_ARCHITECTURE.md` is now
+incorporated as Developer Studio Priority 7. "Copilot-style" describes
+composable Agent behavior, not a Copilot dependency. The implementation plan lives in
+`docs/project/COPILOT-STYLE-TOOL-INTEROPERABILITY-PLAN.md` in the separate
+Aegis Developer Studio repository. The approved approach uses public VS Code
+Language Model Tool and MCP APIs: DMR/Qwen remains primary, Ollama remains the
+only failover, and GitHub Copilot remains an explicitly enabled interoperability
+mode rather than a provider or hidden dependency. The same provider-neutral
+tools must pass with DMR and Ollama; other local providers require capability
+qualification. Unknown registered tools are denied by default, and strict
+offline/local-only operation must pass with external networking blocked.
+
+Offline does not mean removing useful MCP, telemetry, or network capabilities.
+Priority 7 now distinguishes air-gapped machine-only mode from data-sovereign
+network mode. Local/loopback MCP, approved internal company-network MCP servers
+and resources, locally stored/internal telemetry, and governed network tools
+remain eligible. Authorized internal services may receive the minimum company
+data needed for their approved function under identity, capability, credential,
+retention, and audit policy. An external third-party tool may be
+used only when its outbound request contains no protected user/project data;
+third-party transmission of prompts, code, repository metadata, credentials,
+telemetry, tool arguments, or results is prohibited because the provider could
+retain it. The Priority 7 plan defines destination and payload classification,
+redaction/DLP, retention assumptions, and acceptance requirements.
+
+The first Priority 7 code checkpoint is implemented in Developer Studio. It
+adds normalized provider tool call/result and capability contracts plus an
+origin-aware, schema-fingerprinted catalog enforced during FERAL selection,
+discovery, and group activation. External/extension/MCP tools are denied by
+default; exact-name configuration currently permits read-only external tools
+only, while scoped internal write-capable MCP remains disabled pending endpoint
+and data-egress policy. Validation passes **84/84** Local AI tests, **10/10**
+release checks, and the full staged extension build. A.E.G.I.S.-9 enforces its
+live two-step DMR/Ollama qualification gate. Developer Studio now also fails
+closed in both Auto and explicit-model routing unless capabilities declare both
+tool calling and verified tool-protocol behavior; its updated validation is
+**85/85** tests, **10/10** release checks, and a successful staged build.
+
+## Security control-plane foundation — 2026-09-05
+
+A fail-closed security policy now gates workflow execution. The versioned
+`config/security-control.json` registry denies unknown adapters and undeclared
+capabilities, distinguishes read-only from mutating access, and provides a
+global kill switch that immediately blocks mutating adapter checks while
+leaving explicitly registered read-only monitoring available. Missing,
+malformed, disabled, or insufficient policy is a controlled denial.
+
+The initial registry authorizes only the existing approved workflow-execution
+capability and the read-only Developer Studio status capability; it does not
+activate any new production integration. The next security increments are
+authenticated roles, a tamper-evident audit chain, grounded-output policy, and
+an authorized policy/kill-switch administration surface. Current A.E.G.I.S.-9
+backend acceptance is **75/75** tests. The WPF Release build succeeds with zero
+errors; the Debug output could not be overwritten only because the currently
+open A.E.G.I.S.-9 review process was using that executable.
+
+## Developer Studio request-permission hardening — 2026-09-05
+
+Live existing-project testing found that progressive tool-group activation
+could reintroduce scaffold/delete/move/rename after initial intent filtering.
+Developer Studio now holds request permissions invariant across every tool
+turn: those tools remain unavailable without a matching positive user request.
+The affected `D:\StockTest` project was fully restored from Aegis recovery
+storage and builds with zero warnings/errors. Developer Studio also recognizes
+`.slnx` projects and passes **78/78** Local AI tests.
+
+## Developer Studio scaffold-loop correction — 2026-09-05
+
+The Developer Studio request `Create a Visual Studio WPF project that can
+monitor the stock market` revealed repeated execution of the same scaffold
+tool until the bounded turn limit. Developer Studio now permits one scaffold,
+removes that tool, and continues the request with guarded multi-file
+implementation/validation tools. Identical mutating calls are fingerprinted
+and blocked from a second execution. Developer Studio acceptance is now
+**74/74** tests plus a successful full staged extension build.
+
+## Authenticated Developer Studio status bridge — 2026-09-05
+
+The first read-only bridge increment is implemented locally across the three
+Aegis repositories. Developer Studio exposes a loopback-only, HMAC-authenticated
+status endpoint when `AEGIS_BRIDGE_TOKEN` contains at least 32 characters.
+A.E.G.I.S.-9 signs requests, validates the v1 response identity, fails closed,
+and adds Developer Studio as a fifth read-only Operations Monitoring Center
+resource. The A.E.G.I.S.-9 launcher passes the token from its local `.env` to a
+new Developer Studio process without logging it. Existing Studio processes must
+be restarted to receive the token.
+
+Automated acceptance currently passes **69/69** A.E.G.I.S.-9 backend tests and
+**72/72** Developer Studio Local AI tests; the Developer Studio release matrix
+remains **10/10**. A real cross-process smoke test returned authenticated
+product/session/repository/provider/model/activity status. Platform owns the
+strict payload schema and `docs/BRIDGE-V1-SECURITY-AND-ACCEPTANCE.md`.
+
+Live runtime acceptance then passed with the actual applications: the normalized
+API returned five monitors and five observations; `developer-studio` was
+`healthy`, `configured`, and `readOnly`, reporting Developer Studio `1.134.0`,
+an active session, one open repository, provider preset `both` (the managed
+DMR-primary/Ollama-failover pair), and model selection `auto`. Visual confirmation
+of the card in the open Monitoring Center and launcher focus/reuse remain human
+acceptance items. No approval, workflow, tool, or production action crosses the
+bridge in this increment.
+
 ## Clean-machine verification checkpoint — 2026-09-05
 
 The commits below are the synchronized baseline for the next computer. Perform

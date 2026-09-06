@@ -1,5 +1,8 @@
 import base64
+import hashlib
+import hmac
 import json
+import secrets
 import shutil
 import subprocess
 import sys
@@ -17,6 +20,7 @@ import httpx
 from pydantic import BaseModel, Field
 
 from app.config import Settings
+from app.security_control import SecurityControlError, SecurityControlPolicy
 
 
 Severity = Literal["info", "warning", "error"]
@@ -137,6 +141,18 @@ class QualysMonitor(BaseModel):
     findings: list[QualysFinding] = Field(default_factory=list)
 
 
+class DeveloperStudioMonitor(BaseModel):
+    status: MonitorStatus
+    last_checked_at: str
+    detail: str
+    product_version: str = ""
+    session_id: str = ""
+    repositories: list[str] = Field(default_factory=list)
+    provider: str = ""
+    model: str = ""
+    activity: str = "unknown"
+
+
 class MonitoringAlert(BaseModel):
     id: int
     source: str
@@ -162,6 +178,7 @@ class MonitoringDashboard(BaseModel):
     server: ServerMonitor
     freeflow: FreeFlowMonitor
     qualys: QualysMonitor
+    developer_studio: DeveloperStudioMonitor | None = None
     alerts: list[MonitoringAlert] = Field(default_factory=list)
 
 
@@ -630,6 +647,57 @@ class QualysAdapter:
             return QualysMonitor(status="unavailable", last_checked_at=checked_at, detail=f"Qualys monitoring request failed: {error}")
 
 
+class DeveloperStudioBridgeAdapter:
+    PATH = "/aegis/bridge/v1/status"
+
+    def __init__(self, settings: Settings) -> None:
+        self._url = settings.developer_studio_bridge_url.rstrip("/")
+        self._token = settings.developer_studio_bridge_token or ""
+        self._timeout = settings.developer_studio_bridge_timeout_seconds
+        self._security = SecurityControlPolicy(settings.security_control_policy_path)
+
+    def collect(self, checked_at: str) -> DeveloperStudioMonitor:
+        try:
+            self._security.require("developer-studio-status", "read-status", mutating=False)
+        except SecurityControlError as error:
+            return DeveloperStudioMonitor(status="unavailable", last_checked_at=checked_at, detail=f"Developer Studio status is blocked by security policy: {error}")
+        if len(self._token) < 32:
+            return DeveloperStudioMonitor(status="unavailable", last_checked_at=checked_at, detail="Developer Studio bridge credentials are not configured.")
+        timestamp = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        nonce = secrets.token_hex(16)
+        canonical = f"GET\n{self.PATH}\n{timestamp}\n{nonce}".encode()
+        signature = hmac.new(self._token.encode(), canonical, hashlib.sha256).hexdigest()
+        try:
+            response = httpx.get(
+                f"{self._url}{self.PATH}",
+                headers={"X-Aegis-Timestamp": timestamp, "X-Aegis-Nonce": nonce, "X-Aegis-Signature": signature},
+                timeout=self._timeout,
+            )
+            if response.status_code == 401:
+                return DeveloperStudioMonitor(status="unavailable", last_checked_at=checked_at, detail="Developer Studio bridge authentication failed.")
+            response.raise_for_status()
+            envelope = response.json()
+            if envelope.get("protocolVersion") != "1.0" or envelope.get("source") != "aegis-developer-studio" or envelope.get("type") != "status":
+                raise ValueError("bridge response contract identity is invalid")
+            payload = envelope.get("payload")
+            if not isinstance(payload, dict):
+                raise ValueError("bridge status payload is missing")
+            repositories = payload.get("repositoryPaths")
+            return DeveloperStudioMonitor(
+                status="healthy",
+                last_checked_at=checked_at,
+                detail=f"Authenticated Developer Studio {payload.get('productVersion', 'unknown')} session is {payload.get('activity', 'unknown')}.",
+                product_version=str(payload.get("productVersion") or ""),
+                session_id=str(payload.get("sessionId") or envelope.get("sessionId") or ""),
+                repositories=[str(item) for item in repositories[:20]] if isinstance(repositories, list) else [],
+                provider=str(payload.get("provider") or ""),
+                model=str(payload.get("model") or ""),
+                activity=str(payload.get("activity") or "unknown"),
+            )
+        except (httpx.HTTPError, ValueError) as error:
+            return DeveloperStudioMonitor(status="unavailable", last_checked_at=checked_at, detail=f"Developer Studio bridge is unreachable or invalid: {error}")
+
+
 class MonitoringCollector:
     def __init__(self, store: "MonitoringStore", audit_root: Path, settings: Settings, workflow_store=None) -> None:
         self.store = store
@@ -639,6 +707,7 @@ class MonitoringCollector:
         self.server = LocalServerAdapter(settings)
         self.freeflow = FreeFlowAdapter(settings)
         self.qualys = QualysAdapter(settings)
+        self.developer_studio = DeveloperStudioBridgeAdapter(settings)
         self.settings = settings
 
     def collect(self) -> MonitoringDashboard:
@@ -649,6 +718,7 @@ class MonitoringCollector:
         server = self.server.collect(checked_at, audit_events)
         freeflow = self.freeflow.collect(checked_at)
         qualys = self.qualys.collect(checked_at)
+        developer_studio = self.developer_studio.collect(checked_at)
         server.servers = self._server_inventory(server)
         snapshot_id = self.store.save_snapshot(moveit, server, checked_at)
         self.store.ensure_alert(source="moveit", severity="warning", title="MoveIT monitoring unavailable", detail=moveit.detail, active=moveit.status == "unavailable")
@@ -674,6 +744,7 @@ class MonitoringCollector:
             server=server,
             freeflow=freeflow,
             qualys=qualys,
+            developer_studio=developer_studio,
             alerts=self.store.get_alerts(),
         )
 

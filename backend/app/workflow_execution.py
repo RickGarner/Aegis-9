@@ -10,6 +10,7 @@ import time
 from pathlib import Path
 
 from app.storage import JarvisStore, Workflow, WorkflowRun
+from app.security_control import SecurityControlError, SecurityControlPolicy
 from app.workflow_runner import PreparedArtifact, WorkflowTestRunner
 
 
@@ -18,16 +19,22 @@ class WorkflowExecutionError(RuntimeError):
 
 
 class WorkflowExecutionManager:
-    def __init__(self, store: JarvisStore, artifact_root: Path, catalog_path: Path, timeout_seconds: int, output_limit: int) -> None:
+    def __init__(self, store: JarvisStore, artifact_root: Path, catalog_path: Path, timeout_seconds: int, output_limit: int, security_policy_path: Path | None = None) -> None:
         self._store = store
         self._runner = WorkflowTestRunner(artifact_root, timeout_seconds, output_limit)
         self._catalog_path = catalog_path
         self._timeout_seconds = timeout_seconds
         self._output_limit = output_limit
+        self._security = SecurityControlPolicy(security_policy_path) if security_policy_path else None
         self._tasks: dict[int, asyncio.Task] = {}
         self._cancel: dict[int, threading.Event] = {}
 
     def validate(self, workflow: Workflow) -> tuple[PreparedArtifact, dict]:
+        if self._security:
+            try:
+                self._security.require("workflow-execution", "execute-approved-workflow", mutating=True)
+            except SecurityControlError as error:
+                raise WorkflowExecutionError(str(error)) from error
         if not self._store.workflow_approval_is_current(workflow):
             raise WorkflowExecutionError("Supervisor approval no longer matches the workflow revision, artifact, manifest, and schedule.")
         artifact = self._runner.prepare(workflow.transfer_id, workflow.revision, workflow.language, workflow.implementation_text)

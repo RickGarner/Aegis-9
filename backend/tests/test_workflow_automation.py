@@ -3,6 +3,7 @@ from pathlib import Path
 from app.storage import JarvisStore
 from app.main import parse_workflow_plan_response
 from app.main import WorkflowRequest
+from app.workflow_governance import WORKFLOW_ARCHITECT_INSTRUCTIONS, workflow_implementer_instructions
 
 
 def make_store(tmp_path: Path) -> JarvisStore:
@@ -65,6 +66,11 @@ def test_workflow_requires_test_user_and_supervisor_gates(tmp_path: Path) -> Non
     workflow = store.review_workflow(workflow.id, "approve_plan")
     assert workflow is not None
     assert workflow.state == "plan_approved"
+    workflow = store.save_workflow_test_plan(workflow.id, "Test plan A\n\nTest plan B", "ollama", "reasoning-model")
+    assert workflow is not None and workflow.state == "test_plan_review"
+    assert store.save_workflow_implementation(workflow.id, "unsafe", "ollama", "coder-model") is None
+    workflow = store.review_workflow(workflow.id, "approve_test_plan")
+    assert workflow is not None and workflow.state == "test_plan_approved"
     workflow = store.save_workflow_implementation(workflow.id, "Write-Output 'ready'", "ollama", "coder-model")
     assert workflow is not None
     assert workflow.state == "implementation_review"
@@ -107,6 +113,28 @@ def test_implementation_cannot_be_generated_before_plan_approval(tmp_path: Path)
     store = make_store(tmp_path)
     workflow = store.create_workflow("Protected task")
     assert store.save_workflow_implementation(workflow.id, "unsafe", "provider", "coder") is None
+
+
+def test_test_plans_require_plan_approval_and_explicit_user_approval(tmp_path: Path) -> None:
+    store = make_store(tmp_path)
+    workflow = store.create_workflow("Approval chain")
+    assert store.save_workflow_test_plan(workflow.id, "tests", "provider", "model") is None
+    with store._connect() as connection:
+        connection.execute("UPDATE workflows SET state='plan_approved',approval_stage='plan_approved' WHERE id=?", (workflow.id,))
+    planned = store.save_workflow_test_plan(workflow.id, "Test one\nTest two", "provider", "model")
+    assert planned is not None and planned.state == "test_plan_review"
+    assert store.save_workflow_implementation(workflow.id, "code", "provider", "model") is None
+    approved = store.review_workflow(workflow.id, "approve_test_plan")
+    assert approved is not None and approved.state == "test_plan_approved"
+
+
+def test_governance_prompts_preserve_moveit_style_staged_controls() -> None:
+    architect = WORKFLOW_ARCHITECT_INSTRUCTIONS.lower()
+    implementer = workflow_implementer_instructions("PowerShell").lower()
+    for requirement in ("non-goals", "environment profile", "fail closed", "least-privilege", "acceptance criteria"):
+        assert requirement in architect
+    for requirement in ("approved workflow plan", "fixed-function", "test evidence", "user acceptance", "supervisor approval"):
+        assert requirement in implementer
 
 
 def test_questions_block_plan_approval_until_answers_are_submitted(tmp_path: Path) -> None:

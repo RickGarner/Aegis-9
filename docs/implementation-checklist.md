@@ -27,8 +27,8 @@ configuration-blocked, or live-acceptance work. Cross-product items are labeled
 - [x] Standardize family routing on DMR primary and Ollama-only failover.
 - [x] Exclude providers and models without verified native tool calling.
 - [x] Windows dependency manifest, installer, validator, and service templates.
-- [x] Current backend suite: 66 tests passing on 2026-09-05.
-- [x] Current WPF solution: build succeeds with 0 errors on 2026-09-05.
+- [x] Current backend suite: 97 tests passing on 2026-09-06.
+- [x] Current WPF solution: build succeeds with 0 warnings/errors on 2026-09-06.
 - [ ] Validate model profiles across different CPU/GPU hardware.
 - [ ] Validate DMR primary, Ollama failover, and local services after reboot.
 - [ ] Complete clean-machine production installer/package acceptance.
@@ -72,7 +72,7 @@ configuration-blocked, or live-acceptance work. Cross-product items are labeled
   specialized windows or collectors.
 - [x] Add workflow, approval, prerequisite, and schedule status.
 - [ ] Add A.E.G.I.S. backend, provider, voice/runtime, and dependency health.
-- [ ] Add authenticated Developer Studio/bridge status.
+- [x] Add authenticated read-only Developer Studio/bridge status and normalize it into the Monitoring Center.
 - [x] Persist validated window bounds and layout mode.
 - [ ] Persist filters, sorting, and selection across monitor-topology changes.
 - [ ] Add incident acknowledgement, assignment, escalation, recovery, and
@@ -116,27 +116,41 @@ configuration-blocked, or live-acceptance work. Cross-product items are labeled
 - [x] Required-answer gating, Final Submit, and repeated re-evaluation.
 - [x] Dashboard readiness/more-information notifications.
 - [x] Question-free final plan approval/rejection.
-- [x] Independently selected coding model after plan approval.
-- [x] PowerShell/C# implementation and at least two test plans.
+- [x] Independently selected test architect after workflow-plan approval.
+- [x] Separate user approval of detailed test plans before code generation.
+- [x] Independently selected coding model after workflow and test-plan approval.
+- [x] PowerShell/C# workflow and corresponding test implementation.
 - [x] Material revision invalidates stale test and approval state.
+- [x] Give workflow planning and implementation models a provider-neutral,
+  security-gated read-only tool loop for request details, attachment inventory,
+  bounded attached text, and clarification answers.
+- [x] Deny unoffered workflow tools and prevent access to files not attached to
+  the current workflow.
+- [ ] Live-accept the workflow tool loop against both DMR and Ollama, including
+  tool-result continuation, failover, malformed calls, and bounded-turn behavior.
 
 ## Workflow test, approval, schedule, and execution
 
 - [x] Extract immutable artifacts and store SHA-256 hashes/manifests.
 - [x] PowerShell parser validation and .NET 8 C# build validation.
 - [x] Retain hashed stdout/stderr and test evidence.
+- [x] Generate per-revision user manuals, redacted detailed test-results records,
+  and dated lifecycle logs under the local `Workflows` tree.
 - [x] Restricted low-risk PowerShell test execution.
 - [x] Prevent manually fabricated test passes; fail closed when unsupported.
 - [x] Separate test, user acceptance, supervisor approval, and schedule gates.
 - [x] Bind supervisor decision to revision/source/manifest/schedule hashes and identity.
 - [x] Once/daily/weekly/interval/manual schedules, timezone, and prerequisites.
 - [x] Revalidate approvals, hashes, prerequisites, and action policy before launch.
+- [x] Add a fail-closed security policy with a global mutation kill switch and
+  default-deny adapter/capability registry; enforce it at workflow execution.
 - [x] Allowlisted PowerShell runs with events/history/timeout/cancel/retry/recovery.
 - [x] Portable `.aegisworkflow` transfer and safe conflict/import behavior.
 - [ ] Disposable Windows Sandbox/VM runner for external capabilities.
 - [ ] Safe C# runtime execution inside the sandbox.
 - [ ] External-system functional adapters and non-production credentials.
 - [ ] Authenticated supervisor roles and managed production secrets.
+- [ ] Administrative UI/API for authorized security-policy changes and kill-switch status.
 - [ ] Artifact signing beyond hashing.
 - [ ] Advanced missed-run/compensation/escalation/concurrency/stop policies.
 - [ ] Delivered workflow notifications and long-duration scheduler/reboot tests.
@@ -180,6 +194,39 @@ configuration-blocked, or live-acceptance work. Cross-product items are labeled
 - [ ] VB.NET→C#, VB.NET→PowerShell, and C#→PowerShell conversion with repair.
 - [x] DMR-first tool-capable provider filtering, failover, and preflight context budgeting.
 - [ ] Broader model/hardware benchmarks and explicit release criteria.
+- [x] Developer Studio Priority 7 foundation: provider-neutral tool call/result
+  and capability contracts with identical DMR/Ollama unit scenarios.
+- [x] Add and enforce an origin-aware, schema-fingerprinted, default-deny
+  registered-tool catalog without introducing a Copilot dependency.
+- [x] Live DMR/Qwen and Ollama/Llama 3.1 probes pass native calls, valid JSON
+  arguments, and continuation after tool results.
+- [x] Enforce a cached two-step native qualification probe before A.E.G.I.S.-9
+  workflow tool routing; remove failed routes and try the next qualified provider.
+- [x] Persist versioned, expiring, endpoint-bound capability reports locally;
+  reject stale, malformed, failed, and endpoint-mismatched evidence.
+- [x] Add a reusable local DMR/Ollama qualification script without storing
+  endpoint URLs, credentials, prompts, or tool results in the report.
+- [x] Live DMR/Qwen and Ollama/Llama 3.1 each complete ordered probe steps 1 and
+  2 and continue to the required final response.
+- [x] Developer Studio Auto and explicit-model routing require verified tool
+  protocol capability, not merely a provider/model tool-calling claim.
+- [ ] Complete cancellation/context stress and induced live failover acceptance;
+  apply the qualification gate to additional local providers before admission.
+- [ ] Add bounded directory listing, terminal-output sessions, structured test
+  failures, request todos, and question/answer coordination tools.
+- [ ] Prove fully offline/local-only operation with external networking blocked;
+  separately test explicitly enabled Copilot interoperability without adding
+  Copilot to the provider failover chain.
+- [ ] Add offline MCP registry/lifecycle support for local process and loopback
+  servers; permit internal company-network MCP and resources under exact
+  identity, capability, data-scope, credential, retention, and audit policy.
+- [ ] Add redacted, bounded local telemetry storage/viewing and optional
+  loopback/private OpenTelemetry collection with cloud exporters disabled.
+- [ ] Add a shared destination-policy layer for loopback/private network tools,
+  with DNS/redirect/proxy revalidation and explicit host/port allowlists.
+- [ ] Add outbound schema classification and DLP/redaction enforcement; prohibit
+  third-party transmission of prompts, code, repository/user data, credentials,
+  telemetry, tool arguments, or results that an external provider could retain.
 
 ## A.E.G.I.S. ↔ Developer Studio integration
 
@@ -188,8 +235,8 @@ configuration-blocked, or live-acceptance work. Cross-product items are labeled
 - [x] Repository browsing and persisted recent/selected repositories.
 - [x] Exact-path IDE discovery, launch, process status, and focus/reuse logic.
 - [ ] Live-accept launch/focus/reuse against `development-v2`.
-- [ ] Define authenticated versioned loopback bridge and threat model.
-- [ ] Report IDE version/session/repository/provider/model/activity to A.E.G.I.S.
+- [x] Define the authenticated versioned loopback status bridge and threat model.
+- [x] Report IDE version/session/repository/provider/model/activity to A.E.G.I.S.
 - [ ] Exchange approvals without bypassing native confirmation boundaries.
 - [ ] Open an approved A.E.G.I.S. workflow revision in Developer Studio.
 - [ ] Return build/test output, hashes, and repair history to that exact revision.
@@ -206,11 +253,33 @@ configuration-blocked, or live-acceptance work. Cross-product items are labeled
 - [ ] Audit/disable prompt-related cloud telemetry and authentication paths.
 - [ ] Enforce firewall/proxy allowlisting for approved private services.
 - [ ] Prove blocked cloud egress while local prompts/tools still work.
-- [ ] Add bridge authentication, authorization, replay protection, version
-  negotiation, least privilege, and audit.
+- [x] Add bridge authentication, replay protection, strict version negotiation,
+  and least-privilege read-only status.
+- [ ] Add authenticated cross-product roles and tamper-evident bridge audit.
 - [ ] Complete a combined security review.
 
 ## Release readiness
+
+## MOVEit HA auto-failback
+
+- [x] Adopt deterministic HA specification and configure `BSOAUTALB001` as preferred primary and `BSOAUTALB002` as preferred secondary.
+- [x] Add observe-only configuration, typed state contracts, fail-closed state evaluation, durable snapshot, API route, and offline tests.
+- [x] Keep privileged operations and automatic failback disabled pending exact-version/on-network validation.
+- [ ] Complete onsite MOVEit version, role-query, SQL identity, service, Web Admin, port, task-query, graceful-shutdown, Clear Admin Rep, and WinRM/JEA discovery.
+- [ ] Bind and acceptance-test the read-only collector on the internal network.
+- [ ] Add durable incidents/events, monitoring UI, exclusive lock, preflight gates, assisted failback, rollback, and fault injection.
+- [ ] Obtain operations/security approval before enabling automatic failback.
+
+## Workflow Center staged engineering standard
+
+- [x] Apply the MOVEit HA design procedure to every AI-designed workflow: discovery, explicit assumptions/non-goals, architecture, deterministic gates, least privilege, phased rollout, tests, acceptance, rollback, and operations handoff.
+- [x] Keep workflow planning read-only and prohibit executable code before explicit user plan approval.
+- [x] Present plan approval as **Approve Plan + Authorize Build** with an explicit confirmation.
+- [x] Require implementation review and retained non-production test evidence before user acceptance.
+- [x] Require user acceptance, schedule/condition binding, and authenticated supervisor approval before production eligibility.
+- [x] Require privileged actions to use fixed-function/allowlisted adapters and fail closed on unknown safety state.
+- [x] Add a separate AI test-plan design stage and explicit user test-plan approval before workflow/test implementation.
+- [x] Retain approved test-plan details alongside execution results and evidence before user acceptance and supervisor promotion.
 
 - [x] Current A.E.G.I.S. backend tests and WPF build pass.
 - [x] Current Aegis Developer Studio tests and release matrix pass.

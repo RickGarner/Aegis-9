@@ -113,6 +113,8 @@ class Settings(BaseSettings):
     workflow_supervisor_identities: str = Field(default="", validation_alias="JARVIS_WORKFLOW_SUPERVISOR_IDENTITIES")
     workflow_execution_timeout_seconds: int = Field(default=300, ge=10, le=3600, validation_alias="JARVIS_WORKFLOW_EXECUTION_TIMEOUT_SECONDS")
     workflow_action_catalog_path: Path = Field(default=Path("config/workflow-actions.json"), validation_alias="JARVIS_WORKFLOW_ACTION_CATALOG_PATH")
+    security_control_policy_path: Path = Field(default=Path("config/security-control.json"), validation_alias="JARVIS_SECURITY_CONTROL_POLICY_PATH")
+    tool_qualification_store_path: Path = Field(default=Path("storage/tool-capability-reports.json"), validation_alias="JARVIS_TOOL_QUALIFICATION_STORE_PATH")
     server_inventory_path: Path = Field(
         default=Path(__file__).resolve().parents[2] / "config" / "monitored-servers.json",
         validation_alias="JARVIS_SERVER_INVENTORY_PATH",
@@ -128,10 +130,18 @@ class Settings(BaseSettings):
     qualys_verify_tls: bool = Field(default=True, validation_alias="JARVIS_QUALYS_VERIFY_TLS")
     qualys_minimum_severity: int = Field(default=4, ge=1, le=5, validation_alias="JARVIS_QUALYS_MINIMUM_SEVERITY")
     qualys_max_findings: int = Field(default=200, ge=10, le=1000, validation_alias="JARVIS_QUALYS_MAX_FINDINGS")
+    developer_studio_bridge_url: str = Field(default="http://127.0.0.1:8765", validation_alias="JARVIS_DEVELOPER_STUDIO_BRIDGE_URL")
+    developer_studio_bridge_token: str | None = Field(default=None, validation_alias="AEGIS_BRIDGE_TOKEN")
+    developer_studio_bridge_timeout_seconds: float = Field(default=3, ge=0.5, le=15, validation_alias="JARVIS_DEVELOPER_STUDIO_BRIDGE_TIMEOUT_SECONDS")
     moveit_servers: str = Field(
-        default="BSOAUTALB002,BSOAUTALB001",
+        default="BSOAUTALB001,BSOAUTALB002",
         validation_alias="JARVIS_MOVEIT_SERVERS",
     )
+    workflow_documentation_root: Path = Field(
+        default=Path("Workflows"), validation_alias="JARVIS_WORKFLOW_DOCUMENTATION_ROOT"
+    )
+    moveit_ha_config_path: Path = Field(default=Path("config/moveit-ha.json"), validation_alias="JARVIS_MOVEIT_HA_CONFIG_PATH")
+    moveit_ha_state_path: Path = Field(default=Path("storage/moveit-ha-state.json"), validation_alias="JARVIS_MOVEIT_HA_STATE_PATH")
     moveit_username: str | None = Field(default=None, validation_alias="JARVIS_MOVEIT_USERNAME")
     moveit_password: str | None = Field(default=None, validation_alias="JARVIS_MOVEIT_PASSWORD")
     moveit_verify_tls: bool = Field(default=True, validation_alias="JARVIS_MOVEIT_VERIFY_TLS")
@@ -156,8 +166,18 @@ class Settings(BaseSettings):
             self.freeflow_inventory_path = (Path(__file__).resolve().parents[2] / self.freeflow_inventory_path).resolve()
         if not self.workflow_artifact_root.is_absolute():
             self.workflow_artifact_root = (Path(__file__).resolve().parents[2] / self.workflow_artifact_root).resolve()
+        if not self.workflow_documentation_root.is_absolute():
+            self.workflow_documentation_root = (Path(__file__).resolve().parents[2] / self.workflow_documentation_root).resolve()
         if not self.workflow_action_catalog_path.is_absolute():
             self.workflow_action_catalog_path = (Path(__file__).resolve().parents[2] / self.workflow_action_catalog_path).resolve()
+        if not self.security_control_policy_path.is_absolute():
+            self.security_control_policy_path = (Path(__file__).resolve().parents[2] / self.security_control_policy_path).resolve()
+        if not self.tool_qualification_store_path.is_absolute():
+            self.tool_qualification_store_path = (Path(__file__).resolve().parents[2] / self.tool_qualification_store_path).resolve()
+        if not self.moveit_ha_config_path.is_absolute():
+            self.moveit_ha_config_path = (Path(__file__).resolve().parents[2] / self.moveit_ha_config_path).resolve()
+        if not self.moveit_ha_state_path.is_absolute():
+            self.moveit_ha_state_path = (Path(__file__).resolve().parents[2] / self.moveit_ha_state_path).resolve()
         if self.provider_base_url is not None:
             return self
 

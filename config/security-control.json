@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "global_kill_switch": false,
+  "adapters": {
+    "workflow-execution": {
+      "enabled": true,
+      "mode": "read-write",
+      "capabilities": [
+        "execute-approved-workflow"
+      ]
+    },
+    "developer-studio-status": {
+      "enabled": true,
+      "mode": "read-only",
+      "capabilities": [
+        "read-status"
+      ]
+    },
+    "workflow-design-tools": {
+      "enabled": true,
+      "mode": "read-only",
+      "capabilities": [
+        "get_workflow_request",
+        "list_workflow_attachments",
+        "read_workflow_attachment"
+      ]
+    }
+  }
+}

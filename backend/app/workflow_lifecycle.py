@@ -11,6 +11,7 @@ class WorkflowTransitionRule:
 
 REVIEW_TRANSITIONS = (
     WorkflowTransitionRule("plan_review", "approve_plan", "plan_approved", "plan_approved"),
+    WorkflowTransitionRule("test_plan_review", "approve_test_plan", "test_plan_approved", "test_plan_approved"),
     WorkflowTransitionRule("implementation_review", "submit_for_test", "test_ready", "test_ready"),
     WorkflowTransitionRule("test_failed", "submit_for_test", "test_ready", "test_ready"),
     WorkflowTransitionRule("test_passed", "user_accept", "user_accepted", "user_accepted"),

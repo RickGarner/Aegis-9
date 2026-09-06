@@ -64,6 +64,11 @@ public sealed class DeveloperStudioService(DeveloperStudioOptions options)
         startInfo.Environment["NODE_ENV"] = "development";
         startInfo.Environment["VSCODE_DEV"] = "1";
         startInfo.Environment["VSCODE_CLI"] = "1";
+        var bridgeToken = ResolveBridgeToken();
+        if (bridgeToken.Length >= 32)
+        {
+            startInfo.Environment["AEGIS_BRIDGE_TOKEN"] = bridgeToken;
+        }
         startInfo.ArgumentList.Add(FoundationPath);
         startInfo.ArgumentList.Add("--disable-extension=vscode.vscode-api-tests");
         var localAiExtension = Path.Combine(FoundationPath, ".build", "extensions", "local-ai");
@@ -74,6 +79,31 @@ public sealed class DeveloperStudioService(DeveloperStudioOptions options)
         startInfo.ArgumentList.Add(reuseWindow ? "--reuse-window" : "--new-window");
         startInfo.ArgumentList.Add(Path.GetFullPath(repositoryPath));
         return Process.Start(startInfo) ?? throw new InvalidOperationException("Developer Studio did not return a process handle.");
+    }
+
+    private static string ResolveBridgeToken()
+    {
+        var inherited = Environment.GetEnvironmentVariable("AEGIS_BRIDGE_TOKEN")?.Trim();
+        if (!string.IsNullOrEmpty(inherited)) return inherited;
+
+        var current = new DirectoryInfo(AppContext.BaseDirectory);
+        while (current is not null)
+        {
+            var environmentFile = Path.Combine(current.FullName, ".env");
+            if (File.Exists(environmentFile))
+            {
+                foreach (var line in File.ReadLines(environmentFile))
+                {
+                    var trimmed = line.Trim();
+                    if (trimmed.StartsWith("AEGIS_BRIDGE_TOKEN=", StringComparison.Ordinal))
+                    {
+                        return trimmed["AEGIS_BRIDGE_TOKEN=".Length..].Trim().Trim('"', '\'');
+                    }
+                }
+            }
+            current = current.Parent;
+        }
+        return string.Empty;
     }
 
     [DllImport("user32.dll")]

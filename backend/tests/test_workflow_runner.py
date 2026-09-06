@@ -86,7 +86,7 @@ class WorkflowRunnerLifecycleTests(unittest.IsolatedAsyncioTestCase):
         store.initialize()
         workflow = store.create_workflow("Evidence gate", "Validate safely", [], "powershell")
         with store._connect() as connection:
-            connection.execute("UPDATE workflows SET state='plan_approved', approval_stage='plan_approved' WHERE id=?", (workflow.id,))
+            connection.execute("UPDATE workflows SET state='test_plan_approved', approval_stage='test_plan_approved',test_plan_text='Approved tests' WHERE id=?", (workflow.id,))
         workflow = store.save_workflow_implementation(
             workflow.id, "```powershell\nWrite-Output 'safe validation'\n```", "test", "coding-model",
         )

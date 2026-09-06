@@ -1,6 +1,6 @@
 # A.E.G.I.S.-9 and Aegis Developer Studio Roadmap
 
-**Updated:** 2026-09-03
+**Updated:** 2026-09-06
 
 **A.E.G.I.S.-9 branch:** `feature/workflow-automation-monitoring-2026-08-31`
 
@@ -95,6 +95,8 @@ Delivered:
 - FreeFlow checks for `BSOXERALB001` primary and `BSOXERALB002` secondary
 - severity-first read-only Qualys collector foundation
 - durable, deduplicated alerts
+- observe-only MOVEit HA pair contracts and deterministic fail-closed state
+  evaluation for preferred `BSOAUTALB001` / secondary `BSOAUTALB002`
 
 Delivered since the original plan: the enabled movable/resizable read-only
 Operations Monitoring Center, normalized monitor/observation/alert contracts,
@@ -116,6 +118,9 @@ Remaining:
 - accept MoveIT alert policy and managed service credentials
 - finish approved remote agent/hub connectivity where required
 - add notification delivery outbox, retry, escalation, and visible delivery state
+- bind the exact-version, read-only MOVEit HA health/role/SQL adapter; then add
+  incidents, UI, locking, assisted failback, rollback, and fault injection before
+  automatic failback can be considered
 
 Exit criteria: every monitored service has a documented health definition,
 approved read-only credentials, alert/recovery policy, and notification test.
@@ -126,16 +131,29 @@ approved read-only credentials, alert/recovery policy, and notification test.
 
 Delivered: workflow dashboard/windows, document-assisted reasoning-model plans,
 split-pane question review, individual answers, re-evaluation notifications,
-final plan approval before independently routed implementation, immutable
-revisions, PowerShell/C# artifacts and test plans, hashes/manifests, bounded
-validation, restricted low-risk PowerShell tests, user and supervisor gates,
+final plan approval, separately generated and user-approved test plans before
+independently routed implementation, immutable revisions, PowerShell/C# workflow
+and test artifacts, hashes/manifests, bounded validation, restricted low-risk
+PowerShell tests, explicit result acceptance, user and supervisor gates,
 schedules/prerequisites, allowlisted PowerShell production execution, live
 events/history/cancel/retry/recovery, recoverable archive, and portable transfer.
+
+Each revision also receives a generated user manual, detailed redacted test-results
+record, and daily lifecycle log under the local Git-ignored `Workflows` tree.
+
+The workflow architect and post-plan implementation model now share a bounded,
+provider-neutral read-only tool loop. DMR/Ollama can inspect authoritative
+workflow details, submitted answers, attachment IDs, and bounded extracted text
+without receiving every document in the initial prompt. Tool access is
+default-deny and cannot reach unrelated uploads or production execution.
 
 Remaining: disposable Windows/VM sandbox for C# and external capabilities,
 authenticated supervisor authorization, managed secrets and non-production
 credentials, artifact signing, functional adapters, advanced missed-run and
 compensation policies, delivered notifications, and scheduler/reboot soak tests.
+Core live DMR/Ollama workflow-tool qualification now passes. Cancellation and
+context stress, induced failover, and additional-provider qualification remain.
+Qualification reports are persisted locally with endpoint binding and expiry.
 
 ### A.E.G.I.S. ↔ Developer Studio link
 
@@ -188,8 +206,9 @@ process state, and focus/reuse logic.
 Remaining milestones:
 
 1. Live-accept launch/focus/reuse with the `development-v2` IDE build.
-2. Add an authenticated local bridge for version, session, repository,
-   provider/model, activity, and approval state.
+2. Complete live UI acceptance of the implemented authenticated read-only
+   version/session/repository/provider/model/activity bridge; approval state
+   remains a later write-capable increment.
 3. Complete conversion pipelines, build/test evidence exchange, and workflow handoff.
 4. Complete product-wide Local-Only Mode, telemetry/auth audit, outbound policy,
    and a blocked-cloud-egress acceptance test.
@@ -200,7 +219,8 @@ Remaining milestones:
 **Status: Partial.**
 
 Delivered foundation: approvals, audits, hashes, manifests, protected paths,
-default-deny prerequisites, cancellation/retry/recovery, WolfForge Local AI
+a fail-closed global mutation kill switch and default-deny adapter/capability
+registry enforced at workflow execution, cancellation/retry/recovery, Developer Studio Local AI
 endpoint filtering, A.E.G.I.S. workstation bootstrap, and a stable WolfForge v1
 recovery line plus v2 track.
 
@@ -214,16 +234,25 @@ workflow isolation, authorization, packaging, and recovery pass documented tests
 
 ## Current execution order
 
-1. Commit, push, and clean-machine validate the 2026-09-05 baselines.
-2. Implement the read-only authenticated A.E.G.I.S./Developer Studio bridge and
-   display its status in the Monitoring Center.
-3. Add authenticated roles, tamper-evident audit, global kill switch, grounded
-   output policy, and the default-deny adapter registry.
-4. Complete Qualys, FreeFlow, MoveIT, server, and notification acceptance; then
+1. Clean-pull and machine-verify this 2026-09-06 checkpoint.
+2. Live-test the new workflow-plan, test-plan, implementation, evidence,
+   documentation, user-promotion, and supervisor gates.
+3. Complete read-only MOVEit HA discovery and adapter binding while automatic
+   failback remains disabled.
+4. Complete authenticated roles, tamper-evident audit, grounded output policy,
+   and an authorized administration surface for the implemented global kill
+   switch/default-deny adapter registry.
+5. Complete Qualys, FreeFlow, MoveIT, server, and notification acceptance; then
    adopt approved Enterprise operations-catalog and monitoring enhancements.
-5. Add workflow sandboxing, managed secrets, and signing.
-6. Connect Developer Studio build/test evidence to immutable A.E.G.I.S. workflows.
-7. Finish Developer Studio agent/MCP evidence, conversion execution, and Local-Only controls.
+6. Add workflow sandboxing, managed secrets, and signing.
+7. Connect Developer Studio build/test evidence to immutable A.E.G.I.S. workflows.
+8. Continue Developer Studio Priority 7 provider-neutral, Copilot-style agent
+   tools: one contract and test suite for DMR, Ollama, and qualified local
+   providers; a default-deny tool catalog; missing coordination primitives; and
+   proven air-gapped/data-sovereign network operation, including local MCP,
+   local telemetry, and external tools only when no protected data is sent to a
+   third party. Copilot remains a separate opt-in
+   interoperability mode and must not enter the automatic provider chain.
 8. Add the managed knowledge/RAG increment after its architecture decision.
 9. Resume research, broader automation, preference memory, advanced workspaces,
    and final voice/lip-sync acceptance.

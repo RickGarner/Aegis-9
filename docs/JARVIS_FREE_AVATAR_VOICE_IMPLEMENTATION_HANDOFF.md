@@ -1,5 +1,10 @@
 # Jarvis Free Local Avatar and Voice Implementation Handoff
 
+> **2026-09-06 continuity note:** Use `docs/handoff.md` for the current
+> A.E.G.I.S.-9 project-wide status and execution order. This document remains the
+> focused avatar/voice implementation record; no avatar or voice behavior was
+> changed by the 2026-09-06 workflow/MOVEit HA checkpoint.
+
 ## 2026-08-25 implementation status
 
 Jarvis now has the first architecture slice of this specification implemented in the WPF desktop app and bundled FastAPI backend:

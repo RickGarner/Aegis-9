@@ -1,5 +1,6 @@
 import types
 import unittest
+from unittest.mock import patch
 
 from app.config import Settings
 from app.main import ChatResponse
@@ -16,6 +17,102 @@ def settings() -> Settings:
 
 
 class ProviderDiscoveryTests(unittest.IsolatedAsyncioTestCase):
+    async def test_tool_qualification_is_cached_per_route(self) -> None:
+        router = OpenAICompatibleProvider(settings())
+        route = ProviderRoute("local", "dmr", "tool-model", "http://chat")
+        calls = 0
+
+        async def probe(_self, candidate):
+            nonlocal calls
+            calls += 1
+            self.assertEqual(route, candidate)
+            return True
+
+        router._probe_tool_route = types.MethodType(probe, router)
+        self.assertEqual([route], await router._qualified_tool_routes([route], []))
+        self.assertEqual([route], await router._qualified_tool_routes([route], []))
+        self.assertEqual(1, calls)
+
+    async def test_tool_routing_excludes_failed_primary_qualification(self) -> None:
+        router = OpenAICompatibleProvider(settings())
+        dmr = ProviderRoute("local", "dmr", "dmr-model", "http://dmr/chat")
+        ollama = ProviderRoute("local", "ollama", "ollama-model", "http://ollama/chat")
+        router._candidates = [dmr, ollama]
+        router._active = dmr
+        router._location = "local"
+        router._status = "ready"
+
+        async def probe(_self, route):
+            return route.provider == "ollama"
+
+        async def try_tools(_self, routes, _messages, _tools, _allowed, _executor, _turns, _errors):
+            self.assertEqual([ollama], routes)
+            return "completed", ollama
+
+        router._probe_tool_route = types.MethodType(probe, router)
+        router._try_tool_routes = types.MethodType(try_tools, router)
+        tools = [{"type": "function", "function": {"name": "read", "parameters": {"type": "object"}}}]
+
+        async def execute(_name, _arguments): return "ok"
+
+        result = await router.chat_for_task_with_tools("reasoning", [ChatMessage(role="user", content="plan")], tools, execute)
+        self.assertEqual(("ollama", "completed"), (result.route.provider, result.content))
+
+    async def test_tool_chat_continues_after_a_structured_call(self) -> None:
+        router = OpenAICompatibleProvider(settings())
+        route = ProviderRoute("local", "dmr", "docker.io/ai/qwen3:8b-q4_K_M", "http://chat")
+        responses = [
+            {"choices": [{"message": {"role": "assistant", "content": None, "tool_calls": [{"id": "call-1", "type": "function", "function": {"name": "get_workflow_request", "arguments": "{}"}}]}}]},
+            {"choices": [{"message": {"role": "assistant", "content": "final plan"}}]},
+        ]
+        posted = []
+
+        class Response:
+            def __init__(self, payload): self._payload = payload
+            def raise_for_status(self): return None
+            def json(self): return self._payload
+
+        class Client:
+            def __init__(self, **_kwargs): pass
+            async def __aenter__(self): return self
+            async def __aexit__(self, *_args): return None
+            async def post(self, _url, json, headers):
+                posted.append(json)
+                return Response(responses.pop(0))
+
+        async def execute(name, arguments):
+            self.assertEqual(("get_workflow_request", {}), (name, arguments))
+            return '{"request":"test"}'
+
+        tools = [{"type": "function", "function": {"name": "get_workflow_request", "description": "Read request", "parameters": {"type": "object"}}}]
+        with patch("app.providers.httpx.AsyncClient", Client):
+            result = await router._try_tool_routes([route], [ChatMessage(role="user", content="plan")], tools, {"get_workflow_request"}, execute, 4, [])
+
+        self.assertEqual(("final plan", route), result)
+        self.assertEqual("tool", posted[1]["messages"][-1]["role"])
+        self.assertEqual("call-1", posted[1]["messages"][-1]["tool_call_id"])
+
+    async def test_tool_chat_rejects_unoffered_tool(self) -> None:
+        router = OpenAICompatibleProvider(settings())
+        route = ProviderRoute("local", "ollama", "llama3.1:8b", "http://chat")
+
+        class Response:
+            def raise_for_status(self): return None
+            def json(self): return {"choices": [{"message": {"tool_calls": [{"id": "bad", "function": {"name": "execute_production", "arguments": "{}"}}]}}]}
+
+        class Client:
+            def __init__(self, **_kwargs): pass
+            async def __aenter__(self): return self
+            async def __aexit__(self, *_args): return None
+            async def post(self, *_args, **_kwargs): return Response()
+
+        errors = []
+        with patch("app.providers.httpx.AsyncClient", Client):
+            result = await router._try_tool_routes([route], [ChatMessage(role="user", content="plan")], [{"function": {"name": "read"}}], {"read"}, lambda *_args: None, 2, errors)
+
+        self.assertIsNone(result)
+        self.assertIn("unoffered tool", errors[0])
+
     async def test_dmr_is_the_first_provider_validated(self) -> None:
         router = OpenAICompatibleProvider(settings())
 

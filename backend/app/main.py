@@ -31,6 +31,12 @@ from app.workflow_execution import WorkflowExecutionError, WorkflowExecutionMana
 from app.workflow_runner import WorkflowTestEvidence, WorkflowTestRunner
 from app.workflow_scheduler import ScheduleError, is_due, prerequisites_met
 from app.workflow_notifications import WorkflowNotificationWorker
+from app.security_control import SecurityControlPolicy
+from app.workflow_agent_tools import WorkflowAgentToolContext
+from app.workflow_governance import WORKFLOW_ARCHITECT_INSTRUCTIONS, workflow_implementer_instructions
+from app.workflow_documentation import WorkflowDocumentationManager
+from app.moveit_ha import MoveItHaService
+from app.moveit_ha.models import HaStatus
 
 
 class ChatRequest(BaseModel):
@@ -58,7 +64,7 @@ class WorkflowRequest(BaseModel):
 
 
 class WorkflowReviewRequest(BaseModel):
-    decision: str = Field(pattern="^(approve_plan|submit_for_test|user_accept|request_supervisor|supervisor_approve|reject)$")
+    decision: str = Field(pattern="^(approve_plan|approve_test_plan|submit_for_test|user_accept|request_supervisor|supervisor_approve|reject)$")
 
 
 class WorkflowTestRequest(BaseModel):
@@ -201,6 +207,7 @@ async def lifespan(app: FastAPI):
     app.state.workflow_execution = WorkflowExecutionManager(
         app.state.store, settings.workflow_artifact_root, settings.workflow_action_catalog_path,
         settings.workflow_execution_timeout_seconds, settings.workflow_test_output_limit,
+        settings.security_control_policy_path,
     )
     for workflow in app.state.store.get_workflows():
         parsed_plan, _ = parse_workflow_plan_response(workflow.plan_text) if workflow.plan_text else ("", [])
@@ -235,6 +242,10 @@ async def lifespan(app: FastAPI):
         settings,
         workflow_store=app.state.store,
     )
+    app.state.workflow_documentation = WorkflowDocumentationManager(settings.workflow_documentation_root)
+    for workflow in app.state.store.get_workflows():
+        app.state.workflow_documentation.ensure(workflow)
+    app.state.moveit_ha = MoveItHaService(settings.moveit_ha_config_path, settings.moveit_ha_state_path)
     collect_operations_snapshot(app.state.monitoring)
 
     async def monitoring_loop() -> None:
@@ -298,6 +309,13 @@ def get_workflow_execution() -> WorkflowExecutionManager:
 
 def get_monitoring() -> MonitoringCollector:
     return app.state.monitoring
+
+
+def document_workflow(workflow: Workflow, event: str, detail: str = "") -> Workflow:
+    manager = getattr(app.state, "workflow_documentation", None)
+    if manager is not None:
+        manager.record(workflow, event, detail)
+    return workflow
 
 
 def get_speech_recognition() -> LocalWhisperService:
@@ -383,6 +401,12 @@ async def monitoring_dashboard(
     monitoring: MonitoringCollector = Depends(get_monitoring),
 ) -> MonitoringDashboard:
     return monitoring.collect()
+
+
+@app.get("/api/monitoring/moveit-ha", response_model=HaStatus)
+async def moveit_ha_status() -> HaStatus:
+    """Return fail-closed HA readiness until the live, version-specific adapter is bound."""
+    return app.state.moveit_ha.status()
 
 
 @app.get("/api/operations/monitoring", response_model=OperationsMonitoringSnapshot)
@@ -589,7 +613,7 @@ async def create_workflow(
     request: WorkflowRequest,
     store: JarvisStore = Depends(get_store),
 ) -> Workflow:
-    return store.create_workflow(request.title, request.description, request.attachment_ids, request.language)
+    return document_workflow(store.create_workflow(request.title, request.description, request.attachment_ids, request.language), "workflow-created")
 
 
 @app.put("/api/workflows/{workflow_id}", response_model=Workflow)
@@ -597,7 +621,7 @@ async def update_workflow(workflow_id: int, request: WorkflowRequest, store: Jar
     result = store.update_workflow(workflow_id, request.title, request.description, request.attachment_ids, request.language)
     if result is None:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Workflow cannot be edited while active or was not found.")
-    return result
+    return document_workflow(result, "workflow-revised", "Prior downstream approvals were invalidated.")
 
 
 @app.post("/api/workflows/{workflow_id}/review", response_model=Workflow)
@@ -629,7 +653,7 @@ async def review_workflow(
         result = store.review_workflow(workflow_id, request.decision)
     if result is None:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Decision is not valid for the workflow's current gate.")
-    return result
+    return document_workflow(result, f"review-{request.decision}")
 
 
 @app.post("/api/workflows/{workflow_id}/run-test", response_model=WorkflowTestResult)
@@ -655,6 +679,10 @@ async def run_workflow_test(
     updated = store.complete_workflow_test(workflow_id, evidence.model_dump())
     if updated is None:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Test evidence could not be attached to the workflow.")
+    document_workflow(updated, "non-production-test-completed", evidence.summary)
+    documentation = getattr(app.state, "workflow_documentation", None)
+    if documentation is not None:
+        documentation.record_test_result(updated, evidence.model_dump())
     return WorkflowTestResult(workflow=updated, evidence=evidence)
 
 
@@ -663,14 +691,16 @@ async def design_workflow_plan(
     workflow_id: int,
     provider: OpenAICompatibleProvider = Depends(get_provider),
     store: JarvisStore = Depends(get_store),
+    settings: Settings = Depends(get_settings),
 ) -> Workflow:
-    return await _generate_workflow_plan(workflow_id, provider, store, finalizing=False)
+    return await _generate_workflow_plan(workflow_id, provider, store, settings, finalizing=False)
 
 
 async def _generate_workflow_plan(
     workflow_id: int,
     provider: OpenAICompatibleProvider,
     store: JarvisStore,
+    settings: Settings,
     finalizing: bool,
 ) -> Workflow:
     workflow = store.get_workflow(workflow_id)
@@ -678,18 +708,17 @@ async def _generate_workflow_plan(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workflow was not found.")
     if workflow.state not in {"draft", "rejected", "plan_review", "design_review"}:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="The workflow is not available for plan design.")
-    attachments = [store.get_file_content(file_id) for file_id in workflow.attachment_ids]
-    context = "\n\n".join(content for content in attachments if content)
+    tool_context = WorkflowAgentToolContext(store, workflow, SecurityControlPolicy(settings.security_control_policy_path))
     messages = [
-        ChatMessage(role="system", content="You are the A.E.G.I.S.-9 workflow architect. Design a safe, testable operational workflow plan only; do not generate executable code. Return strict JSON with this shape: {\"plan\": \"complete markdown plan\", \"questions\": [{\"id\": \"stable_key\", \"prompt\": \"question\", \"required\": true, \"options\": [\"optional choice\"]}]}. The plan must cover goal, inputs, assumptions, ordered steps, permissions, risks, test strategy, success criteria, schedule considerations, and stop conditions. Ask only material unresolved questions. Return an empty questions array when the plan is ready for approval."),
-        ChatMessage(role="user", content=f"Workflow: {workflow.title}\nRequest: {workflow.description}\nPreferred implementation: {workflow.language}\nAttached material:\n{context or '[none]'}\nPreviously submitted clarification answers:\n{json.dumps(workflow.clarification_answers, indent=2) if workflow.clarification_answers else '[none]'}"),
+        ChatMessage(role="system", content=WORKFLOW_ARCHITECT_INSTRUCTIONS),
+        ChatMessage(role="user", content="Inspect this workflow through the provided tools, then create or reevaluate its plan."),
     ]
     routed = None
     plan = ""
     questions: list[dict] = []
     for attempt in range(2):
         try:
-            routed = await provider.chat_for_task("reasoning", messages)
+            routed = await provider.chat_for_task_with_tools("reasoning", messages, tool_context.definitions, tool_context.invoke)
         except ProviderError as error:
             raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(error)) from error
         plan, questions = parse_workflow_plan_response(routed.content)
@@ -707,7 +736,7 @@ async def _generate_workflow_plan(
     result = store.save_workflow_plan(workflow_id, plan, routed.route.provider, routed.route.model, questions, finalizing=finalizing)
     if result is None:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Workflow changed before the plan could be saved.")
-    return result
+    return document_workflow(result, "workflow-plan-generated", "Final plan ready for approval." if finalizing and not questions else "Plan requires review.")
 
 
 @app.put("/api/workflows/{workflow_id}/clarifications/{question_id}", response_model=Workflow)
@@ -720,7 +749,7 @@ async def answer_one_workflow_clarification(
     result = store.save_clarification_answer(workflow_id, question_id, request.answer)
     if result is None:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="The question is unavailable or the workflow is not in design review.")
-    return result
+    return document_workflow(result, "clarification-answer-submitted", f"Question {question_id} answered; answer content omitted from process log.")
 
 
 @app.post("/api/workflows/{workflow_id}/complete-design-review", response_model=Workflow)
@@ -728,14 +757,43 @@ async def complete_workflow_design_review(
     workflow_id: int,
     provider: OpenAICompatibleProvider = Depends(get_provider),
     store: JarvisStore = Depends(get_store),
+    settings: Settings = Depends(get_settings),
 ) -> Workflow:
     if store.begin_workflow_reevaluation(workflow_id) is None:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Every required question must be submitted before updating the draft.")
-    return await _generate_workflow_plan(workflow_id, provider, store, finalizing=True)
+    return await _generate_workflow_plan(workflow_id, provider, store, settings, finalizing=True)
 
 
 @app.post("/api/workflows/{workflow_id}/generate-implementation", response_model=Workflow)
 async def generate_workflow_implementation(
+    workflow_id: int,
+    provider: OpenAICompatibleProvider = Depends(get_provider),
+    store: JarvisStore = Depends(get_store),
+    settings: Settings = Depends(get_settings),
+) -> Workflow:
+    workflow = store.get_workflow(workflow_id)
+    if workflow is None or workflow.archived:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workflow was not found.")
+    if workflow.state != "test_plan_approved" or not workflow.plan_text or not workflow.test_plan_text:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="The workflow plan and non-production test plans must be approved before implementation generation.")
+    language = "PowerShell" if workflow.language == "powershell" else "C#"
+    tool_context = WorkflowAgentToolContext(store, workflow, SecurityControlPolicy(settings.security_control_policy_path))
+    messages = [
+        ChatMessage(role="system", content=workflow_implementer_instructions(language)),
+        ChatMessage(role="user", content=f"Approved workflow plan, revision {workflow.revision}:\n{workflow.plan_text}\n\nApproved non-production test plans:\n{workflow.test_plan_text}"),
+    ]
+    try:
+        routed = await provider.chat_for_task_with_tools("code", messages, tool_context.definitions, tool_context.invoke)
+    except ProviderError as error:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(error)) from error
+    result = store.save_workflow_implementation(workflow_id, routed.content, routed.route.provider, routed.route.model)
+    if result is None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Workflow approval changed before the implementation could be saved.")
+    return document_workflow(result, "workflow-implementation-generated", "Implementation content omitted from process log.")
+
+
+@app.post("/api/workflows/{workflow_id}/generate-test-plans", response_model=Workflow)
+async def generate_workflow_test_plans(
     workflow_id: int,
     provider: OpenAICompatibleProvider = Depends(get_provider),
     store: JarvisStore = Depends(get_store),
@@ -744,20 +802,19 @@ async def generate_workflow_implementation(
     if workflow is None or workflow.archived:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workflow was not found.")
     if workflow.state != "plan_approved" or not workflow.plan_text:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="The workflow plan must be approved before implementation generation.")
-    language = "PowerShell" if workflow.language == "powershell" else "C#"
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="The final workflow plan must be user-approved before test-plan design.")
     messages = [
-        ChatMessage(role="system", content=f"You are the A.E.G.I.S.-9 implementation engineer. Implement the approved workflow plan in {language}. Produce reviewable code with strict input validation, structured logging, dry-run support, cancellation/timeouts, no embedded credentials, and clear configuration placeholders. After the implementation, provide at least two distinct non-production test plans with setup, inputs, expected results, cleanup, and pass/fail criteria. Do not claim that the implementation or tests were executed."),
-        ChatMessage(role="user", content=f"Approved plan, revision {workflow.revision}:\n{workflow.plan_text}"),
+        ChatMessage(role="system", content="You are the A.E.G.I.S.-9 test architect. Design at least two detailed, non-production test plans for the approved workflow. Include objective, environment/isolation, prerequisites, setup, test data, ordered steps, expected result, evidence to retain, pass/fail criteria, cleanup, negative/failure cases, and rollback. Do not execute tests or generate production commands. Do not include credentials. Return clear Markdown for explicit user approval."),
+        ChatMessage(role="user", content=f"Approved workflow plan, revision {workflow.revision}:\n{workflow.plan_text}"),
     ]
     try:
-        routed = await provider.chat_for_task("code", messages)
+        routed = await provider.chat_for_task("reasoning", messages)
     except ProviderError as error:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(error)) from error
-    result = store.save_workflow_implementation(workflow_id, routed.content, routed.route.provider, routed.route.model)
+    result = store.save_workflow_test_plan(workflow_id, routed.content, routed.route.provider, routed.route.model)
     if result is None:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Workflow approval changed before the implementation could be saved.")
-    return result
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Workflow approval changed before test plans could be saved.")
+    return document_workflow(result, "workflow-test-plans-generated", "Test plans are ready for explicit user approval.")
 
 
 @app.put("/api/workflows/{workflow_id}/schedule", response_model=Workflow)
@@ -765,7 +822,7 @@ async def schedule_workflow(workflow_id: int, request: WorkflowScheduleRequest, 
     result = store.set_workflow_schedule(workflow_id, request.model_dump())
     if result is None:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="A workflow must be awaiting supervisor review before its approval-bound schedule can be recorded.")
-    return result
+    return document_workflow(result, "workflow-schedule-recorded")
 
 
 @app.post("/api/workflows/{workflow_id}/execute", response_model=WorkflowRun, status_code=status.HTTP_202_ACCEPTED)
@@ -779,7 +836,9 @@ async def execute_workflow(
     if workflow is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workflow was not found.")
     try:
-        return await manager.start(workflow, request.trigger, getpass.getuser())
+        run = await manager.start(workflow, request.trigger, getpass.getuser())
+        document_workflow(store.get_workflow(workflow_id) or workflow, "workflow-execution-started", f"Run {run.id}; trigger={request.trigger}.")
+        return run
     except (OSError, ValueError, WorkflowExecutionError) as error:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(error)) from error
 
@@ -857,7 +916,7 @@ async def archive_workflow(workflow_id: int, store: JarvisStore = Depends(get_st
     result = store.archive_workflow(workflow_id)
     if result is None:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Active workflows must be stopped before archival.")
-    return result
+    return document_workflow(result, "workflow-archived")
 
 
 @app.post("/api/workflows/{workflow_id}/approve", response_model=Workflow)
@@ -872,7 +931,7 @@ async def approve_workflow(
             status_code=status.HTTP_409_CONFLICT,
             detail="Workflow must be awaiting approval before it can be scheduled.",
         )
-    return workflow
+    return document_workflow(workflow, "legacy-workflow-approved")
 
 
 @app.post("/api/workflows/{workflow_id}/actions", response_model=WorkflowTransition)
@@ -892,6 +951,7 @@ async def transition_workflow(
             status_code=status.HTTP_409_CONFLICT,
             detail="The requested workflow action is not valid for its current state.",
         )
+    document_workflow(transition.workflow, f"workflow-action-{request.action}")
     return transition
 
 

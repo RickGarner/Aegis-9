@@ -23,8 +23,10 @@ public partial class WorkflowApprovalWindow : Window
     {
         "draft" => ("design_plan", "DESIGN AI PLAN", "A reasoning model will be selected to analyze the request and documents. It will create a plan, not executable code."),
         "rejected" => ("design_plan", "REVISE AI PLAN", "The rejected plan will be analyzed again before it can return to design review."),
-        "plan_review" => ("approve_plan", "APPROVE REVIEWED PLAN", "The design review is complete and has no unanswered required questions. Approving it unlocks coding-model implementation."),
-        "plan_approved" => ("generate_implementation", "GENERATE IMPLEMENTATION", "A coding model will be selected independently to implement the approved plan."),
+        "plan_review" => ("approve_plan", "APPROVE WORKFLOW PLAN", "Approve the workflow design before A.E.G.I.S.-9 creates detailed non-production test plans. No code is built at this gate."),
+        "plan_approved" => ("generate_test_plans", "DESIGN TEST PLANS", "A qualified reasoning model will design detailed isolated test plans for user review."),
+        "test_plan_review" => ("approve_test_plan", "APPROVE TEST PLANS + AUTHORIZE BUILD", "Approve the proposed test procedures before a coding model builds the workflow and corresponding test artifacts."),
+        "test_plan_approved" => ("generate_implementation", "BUILD WORKFLOW + TESTS", "A coding model will implement only the approved workflow and approved test plans."),
         "implementation_review" => ("submit_for_test", "SUBMIT FOR TEST", "Review the generated implementation before it enters the isolated-test queue."),
         "test_ready" => ("run_test", "RUN SAFE TEST", "Run the selected bounded non-production profile and retain hashed evidence."),
         "test_failed" => ("run_test", "RETRY SAFE TEST", "Review the permission findings or build errors, revise when necessary, and run validation again."),
@@ -53,14 +55,27 @@ public partial class WorkflowApprovalWindow : Window
                     ? "ANALYSIS REQUIRED · A.E.G.I.S.-9 is preparing the design review."
                     : "No unresolved design questions are recorded at this stage.";
         var showingImplementation = !string.IsNullOrWhiteSpace(_workflow.ImplementationText);
+        var showingTestPlan = !showingImplementation && !string.IsNullOrWhiteSpace(_workflow.TestPlanText) && _workflow.State is "test_plan_review" or "test_plan_approved";
         var evidence = string.IsNullOrWhiteSpace(_workflow.LatestTestStatus) ? "" : $"\n\n--- RETAINED TEST EVIDENCE ---\nStatus: {_workflow.LatestTestStatus}\nArtifact SHA-256: {_workflow.ArtifactSha256}\nEvidence SHA-256: {_workflow.LatestTestEvidenceSha256}\nSummary: {_workflow.LatestTestSummary}\nPermission manifest:\n{JsonSerializer.Serialize(_workflow.PermissionManifest, new JsonSerializerOptions { WriteIndented = true })}";
-        ArtifactText.Text = (showingImplementation ? _workflow.ImplementationText : _workflow.PlanText) + evidence;
-        ModelText.Text = showingImplementation ? $"Implementation model: {_workflow.ImplementationProvider} / {_workflow.ImplementationModel}" : string.IsNullOrWhiteSpace(_workflow.PlanText) ? "Planning model selection pending." : $"Planning model: {_workflow.PlanProvider} / {_workflow.PlanModel}";
+        ArtifactText.Text = (showingImplementation ? _workflow.ImplementationText : showingTestPlan ? _workflow.TestPlanText : _workflow.PlanText) + evidence;
+        ModelText.Text = showingImplementation ? $"Implementation model: {_workflow.ImplementationProvider} / {_workflow.ImplementationModel}" : showingTestPlan ? $"Test-plan model: {_workflow.TestPlanProvider} / {_workflow.TestPlanModel}" : string.IsNullOrWhiteSpace(_workflow.PlanText) ? "Planning model selection pending." : $"Planning model: {_workflow.PlanProvider} / {_workflow.PlanModel}";
     }
     private async void AdvanceButton_Click(object sender, RoutedEventArgs e)
     {
         var next = NextGate();
         if (next is null) return;
+        if (next.Value.decision == "approve_plan" && MessageBox.Show(
+            this,
+            "Approve this reviewed plan and authorize A.E.G.I.S.-9 to build its PowerShell/C# implementation and non-production test plans? This does not authorize testing or production use.",
+            "Approve Plan and Authorize Build",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Question) != MessageBoxResult.Yes) return;
+        if (next.Value.decision == "approve_test_plan" && MessageBox.Show(
+            this,
+            "Approve these non-production test plans and authorize A.E.G.I.S.-9 to build the workflow and test artifacts? Testing and production still require later approvals.",
+            "Approve Test Plans and Authorize Build",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Question) != MessageBoxResult.Yes) return;
         if (next.Value.decision == "set_schedule")
         {
             StatusText.Text = "Record the production schedule and conditions before supervisor approval.";
@@ -77,15 +92,22 @@ public partial class WorkflowApprovalWindow : Window
             _workflow = next.Value.decision switch
             {
                 "design_plan" => await _client.DesignWorkflowPlanAsync(_workflow.Id, CancellationToken.None),
+                "generate_test_plans" => await _client.GenerateWorkflowTestPlansAsync(_workflow.Id, CancellationToken.None),
                 "generate_implementation" => await _client.GenerateWorkflowImplementationAsync(_workflow.Id, CancellationToken.None),
                 "run_test" => (await _client.RunWorkflowTestAsync(_workflow.Id, (TestProfileInput.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "static", CancellationToken.None)).Workflow,
                 _ => await _client.ReviewWorkflowAsync(_workflow.Id, next.Value.decision, CancellationToken.None)
             };
             if (next.Value.decision == "approve_plan")
             {
-                StatusText.Text = "Plan approved. A.E.G.I.S.-9 is selecting a coding model and creating the workflow plus test plans…";
+                StatusText.Text = "Workflow plan approved. A.E.G.I.S.-9 is designing detailed non-production test plans…";
+                _workflow = await _client.GenerateWorkflowTestPlansAsync(_workflow.Id, CancellationToken.None);
+                StatusText.Text = "Test plans are ready for your review and approval.";
+            }
+            else if (next.Value.decision == "approve_test_plan")
+            {
+                StatusText.Text = "Test plans approved. A.E.G.I.S.-9 is building the workflow and corresponding test artifacts…";
                 _workflow = await _client.GenerateWorkflowImplementationAsync(_workflow.Id, CancellationToken.None);
-                StatusText.Text = "Workflow implementation and test plans are ready for review and testing.";
+                StatusText.Text = "Workflow and test implementation are ready for review.";
             }
             else StatusText.Text = "Stage completed and recorded.";
             Render();
