@@ -33,6 +33,10 @@ from app.workflow_scheduler import ScheduleError, is_due, prerequisites_met
 from app.workflow_notifications import WorkflowNotificationWorker
 from app.security_control import SecurityControlPolicy
 from app.workflow_agent_tools import WorkflowAgentToolContext
+from app.policy_integrity import policy_status
+from app.post_acceptance import EncryptedSemanticStore, ReviewHistoryStore, create_cyclonedx, export_migration, import_migration, local_embedding, match_offline_vulnerabilities, scan_dependencies, semantic_similarity
+from app.test_lab import create_test_package, create_test_plan
+from app.workflow_implementation_tools import ApprovedWorkflowImplementationToolContext
 from app.workflow_governance import WORKFLOW_ARCHITECT_INSTRUCTIONS, workflow_implementer_instructions
 from app.workflow_documentation import WorkflowDocumentationManager
 from app.moveit_ha import MoveItHaService
@@ -54,6 +58,42 @@ class ChatResponse(BaseModel):
 
 class ApprovalRequest(BaseModel):
     decision: str = Field(pattern="^(approved|rejected)$")
+
+
+class SemanticIndexRequest(BaseModel):
+    records: list[dict] = Field(max_length=50_000)
+
+
+class SemanticQueryRequest(BaseModel):
+    query: str = Field(min_length=1, max_length=20_000)
+    limit: int = Field(default=20, ge=1, le=100)
+
+
+class ReviewHistoryRequest(BaseModel):
+    summary: str = Field(min_length=1, max_length=2000)
+    findings: int = Field(default=0, ge=0, le=100_000)
+    validation: str = Field(default="", max_length=2000)
+    approved: bool = False
+
+
+class DependencyScanRequest(BaseModel):
+    files: dict[str, str] = Field(max_length=1000)
+    vulnerability_database: list[dict[str, str]] = Field(default_factory=list, max_length=1_000_000)
+
+
+class MigrationRequest(BaseModel):
+    files: dict[str, str] = Field(max_length=1000)
+
+
+class TestLabPlanRequest(BaseModel):
+    files: dict[str, str] = Field(min_length=1, max_length=100)
+    use_ai: bool = True
+
+
+class TestLabPackageRequest(BaseModel):
+    files: dict[str, str] = Field(min_length=1, max_length=100)
+    plan: dict
+    approved: bool = False
 
 
 class WorkflowRequest(BaseModel):
@@ -345,6 +385,137 @@ async def system_health(
     settings: Settings = Depends(get_settings),
 ) -> SystemHealth:
     return await check_system_health(settings)
+
+@app.get("/api/security/policy-status")
+async def security_policy_status(settings: Settings = Depends(get_settings)) -> dict:
+    root = Path(__file__).resolve().parents[2]
+    return policy_status([settings.security_control_policy_path, root / "config" / "mcp" / "catalog.json", root / "docs" / "SHARED-TOOL-PARITY-CONTRACT.json"], required=settings.require_signed_policies, public_key_path=settings.policy_public_key_path)
+
+
+def _semantic_store(settings: Settings) -> EncryptedSemanticStore:
+    key_path = settings.post_acceptance_storage_root / "semantic.key"
+    if not key_path.exists():
+        key_path.parent.mkdir(parents=True, exist_ok=True)
+        key_path.write_bytes(os.urandom(32))
+        try:
+            key_path.chmod(0o600)
+        except OSError:
+            pass
+    return EncryptedSemanticStore(settings.post_acceptance_storage_root / "semantic-index.bin", key_path.read_bytes())
+
+
+@app.post("/api/local-intelligence/semantic-index")
+async def refresh_semantic_index(request: SemanticIndexRequest, settings: Settings = Depends(get_settings)) -> dict:
+    records = []
+    for item in request.records:
+        identifier, text, metadata = str(item.get("id", ""))[:500], str(item.get("text", ""))[:200_000], item.get("metadata", {})
+        if not identifier or not isinstance(metadata, dict):
+            raise HTTPException(status_code=400, detail="Each semantic record requires id, text, and object metadata.")
+        records.append({"id": identifier, "vector": local_embedding(text), "metadata": {str(key)[:200]: str(value)[:2000] for key, value in list(metadata.items())[:50]}})
+    _semantic_store(settings).save(records)
+    return {"status": "ready", "records": len(records), "offline": True, "encrypted": True}
+
+
+@app.post("/api/local-intelligence/semantic-query")
+async def query_semantic_index(request: SemanticQueryRequest, settings: Settings = Depends(get_settings)) -> dict:
+    query = local_embedding(request.query)
+    matches = sorted(({"id": item["id"], "score": semantic_similarity(query, item["vector"]), "metadata": item.get("metadata", {})} for item in _semantic_store(settings).load()), key=lambda item: item["score"], reverse=True)[:request.limit]
+    return {"matches": matches, "offline": True}
+
+
+@app.delete("/api/local-intelligence/semantic-index", status_code=status.HTTP_204_NO_CONTENT)
+async def clear_semantic_index(settings: Settings = Depends(get_settings)) -> Response:
+    _semantic_store(settings).clear()
+    (settings.post_acceptance_storage_root / "semantic.key").unlink(missing_ok=True)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@app.get("/api/review-history")
+async def get_review_history(limit: int = 100, settings: Settings = Depends(get_settings)) -> list[dict]:
+    return ReviewHistoryStore(settings.post_acceptance_storage_root / "review-history.jsonl").list(limit)
+
+
+@app.post("/api/review-history", status_code=status.HTTP_201_CREATED)
+async def add_review_history(request: ReviewHistoryRequest, settings: Settings = Depends(get_settings)) -> dict:
+    return ReviewHistoryStore(settings.post_acceptance_storage_root / "review-history.jsonl").append(request.summary, request.findings, request.validation, request.approved)
+
+
+@app.post("/api/dependencies/offline-scan")
+async def offline_dependency_scan(request: DependencyScanRequest) -> dict:
+    dependencies = scan_dependencies(request.files)
+    return {"sbom": create_cyclonedx(dependencies), "vulnerabilities": match_offline_vulnerabilities(dependencies, request.vulnerability_database), "offline": True}
+
+
+@app.post("/api/migration/export")
+async def export_local_migration(request: MigrationRequest, settings: Settings = Depends(get_settings)) -> Response:
+    destination = settings.post_acceptance_storage_root / f"aegis-export-{uuid.uuid4()}.aegis-export"
+    export_migration(destination, request.files)
+    value = destination.read_bytes()
+    destination.unlink(missing_ok=True)
+    return Response(content=value, media_type="application/vnd.aegis.export", headers={"Content-Disposition": "attachment; filename=aegis-9.aegis-export"})
+
+
+@app.post("/api/migration/inspect")
+async def inspect_local_migration(file: UploadFile = File(...), settings: Settings = Depends(get_settings)) -> dict:
+    destination = settings.post_acceptance_storage_root / f"inspect-{uuid.uuid4()}.aegis-export"
+    try:
+        content = await file.read(25_000_001)
+        if len(content) > 25_000_000:
+            raise HTTPException(status_code=413, detail="Migration bundle exceeds 25 MB.")
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_bytes(content)
+        payload = import_migration(destination)
+        return {"schemaVersion": payload["schemaVersion"], "createdAt": payload["createdAt"], "files": list(payload["files"]), "validated": True, "applied": False}
+    finally:
+        destination.unlink(missing_ok=True)
+
+
+def _bounded_test_lab_files(files: dict[str, str]) -> dict[str, str]:
+    if sum(len(value) for value in files.values()) > 2_000_000 or any(not name.strip() or len(name) > 500 or len(content) > 500_000 for name, content in files.items()):
+        raise HTTPException(status_code=413, detail="Test Lab source exceeds bounded file or request limits.")
+    return files
+
+
+@app.post("/api/test-lab/plan")
+async def create_test_lab_plan(request: TestLabPlanRequest, provider: OpenAICompatibleProvider = Depends(get_provider)) -> dict:
+    files = _bounded_test_lab_files(request.files)
+    ai_cases: list[dict] = []
+    ai_status = "disabled"
+    if request.use_ai:
+        source = "\n\n".join(f"FILE {name}\n{content[:20_000]}" for name, content in list(files.items())[:10])[:80_000]
+        messages = [
+            ChatMessage(role="system", content="You are the A.E.G.I.S. Test Lab test architect. Analyze without executing. Return only a JSON array of at most 10 objects with string name, string purpose, object syntheticInput, and string expected. Use synthetic values only. Never request production credentials, external network access, host writes, or weaker sandbox controls."),
+            ChatMessage(role="user", content=source),
+        ]
+        try:
+            routed = await provider.chat_for_task("reasoning", messages)
+            match = re.search(r"\[[\s\S]*\]", routed.content)
+            candidate = json.loads(match.group(0)) if match else []
+            if isinstance(candidate, list):
+                ai_cases = candidate
+                ai_status = f"generated locally by {routed.route.provider}/{routed.route.model}"
+            else:
+                ai_status = "local model returned an invalid test-case shape; deterministic cases retained"
+        except (ProviderError, json.JSONDecodeError, ValueError) as error:
+            ai_status = f"local AI unavailable; deterministic cases retained: {str(error)[:300]}"
+    plan = create_test_plan(files, ai_cases)
+    plan["aiStatus"] = ai_status
+    return plan
+
+
+@app.post("/api/test-lab/package", status_code=status.HTTP_201_CREATED)
+async def create_approved_test_lab_package(request: TestLabPackageRequest, settings: Settings = Depends(get_settings)) -> dict:
+    if not request.approved:
+        raise HTTPException(status_code=409, detail="Explicit user approval of the displayed Test Lab plan is required.")
+    files = _bounded_test_lab_files(request.files)
+    expected = create_test_plan(files)
+    if request.plan.get("schemaVersion") != 1 or request.plan.get("risk") != expected["risk"] or request.plan.get("capabilities") != expected["capabilities"]:
+        raise HTTPException(status_code=409, detail="The approved plan is stale or attempts to weaken enforced Test Lab controls.")
+    try:
+        package = create_test_package(settings.test_lab_root, files, request.plan)
+    except (OSError, ValueError, KeyError) as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    return {"planId": request.plan["id"], "packagePath": str(package), "configurationPath": str(package / "AegisTestLab.wsb"), "status": "ready-for-explicit-launch", "executed": False, "capabilities": request.plan["capabilities"]}
 
 
 @app.get("/api/session", response_model=SessionState)
@@ -777,15 +948,34 @@ async def generate_workflow_implementation(
     if workflow.state != "test_plan_approved" or not workflow.plan_text or not workflow.test_plan_text:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="The workflow plan and non-production test plans must be approved before implementation generation.")
     language = "PowerShell" if workflow.language == "powershell" else "C#"
-    tool_context = WorkflowAgentToolContext(store, workflow, SecurityControlPolicy(settings.security_control_policy_path))
+    async def delegate_local_agent(role: str, prompt: str) -> dict[str, str]:
+        task = "code" if role == "implementation" else "reasoning"
+        result = await provider.chat_for_task(task, [
+            ChatMessage(role="system", content=f"You are a bounded A.E.G.I.S.-9 {role} sub-agent. Analyze only the supplied subtask. You have no tools or production authority. Return concise evidence, risks, and recommendations to the parent workflow agent."),
+            ChatMessage(role="user", content=prompt),
+        ])
+        return {"content": result.content[:20000], "provider": result.route.provider, "model": result.route.model}
+    tool_context = ApprovedWorkflowImplementationToolContext(
+        store,
+        workflow,
+        SecurityControlPolicy(settings.security_control_policy_path),
+        settings.workflow_artifact_root,
+        settings.workflow_test_output_limit,
+        delegate_local_agent,
+        settings.max_process_memory_mb,
+        settings.max_process_cpu_percent,
+        settings.max_child_processes,
+    )
     messages = [
         ChatMessage(role="system", content=workflow_implementer_instructions(language)),
         ChatMessage(role="user", content=f"Approved workflow plan, revision {workflow.revision}:\n{workflow.plan_text}\n\nApproved non-production test plans:\n{workflow.test_plan_text}"),
     ]
     try:
-        routed = await provider.chat_for_task_with_tools("code", messages, tool_context.definitions, tool_context.invoke)
+        routed = await provider.chat_for_task_with_tools("code", messages, tool_context.definitions, tool_context.invoke, max_turns=12)
     except ProviderError as error:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(error)) from error
+    finally:
+        tool_context.close()
     result = store.save_workflow_implementation(workflow_id, routed.content, routed.route.provider, routed.route.model)
     if result is None:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Workflow approval changed before the implementation could be saved.")

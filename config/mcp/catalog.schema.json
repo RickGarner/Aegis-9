@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aegis.local/schemas/mcp-catalog-v1.json",
+  "title": "Aegis MCP Catalog",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "connectivityProfile", "servers"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "connectivityProfile": { "enum": ["airgapped", "local-network", "online"] },
+    "servers": {
+      "type": "array",
+      "maxItems": 100,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "displayName", "enabled", "transport", "connectivity", "version", "health", "credentialRef", "timeoutSeconds", "concurrencyLimit", "audit", "tools"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z][a-z0-9.-]{0,127}$" },
+          "displayName": { "type": "string", "minLength": 1, "maxLength": 200 },
+          "enabled": { "type": "boolean" },
+          "transport": { "enum": ["stdio", "loopback-http", "private-http", "https"] },
+          "connectivity": { "enum": ["local", "organization-controlled", "external-zero-protected-data"] },
+          "version": { "type": "string", "minLength": 1, "maxLength": 100 },
+          "health": { "enum": ["healthy", "degraded", "unavailable", "disabled", "quarantined", "version-mismatch", "authentication-failure"] },
+          "credentialRef": { "type": ["string", "null"], "pattern": "^[a-z][a-z0-9.-]{0,127}$" },
+          "timeoutSeconds": { "type": "integer", "minimum": 1, "maximum": 300 },
+          "concurrencyLimit": { "type": "integer", "minimum": 1, "maximum": 32 },
+          "audit": { "type": "boolean" },
+          "command": { "type": "string" },
+          "args": { "type": "array", "maxItems": 100, "items": { "type": "string", "maxLength": 1000 } },
+          "endpoint": { "type": "string", "format": "uri" },
+          "sha256": { "type": "string", "pattern": "^[A-Fa-f0-9]{64}$" },
+          "allowedRoles": { "type": "array", "maxItems": 100, "items": { "type": "string", "maxLength": 200 } },
+          "allowedTargets": { "type": "array", "maxItems": 100, "items": { "type": "string", "maxLength": 200 } },
+          "owner": { "type": "string", "maxLength": 200 },
+          "retentionPolicy": { "type": "string", "maxLength": 200 },
+          "tools": {
+            "type": "array",
+            "maxItems": 500,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["name", "description", "enabled", "risk", "allowedRoles", "allowedTargets", "outboundFields", "approvalRequired"],
+              "properties": {
+                "name": { "type": "string", "pattern": "^[a-z][a-z0-9.-]{0,127}$" },
+                "description": { "type": "string", "maxLength": 1000 },
+                "enabled": { "type": "boolean" },
+                "risk": { "enum": ["R0", "R1", "W1", "W2", "D"] },
+                "allowedRoles": { "type": "array", "maxItems": 100, "items": { "type": "string", "maxLength": 200 } },
+                "allowedTargets": { "type": "array", "maxItems": 100, "items": { "type": "string", "maxLength": 200 } },
+                "outboundFields": { "type": "array", "maxItems": 100, "items": { "type": "string", "maxLength": 200 } },
+                "approvalRequired": { "type": "boolean" }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

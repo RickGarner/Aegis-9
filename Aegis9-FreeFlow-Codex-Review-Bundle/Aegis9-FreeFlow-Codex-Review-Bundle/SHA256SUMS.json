@@ -1,0 +1,16 @@
+{
+  "00-Preflight-AegisFreeFlow.ps1": "3f4991b437f7d59b091e1ec52706d9437b3a0c59d9ed5ca21451c82422a9264b",
+  "01-Create-SafetySnapshot.ps1": "4f20458ae3fe39533632fabc00fd42b77275de5148f034e238d35142c437763b",
+  "02-Install-FreeFlowBackend.ps1": "db9aa9d3df492c46820284d4063378f5e8ff7df3845f36a1a055b426f3d06909",
+  "03-Register-FreeFlowBackend.ps1": "f4ab5b659e0cecaaa72bf90ae33b0914dac56a0d95d229fff7f4ed1fdcc60fda",
+  "04-Install-FreeFlowDesktopClient.ps1": "da39dc17c717732298712f40a97e8443b884f819d0f8ba2f43916c7df887a144",
+  "05-Configure-FreeFlow.ps1": "6993ecc44f476dc1438de6f52759fd851f655f3c6dd52b7d173d8f79c4b59846",
+  "06-Test-FreeFlowJmf.ps1": "42f26ddab94653f5b4733d716654e04330ea3ffdd4328836e6e6483d5711caff",
+  "07-Validate-AegisFreeFlow.ps1": "6f454e8f076f3965e482ee7a6917b50fb1fc8c0ba6a82e189af8b6dfa2a8ce0a",
+  "90-Rollback-AegisFreeFlow.ps1": "f6ccfe0f27a18546c13a13caadf25fceaf1d01adac26500537dafdd608b0b3cc",
+  "Aegis9-FreeFlow.Common.ps1": "0eb8f5d635a0a3178bc18f50f1e6529f2d5d891cd5d0df77011a350f86d4b56d",
+  "CODEX-REVIEW-CHECKLIST.md": "647dfa0582619dfa2b67e067bcc86cf0fc511d3c695f8051ba1b2b656f8a5c86",
+  "EXECUTION-ORDER-AND-INSTRUCTIONS.md": "c71cf22446a29d5d5e38ea806eafb001cb332767eacbfc202105785b507006c7",
+  "Run-Codex-Review-DryRun.ps1": "e9d9629a994c31b4c74d7e8ec509a9e8ee412418f13e8d028c9342878932327f",
+  "TECHNICAL-BASIS.md": "edfe3a1c9e13653eb23b7e2bacc27ba3174a34376ddff372d745d6193832afab"
+}

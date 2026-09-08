@@ -114,6 +114,13 @@ class Settings(BaseSettings):
     workflow_execution_timeout_seconds: int = Field(default=300, ge=10, le=3600, validation_alias="JARVIS_WORKFLOW_EXECUTION_TIMEOUT_SECONDS")
     workflow_action_catalog_path: Path = Field(default=Path("config/workflow-actions.json"), validation_alias="JARVIS_WORKFLOW_ACTION_CATALOG_PATH")
     security_control_policy_path: Path = Field(default=Path("config/security-control.json"), validation_alias="JARVIS_SECURITY_CONTROL_POLICY_PATH")
+    require_signed_policies: bool = Field(default=False, validation_alias="JARVIS_REQUIRE_SIGNED_POLICIES")
+    policy_public_key_path: Path = Field(default=Path("config/policy-signing-public.pem"), validation_alias="JARVIS_POLICY_PUBLIC_KEY_PATH")
+    max_process_memory_mb: int = Field(default=4096, ge=128, le=32768, validation_alias="JARVIS_MAX_PROCESS_MEMORY_MB")
+    max_process_cpu_percent: float = Field(default=95, ge=10, le=100, validation_alias="JARVIS_MAX_PROCESS_CPU_PERCENT")
+    max_child_processes: int = Field(default=12, ge=1, le=100, validation_alias="JARVIS_MAX_CHILD_PROCESSES")
+    post_acceptance_storage_root: Path = Field(default=Path("storage/post-acceptance"), validation_alias="JARVIS_POST_ACCEPTANCE_STORAGE_ROOT")
+    test_lab_root: Path = Field(default=Path("storage/test-lab"), validation_alias="JARVIS_TEST_LAB_ROOT")
     tool_qualification_store_path: Path = Field(default=Path("storage/tool-capability-reports.json"), validation_alias="JARVIS_TOOL_QUALIFICATION_STORE_PATH")
     server_inventory_path: Path = Field(
         default=Path(__file__).resolve().parents[2] / "config" / "monitored-servers.json",
@@ -172,8 +179,14 @@ class Settings(BaseSettings):
             self.workflow_action_catalog_path = (Path(__file__).resolve().parents[2] / self.workflow_action_catalog_path).resolve()
         if not self.security_control_policy_path.is_absolute():
             self.security_control_policy_path = (Path(__file__).resolve().parents[2] / self.security_control_policy_path).resolve()
+        if not self.policy_public_key_path.is_absolute():
+            self.policy_public_key_path = (Path(__file__).resolve().parents[2] / self.policy_public_key_path).resolve()
         if not self.tool_qualification_store_path.is_absolute():
             self.tool_qualification_store_path = (Path(__file__).resolve().parents[2] / self.tool_qualification_store_path).resolve()
+        if not self.post_acceptance_storage_root.is_absolute():
+            self.post_acceptance_storage_root = (Path(__file__).resolve().parents[2] / self.post_acceptance_storage_root).resolve()
+        if not self.test_lab_root.is_absolute():
+            self.test_lab_root = (Path(__file__).resolve().parents[2] / self.test_lab_root).resolve()
         if not self.moveit_ha_config_path.is_absolute():
             self.moveit_ha_config_path = (Path(__file__).resolve().parents[2] / self.moveit_ha_config_path).resolve()
         if not self.moveit_ha_state_path.is_absolute():

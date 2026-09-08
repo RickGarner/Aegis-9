@@ -1,0 +1,1 @@
+{"profile":"online","allowedConnectivity":["local","organization-controlled","external-zero-protected-data"],"allowedTransports":["stdio","loopback-http","private-http","https"],"publicNetworkAllowed":true}

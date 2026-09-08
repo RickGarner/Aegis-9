@@ -22,7 +22,110 @@
       "capabilities": [
         "get_workflow_request",
         "list_workflow_attachments",
-        "read_workflow_attachment"
+        "read_workflow_attachment",
+        "askQuestions",
+        "getRequestExecutionState",
+        "getCompletionCriteria",
+        "getValidationEvidence",
+        "getArtifactManifest"
+      ]
+    },
+    "workflow-implementation-tools": {
+      "enabled": true,
+      "mode": "read-write",
+      "capabilities": [
+        "listDirectory",
+        "startTerminalSession",
+        "getTerminalOutput",
+        "cancelTerminalSession",
+        "getStructuredFailures",
+        "discoverTests",
+        "buildProjects",
+        "runTargetedTests",
+        "runFormatter",
+        "runLinter",
+        "runStaticAnalysis"
+      ]
+    },
+    "workflow-sandbox-files": {
+      "enabled": true,
+      "mode": "read-write",
+      "capabilities": [
+        "manageTodos",
+        "readWorkspaceFile",
+        "createFile",
+        "applyEdit",
+        "previewChangeSet",
+        "beginChangeSet",
+        "validateChangeSet",
+        "commitChangeSet",
+        "rollbackChangeSet",
+        "searchFiles",
+        "searchWorkspaceText",
+        "getRepositoryInstructions",
+        "getValidationRecipe",
+        "getProjectStructure",
+        "getChangedFiles",
+        "readWorkspaceFiles",
+        "createDirectory",
+        "replaceFileContent",
+        "applyWorkspaceEdits"
+      ]
+    },
+    "workflow-repository-tools": {
+      "enabled": true,
+      "mode": "read-only",
+      "capabilities": [
+        "getWorkspaceDiagnostics",
+        "getFileOutline",
+        "getDependencyGraph",
+        "getRepositoryMap",
+        "getRankedWorkspaceContext",
+        "summarizeRepositoryContext",
+        "getGitContext",
+        "getGitHistory",
+        "getGitBlame",
+        "getBranchComparison"
+      ]
+    },
+    "workflow-intelligence-tools": {
+      "enabled": true,
+      "mode": "read-only",
+      "capabilities": [
+        "activateToolGroup",
+        "analyzeChangeImpact",
+        "estimateContextBudget",
+        "findSymbolUsages",
+        "getBuildTestOwnership",
+        "getDefinitionsAndReferences",
+        "getProjectExecutionPlan",
+        "getProjectImprovementSuggestions",
+        "getRepositoryMemory",
+        "getSymbolGraph"
+      ]
+    },
+    "workflow-extended-tools": {
+      "enabled": true,
+      "mode": "read-write",
+      "capabilities": [
+        "applyUnifiedPatch",
+        "compareDiagnostics",
+        "deletePath",
+        "getMcpTools",
+        "getWorkspaceSymbols",
+        "movePath",
+        "renamePath",
+        "runWorkspaceCommand",
+        "scaffoldWorkspaceProject",
+        "searchAvailableTools",
+        "delegateToAgentHostSession"
+      ]
+    },
+    "workflow-mcp-tools": {
+      "enabled": true,
+      "mode": "read-only",
+      "capabilities": [
+        "callMcpTool"
       ]
     }
   }

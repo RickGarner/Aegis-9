@@ -1,6 +1,8 @@
 import json
+import os
 from dataclasses import dataclass
 from pathlib import Path
+from app.policy_integrity import PolicyIntegrityError, require_policy
 
 
 class SecurityControlError(RuntimeError):
@@ -46,6 +48,10 @@ class SecurityControlPolicy:
         return policy
 
     def _load(self) -> dict:
+        try:
+            require_policy(self._path, required=os.environ.get("JARVIS_REQUIRE_SIGNED_POLICIES", "").casefold() in {"1", "true", "yes"}, public_key_path=Path(os.environ.get("JARVIS_POLICY_PUBLIC_KEY_PATH", "config/policy-signing-public.pem")))
+        except PolicyIntegrityError as error:
+            raise SecurityControlError(str(error)) from error
         try:
             payload = json.loads(self._path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError) as error:

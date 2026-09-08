@@ -938,6 +938,8 @@ public partial class MainWindow : Window
         window.Show();
     }
 
+    private void OpenTestLabButton_Click(object sender, RoutedEventArgs e) => new TestLabWindow(_client) { Owner = this }.Show();
+
     private void OpenMonitorWindow(string title)
     {
         var kind = title switch { "MoveIT Automation" => MonitorWindowKind.MoveIt, "Xerox FreeFlow Core" => MonitorWindowKind.FreeFlow, "Qualys Vulnerabilities" => MonitorWindowKind.Qualys, _ => MonitorWindowKind.ServerStatus };
@@ -1020,6 +1022,9 @@ public partial class MainWindow : Window
             SecurityProviderRouteText.Foreground = health.Available
                 ? (Brush)FindResource("Cyan")
                 : (Brush)FindResource("Amber");
+            var policy = await _client.GetPolicyIntegrityAsync(CancellationToken.None);
+            SecurityPolicyIntegrityText.Text = policy.DriftDetected ? "DRIFT" : policy.SignatureRequired ? "VERIFIED" : "LOCAL";
+            SecurityPolicyIntegrityText.Foreground = policy.DriftDetected ? (Brush)FindResource("Amber") : (Brush)FindResource("Cyan");
         }
         catch (Exception error) { ConnectionText.Text = $"Local command center · provider health unavailable: {error.Message}"; }
     }

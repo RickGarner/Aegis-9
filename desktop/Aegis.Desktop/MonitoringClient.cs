@@ -218,6 +218,12 @@ public sealed class MonitoringClient
         response.EnsureSuccessStatusCode();
         return await response.Content.ReadFromJsonAsync<Workflow>(JsonOptions, cancellationToken) ?? throw new InvalidOperationException("Workflow implementation returned an empty response.");
     }
+    public async Task<PolicyIntegrityStatus> GetPolicyIntegrityAsync(CancellationToken cancellationToken)
+    {
+        using var response = await _httpClient.GetAsync("api/security/policy-status", cancellationToken);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<PolicyIntegrityStatus>(JsonOptions, cancellationToken) ?? throw new InvalidOperationException("Policy status API returned an empty response.");
+    }
 
     public async Task<Workflow> GenerateWorkflowTestPlansAsync(int workflowId, CancellationToken cancellationToken)
     {
@@ -322,7 +328,37 @@ public sealed class MonitoringClient
         catch (JsonException) { }
         throw new HttpRequestException($"{operation} returned HTTP {(int)response.StatusCode}: {detail}");
     }
+
+    public async Task<TestLabPlan> CreateTestLabPlanAsync(Dictionary<string, string> files, bool useAi, CancellationToken cancellationToken)
+    {
+        using var response = await _httpClient.PostAsJsonAsync("api/test-lab/plan", new { files, use_ai = useAi }, JsonOptions, cancellationToken);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<TestLabPlan>(JsonOptions, cancellationToken) ?? throw new InvalidOperationException("Test Lab returned an empty plan.");
+    }
+
+    public async Task<TestLabPackage> CreateTestLabPackageAsync(Dictionary<string, string> files, TestLabPlan plan, CancellationToken cancellationToken)
+    {
+        using var response = await _httpClient.PostAsJsonAsync("api/test-lab/package", new { files, plan, approved = true }, JsonOptions, cancellationToken);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<TestLabPackage>(JsonOptions, cancellationToken) ?? throw new InvalidOperationException("Test Lab returned an empty package.");
+    }
 }
+
+public sealed class TestLabPlan
+{
+    public int SchemaVersion { get; set; }
+    public string Id { get; set; } = "";
+    public string Language { get; set; } = "";
+    public string Risk { get; set; } = "";
+    public string AiStatus { get; set; } = "";
+    public List<TestLabFinding> Findings { get; set; } = [];
+    public List<TestLabCase> TestCases { get; set; } = [];
+    public TestLabCapabilities Capabilities { get; set; } = new();
+}
+public sealed class TestLabFinding { public string Risk { get; set; } = ""; public string Category { get; set; } = ""; public string Evidence { get; set; } = ""; public string Control { get; set; } = ""; }
+public sealed class TestLabCase { public string Name { get; set; } = ""; public string Purpose { get; set; } = ""; public JsonElement SyntheticInput { get; set; } public string Expected { get; set; } = ""; }
+public sealed class TestLabCapabilities { public bool Network { get; set; } public bool Clipboard { get; set; } public bool HostWrite { get; set; } public bool Credentials { get; set; } }
+public sealed class TestLabPackage { public string PlanId { get; set; } = ""; public string PackagePath { get; set; } = ""; public string ConfigurationPath { get; set; } = ""; public string Status { get; set; } = ""; public bool Executed { get; set; } }
 
 public sealed class ChatMessage
 {
@@ -345,6 +381,12 @@ public sealed class ProviderHealth
     public string Status { get; set; } = "initializing";
     public string Detail { get; set; } = string.Empty;
     public string? Recommendation { get; set; }
+}
+public sealed class PolicyIntegrityStatus
+{
+    public string Status { get; set; } = "misconfigured";
+    public bool SignatureRequired { get; set; }
+    public bool DriftDetected { get; set; }
 }
 
 public sealed class SystemHealth

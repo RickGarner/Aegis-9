@@ -1,5 +1,7 @@
 # A.E.G.I.S.-9 canonical version
 
+> **2026-09-07 current-state notice:** For present implementation status and next work, use `DOCUMENTATION-GAP-AND-FUTURE-IDEAS-AUDIT-2026-09-07.md`, `handoff.md`, `roadmap.md`, and `implementation-checklist.md` in that order. Older dated material below is retained as migration history.
+
 ## Operations Monitoring Center launcher restoration — 2026-09-05
 
 The read-only Operations Monitoring Center is enabled by default and launched from the `MONITORING` button in the main window's top-right command bar. The obsolete collapsed preview launcher was removed from the left infrastructure panel. The movable/resizable center continues to refresh normalized collector, alert, and workflow status without gaining production-action authority.

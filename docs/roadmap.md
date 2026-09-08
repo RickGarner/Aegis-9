@@ -155,6 +155,104 @@ Core live DMR/Ollama workflow-tool qualification now passes. Cancellation and
 context stress, induced failover, and additional-provider qualification remain.
 Qualification reports are persisted locally with endpoint binding and expiry.
 
+The workflow agent catalog now also supplies five bounded coordination tools:
+`askQuestions`, `getRequestExecutionState`, `getCompletionCriteria`,
+`getValidationEvidence`, and `getArtifactManifest`. They are available during
+workflow planning and approved-plan implementation generation, remain
+read-only, and preserve every existing user, testing, scheduling, and
+supervisor gate.
+
+The first five workflow-sandbox primitives are now available independently in
+A.E.G.I.S.-9: directory listing, typed validation-session start, retained
+output, exact-session cancellation, and structured failure extraction. They
+are confined to a revision-specific non-production workspace. Terminal start
+accepts only PowerShell syntax checking, .NET build, or .NET test against a
+matching sandbox file; it does not accept arbitrary command text.
+
+The next 15-tool sandbox parity increment is also complete: persistent
+evidence-backed todos; bounded file reads; guarded create and expected-hash
+edit; begin, preview, validate, commit, and rollback change-set phases; file and
+text search; repository instructions; validation-recipe discovery; project
+structure; and changed-file inspection. The implementation agent now has a
+bounded 12-turn loop and must still return the canonical primary source for the
+existing immutable artifact and approval pipeline. Local MCP, telemetry,
+network policy, richer language/project adapters, and live model acceptance
+remain separate increments.
+
+Tool parity is now governed by `docs/SHARED-TOOL-PARITY-CONTRACT.json`, with an
+identical Developer Studio copy. The contract records 45 implemented shared
+capabilities, explicit product-only workflow context, and the outstanding
+parity/platform backlog. Both test suites reject unclassified additions and
+compare copies when the repositories are checked out together. Current gates
+pass 91/91 Developer Studio tests and 114/114 A.E.G.I.S.-9 backend tests.
+
+The latest shared block adds multi-file reads, transactional directory
+creation, guarded whole-file and multi-file edits, test discovery, and typed
+build/test/format/lint/static-analysis sessions to A.E.G.I.S.-9. These map to
+existing Developer Studio tools; that block reduced the parity backlog to 31.
+
+The following ten-tool shared block is also complete: bounded workspace
+diagnostics, file outlines, dependency graphs, repository maps, ranked context,
+repository summaries, and read-only Git context/history/blame/branch comparison
+now run independently inside the workflow revision sandbox. Fixed Git argument
+arrays and validated revisions prevent option/range injection. The authoritative
+contract now records 45 shared capabilities and 21 parity-backlog items; current
+gates pass 91/91 Developer Studio tests and 114/114 A.E.G.I.S.-9 backend tests.
+
+The next ten-tool reasoning block is complete. Workflow implementation now has
+offline tool-group discovery, context budgeting, symbol usages,
+definitions/references, bounded lexical symbol graphs, change-impact analysis,
+build/test ownership, repository-aware execution plans, evidence-backed
+improvement suggestions, and deterministic repository memory. Activation is
+informational and cannot expand server-granted authority. The authoritative
+contract now records 55 shared capabilities and 11 parity-backlog items;
+current gates pass 91/91 Developer Studio tests and 118/118 A.E.G.I.S.-9 tests.
+
+The following ten-tool block is complete: guarded unified patches, diagnostic
+comparison, recoverable deletion, no-overwrite rename/move, bounded workspace
+symbols, typed validation commands, constrained non-production scaffolding,
+tool search, and registry-only MCP discovery. Both products now carry the same
+schema-versioned empty MCP catalog; discovery installs, starts, contacts, and
+authorizes nothing. The contract records 65 shared capabilities with only
+`delegateToAgentHostSession` remaining. Current gates pass 93/93 Developer
+Studio tests and 123/123 A.E.G.I.S.-9 backend tests.
+
+Portable tool parity is complete. `delegateToAgentHostSession` routes only a
+bounded subtask to an A.E.G.I.S.-9-owned local planning, implementation,
+testing, or review role; the delegated request receives no tools and no
+production authority. Developer Studio uses its independent native agent-host
+path. The contract now records 66 shared capabilities and no parity backlog.
+Current gates pass 93/93 Developer Studio tests and 124/124 A.E.G.I.S.-9 tests.
+The next work moves to the seven platform backlog capabilities for MCP,
+telemetry, network/DLP governance, and air-gapped acceptance.
+
+`independentLocalMcpRegistry` is now complete in both products. The shared
+schema validates closed/bounded records, unique identities, profile-compatible
+transport/connectivity, safe endpoints, pinned stdio executables, credential
+references, risks, roles, targets, outbound fields, and mandatory write
+approvals. Six platform capabilities remain. Current gates pass 94/94 Developer
+Studio tests and 129/129 A.E.G.I.S.-9 backend tests.
+
+Two more platform priorities are complete in both products:
+`stdioAndLoopbackMcpLifecycle` and `networkDestinationPolicy`. Pinned stdio and
+approved loopback transports now support the MCP initialization sequence,
+tool listing/calling, bounded timeouts, shutdown, failure tracking, and
+quarantine. Exact host/port allowlists, DNS/address classification, TLS rules,
+proxy prohibition, and redirect revalidation fail closed. Catalogs are empty;
+private-LAN MCP is not enabled. Three of seven platform capabilities are now
+complete, four remain, and current gates pass 98/98 Developer Studio tests and
+133/133 A.E.G.I.S.-9 backend tests.
+
+Governed private-LAN MCP, local redacted telemetry, and outbound DLP/schema
+enforcement are now implemented as independent foundations in both products.
+Private MCP requires the local-network profile, organization-controlled
+classification, exact TLS destination, approved role/target/fields, and any
+required write approval. Local JSONL audit is bounded and secret-redacted; DLP
+fails closed for unknown fields, secrets, protected external data, and oversized
+payloads. Code-level air-gap harnesses pass, but live firewall-isolated DMR and
+Ollama acceptance remains outstanding. Platform progress is 6/7. Current gates
+pass 101/101 Developer Studio and 136/136 A.E.G.I.S.-9 tests.
+
 ### A.E.G.I.S. ↔ Developer Studio link
 
 - Open an approved workflow artifact/revision in Developer Studio.
@@ -164,6 +262,21 @@ Qualification reports are persisted locally with endpoint binding and expiry.
 - Never allow an IDE result to bypass A.E.G.I.S. user or supervisor approval.
 
 ## Phase 7 — Safe automation and action catalog
+
+### MCP roadmap refinement — 2026-09-06
+
+The supplied `AEGIS9_DeveloperDesktop_MCP_Strategy_and_Implementation_Plan.md`
+is adopted as design input through
+`docs/mcp-strategy-roadmap-assessment.md`. It expands Priority 7F into ordered
+security increments: governance, broker/registry, local pilot, internal-service,
+optional public, first-party enterprise, and production-hardening phases. The
+shared registry, lifecycle, governed model-call bridge, network/DLP policy,
+redacted local audit, signature verification/drift display, resource limits,
+and air-gap readiness harnesses are implemented. Catalogs remain empty by
+default. Live pinned-server pilots, A.E.G.I.S.-9 protected credential brokering,
+optional private OpenTelemetry collection, first-party enterprise MCP servers,
+and firewall-isolated acceptance remain. Deployment signing instructions are in
+`docs/POLICY-SIGNING.md`.
 
 **Status: Partial.**
 
@@ -224,35 +337,43 @@ registry enforced at workflow execution, cancellation/retry/recovery, Developer 
 endpoint filtering, A.E.G.I.S. workstation bootstrap, and a stable WolfForge v1
 recovery line plus v2 track.
 
-Remaining: bridge threat model, authenticated roles, managed secrets, signing,
-disposable isolation, product-wide egress enforcement, release criteria, full UI
-regression/performance/soak testing, clean-machine packaging, backup/restore, and
-database migration validation.
+Remaining: extend the completed read-only bridge threat model to write-capable
+job/evidence exchange; authenticated roles; managed secrets; workflow-artifact
+signing beyond completed policy-file signing; tamper-evident audit; disposable
+isolation; product-wide egress enforcement; release criteria; full UI regression/
+performance/soak testing; clean-machine packaging; backup/restore; and database
+migration validation.
 
 No production-ready claim should be made until external integrations, privacy,
 workflow isolation, authorization, packaging, and recovery pass documented tests.
 
-## Current execution order
+## Current execution order — reconciled 2026-09-07
 
-1. Clean-pull and machine-verify this 2026-09-06 checkpoint.
-2. Live-test the new workflow-plan, test-plan, implementation, evidence,
-   documentation, user-promotion, and supervisor gates.
-3. Complete read-only MOVEit HA discovery and adapter binding while automatic
-   failback remains disabled.
-4. Complete authenticated roles, tamper-evident audit, grounded output policy,
-   and an authorized administration surface for the implemented global kill
-   switch/default-deny adapter registry.
-5. Complete Qualys, FreeFlow, MoveIT, server, and notification acceptance; then
-   adopt approved Enterprise operations-catalog and monitoring enhancements.
-6. Add workflow sandboxing, managed secrets, and signing.
-7. Connect Developer Studio build/test evidence to immutable A.E.G.I.S. workflows.
-8. Continue Developer Studio Priority 7 provider-neutral, Copilot-style agent
-   tools: one contract and test suite for DMR, Ollama, and qualified local
-   providers; a default-deny tool catalog; missing coordination primitives; and
-   proven air-gapped/data-sovereign network operation, including local MCP,
-   local telemetry, and external tools only when no protected data is sent to a
-   third party. Copilot remains a separate opt-in
-   interoperability mode and must not enter the automatic provider chain.
-8. Add the managed knowledge/RAG increment after its architecture decision.
-9. Resume research, broader automation, preference memory, advanced workspaces,
-   and final voice/lip-sync acceptance.
+The detailed evidence and gap classifications are in
+`docs/DOCUMENTATION-GAP-AND-FUTURE-IDEAS-AUDIT-2026-09-07.md`.
+
+1. Run Developer Studio interactive acceptance on representative C#/WPF and
+   PowerShell/Pester repositories, induced DMR→Ollama failover, and one approved
+   pinned local MCP server.
+2. Prove product-wide Local-Only Mode with public/cloud egress blocked while
+   local models, native tools, local MCP, and redacted telemetry remain usable.
+3. Implement authenticated roles, protected credential brokers, tamper-evident
+   audit, workflow-artifact signing, grounded-output policy, and complete
+   two-mode emergency stop controls.
+4. Complete the scoped, replay-resistant immutable workflow job and evidence
+   round trip between A.E.G.I.S.-9 and Developer Studio.
+5. Complete disposable workflow isolation, safe C# execution, scheduler edge
+   cases, notification delivery, backup/restore, and clean-machine packaging.
+6. Perform onsite MOVEit, FreeFlow, Qualys, and Windows-server acceptance when
+   internal systems and approved credentials are available.
+7. Implement the normalized operations catalog, component/GPU/Event Log health,
+   durable incident lifecycle, and Monitoring Center accessibility/performance.
+8. Approve and implement the managed knowledge/document-library architecture;
+   finish local embedding-provider, review-history, SBOM/advisory, and migration
+   product integration identified by the documentation audit.
+9. Resume controlled research/web intake, general automation/workspaces,
+   conversions, preference memory, and final voice/avatar/lip-sync acceptance.
+
+## Offline post-acceptance enhancement foundations — 2026-09-07
+
+AES-256-GCM encrypted local indexing with explicit deletion, local review-history primitives, CycloneDX 1.5 generation with user-supplied offline vulnerability data, and integrity-checked selected non-secret migration bundles now have tested foundations in both products. A.E.G.I.S.-9 exposes these under `/api/local-intelligence/*`, `/api/review-history`, `/api/dependencies/offline-scan`, and `/api/migration/*`; none requires cloud transmission. Replaceable local embedding-model integration, complete ecosystem/advisory coverage, lifecycle/UI correlation, selective restore/rollback, and live acceptance remain.

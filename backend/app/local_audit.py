@@ -1,0 +1,72 @@
+"""Bounded, redacted, local-only JSONL audit storage."""
+
+import json
+import os
+import re
+import threading
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
+
+
+SENSITIVE_KEY = re.compile(r"(?i)(password|passwd|secret|token|api[_-]?key|authorization|credential|connectionstring|private[_-]?key)")
+SENSITIVE_VALUE = re.compile(r"(?i)(bearer\s+[A-Za-z0-9._~+/-]+=*|-----BEGIN [A-Z ]*PRIVATE KEY-----|(?:password|pwd|secret|token|api[_-]?key)\s*[=:]\s*[^\s;,]+)")
+
+
+def redact(value: Any, depth: int = 0) -> Any:
+    if depth > 12:
+        return "[REDACTED:DEPTH]"
+    if isinstance(value, dict):
+        return {str(key)[:200]: "[REDACTED]" if SENSITIVE_KEY.search(str(key)) else redact(item, depth + 1) for key, item in list(value.items())[:200]}
+    if isinstance(value, list):
+        return [redact(item, depth + 1) for item in value[:200]]
+    if isinstance(value, str):
+        return SENSITIVE_VALUE.sub("[REDACTED]", value[:10000])
+    return value if value is None or isinstance(value, (bool, int, float)) else str(value)[:1000]
+
+
+class LocalAuditStore:
+    def __init__(self, path: Path, max_events: int = 5000, max_bytes: int = 10_000_000) -> None:
+        self.path = path.resolve()
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self.max_events = min(max(max_events, 100), 100000)
+        self.max_bytes = min(max(max_bytes, 100000), 100_000_000)
+        self._lock = threading.Lock()
+
+    def append(self, event_type: str, fields: dict[str, Any]) -> dict[str, Any]:
+        if not re.fullmatch(r"[a-z][a-z0-9.-]{0,127}", event_type):
+            raise ValueError("Audit event type is invalid.")
+        event = {"schemaVersion": 1, "timestamp": datetime.now(timezone.utc).isoformat(), "eventType": event_type, "data": redact(fields)}
+        encoded = json.dumps(event, separators=(",", ":"), ensure_ascii=True)
+        with self._lock:
+            with self.path.open("a", encoding="utf-8", newline="\n") as stream:
+                stream.write(encoded + "\n")
+            self._compact()
+        return event
+
+    def _compact(self) -> None:
+        if self.path.stat().st_size <= self.max_bytes:
+            lines = self.path.read_text(encoding="utf-8").splitlines()
+            if len(lines) <= self.max_events:
+                return
+        lines = self.path.read_text(encoding="utf-8").splitlines()[-self.max_events:]
+        while lines and sum(len(line) + 1 for line in lines) > self.max_bytes:
+            lines.pop(0)
+        temporary = self.path.with_suffix(self.path.suffix + ".tmp")
+        temporary.write_text("\n".join(lines) + ("\n" if lines else ""), encoding="utf-8", newline="\n")
+        os.replace(temporary, self.path)
+
+    def query(self, event_type: str | None = None, limit: int = 100) -> list[dict[str, Any]]:
+        if not 1 <= limit <= 1000 or not self.path.exists():
+            return []
+        events = []
+        for line in reversed(self.path.read_text(encoding="utf-8").splitlines()):
+            try:
+                event = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if event_type is None or event.get("eventType") == event_type:
+                events.append(event)
+                if len(events) >= limit:
+                    break
+        return events

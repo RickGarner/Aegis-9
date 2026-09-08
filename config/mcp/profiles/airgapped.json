@@ -1,0 +1,1 @@
+{"profile":"airgapped","allowedConnectivity":["local"],"allowedTransports":["stdio","loopback-http"],"publicNetworkAllowed":false}

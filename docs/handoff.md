@@ -1,8 +1,44 @@
 # A.E.G.I.S.-9 Handoff
 
-## Nightly checkpoint — 2026-09-06
+## Authoritative reconciled checkpoint — 2026-09-07
 
-This is the latest continuity checkpoint for the A.E.G.I.S.-9 repository. The
+Start with `DOCUMENTATION-GAP-AND-FUTURE-IDEAS-AUDIT-2026-09-07.md`, then
+`roadmap.md` and `implementation-checklist.md`. Later headings in this file are
+dated history and may contain obsolete paths, names, counts, or “next” items.
+
+Current automated baseline: **142/142 backend tests**, **114/114 Developer
+Studio Local AI tests**, **14/14 Developer Studio release checks**, and both the
+A.E.G.I.S. WPF build and full Developer Studio extension build pass with zero
+compile errors.
+
+Current next work, in order:
+
+0. Provision and validate the optional offline .NET SDK/dependency image for A.E.G.I.S. Test Lab C# compilation. The Test Lab safe first release is implemented in both products, and the current Windows 11 Enterprise workstation passed restricted-profile launch and PowerShell evidence acceptance on 2026-09-07; see `docs/AEGIS-TEST-LAB.md`.
+
+1. Interactive Developer Studio C#/PowerShell, failover, and approved local-MCP acceptance.
+2. Firewall-isolated product-wide Local-Only acceptance.
+3. Authenticated roles, protected credentials, tamper-evident audit, workflow-artifact signing, grounding, and emergency-stop completion.
+4. Immutable A.E.G.I.S.–Developer Studio workflow-job/evidence exchange.
+5. Workflow isolation, scheduler/notification/recovery, and clean-machine packaging.
+6. Onsite MOVEit/FreeFlow/Qualys/server acceptance when internal access is available.
+7. Operations catalog/incidents and managed knowledge/document/research increments.
+
+The 2026-09-07 semantic index, review history, SBOM/offline scan, and migration
+work is a tested foundation. Product UI, qualified embedding models, complete
+dependency/advisory coverage, correlated/tamper-evident history, selective
+restore/rollback, and live acceptance remain.
+
+## Offline post-acceptance services — 2026-09-07
+
+- `backend/app/post_acceptance.py` provides deterministic local embeddings, AES-256-GCM encrypted semantic storage, bounded review history, CycloneDX 1.5 generation, exact-version matching against a caller-supplied offline vulnerability database, and migration bundles with per-file SHA-256 validation.
+- API routes: `POST/DELETE /api/local-intelligence/semantic-index`, `POST /api/local-intelligence/semantic-query`, `GET/POST /api/review-history`, `POST /api/dependencies/offline-scan`, `POST /api/migration/export`, and `POST /api/migration/inspect`.
+- Migration inspection never applies files automatically. Secret-like names, `.env`, absolute paths, traversal, hash mismatch, oversized bundles, and excessive entry counts fail closed.
+- Storage defaults to `storage/post-acceptance`; override with `JARVIS_POST_ACCEPTANCE_STORAGE_ROOT`. Clearing the semantic index also removes its local key.
+- Validation baseline: 141 backend tests pass. Live desktop/API acceptance remains a machine-verification activity.
+
+## Historical nightly checkpoint — 2026-09-06
+
+This was the continuity checkpoint for the A.E.G.I.S.-9 repository at that time. The
 active branch remains `feature/workflow-automation-monitoring-2026-08-31`.
 Backend acceptance is **97/97 tests**, and the WPF desktop builds with zero
 warnings and zero errors when built to an unlocked output directory.
@@ -67,10 +103,120 @@ workflows receive a manual at startup if one is missing.
 
 ## Provider-neutral workflow design tools — 2026-09-06
 
+The next shared coordination increment is complete. The workflow model can use
+`askQuestions`, `getRequestExecutionState`, `getCompletionCriteria`,
+`getValidationEvidence`, and `getArtifactManifest` alongside the original
+request/attachment tools. All five are bounded, read-only, and enforced by
+`config/security-control.json`. `askQuestions` does not answer or persist an
+approval: it identifies material questions for the existing user review gate.
+Completion state is calculated from stored workflow fields and cannot promote
+the workflow. Validation passes **98/98** backend tests; Developer Studio's
+corresponding tool increment passes **89/89** tests.
+
+The following independent workflow-sandbox increment is also complete.
+Approved-plan implementation generation receives `listDirectory`,
+`startTerminalSession`, `getTerminalOutput`, `cancelTerminalSession`, and
+`getStructuredFailures` from A.E.G.I.S.-9 itself; Developer Studio does not
+need to be running. The workspace is scoped to the workflow transfer ID and
+revision. Terminal start is a typed validator—not a general shell—and accepts
+only PowerShell syntax, .NET build, or .NET test operations against matching
+sandbox files. The security registry can disable the entire adapter or any
+individual capability. Backend acceptance passes **101/101** tests.
+
+The subsequent 15-tool workflow-sandbox increment is complete. It adds
+`manageTodos`, `readWorkspaceFile`, `createFile`, `applyEdit`,
+`previewChangeSet`, `beginChangeSet`, `validateChangeSet`, `commitChangeSet`,
+`rollbackChangeSet`, `searchFiles`, `searchWorkspaceText`,
+`getRepositoryInstructions`, `getValidationRecipe`, `getProjectStructure`, and
+`getChangedFiles`. Todos persist under protected revision metadata. File edits
+remain staged until preview and stale-hash validation succeed; rollback restores
+the exact snapshot. Search and discovery are bounded and cannot inspect Aegis
+metadata or escape the sandbox. The implementation tool loop is capped at 12
+turns. Backend validation passes **106/106** tests.
+
+Tool parity is now an enforced repository rule. Both products contain the same
+versioned `SHARED-TOOL-PARITY-CONTRACT.json`. It maps 45 shared capabilities,
+records the three legitimate A.E.G.I.S.-9 workflow attachment tools, and keeps
+the remaining Developer Studio tools visible as parity backlog. Tests fail for
+an unclassified new tool and compare contract copies when both repositories
+are present. Current validation passes **91/91** Developer Studio tests and
+**114/114** A.E.G.I.S.-9 backend tests.
+
+The latest ten-tool parity block adds `readWorkspaceFiles`, `createDirectory`,
+`replaceFileContent`, `applyWorkspaceEdits`, `discoverTests`, `buildProjects`,
+`runTargetedTests`, `runFormatter`, `runLinter`, and `runStaticAnalysis` to the
+A.E.G.I.S.-9 workflow sandbox. Directory and file mutations remain inside the
+change-set preview/validation/commit lifecycle. Build and analysis operations
+return terminal session IDs and accept only typed paths/operations; formatting
+and analysis are check-only.
+
+The following ten-tool parity block adds `getWorkspaceDiagnostics`,
+`getFileOutline`, `getDependencyGraph`, `getRepositoryMap`,
+`getRankedWorkspaceContext`, `summarizeRepositoryContext`, `getGitContext`,
+`getGitHistory`, `getGitBlame`, and `getBranchComparison`. All inspection is
+bounded to the workflow/revision sandbox. Git tools are read-only and use
+validated revisions plus fixed argument arrays. Diagnostics parse retained
+local `.log`/`.txt` artifacts; they do not claim a live IDE diagnostic service.
+The authoritative contract now records 45 shared capabilities and 21
+parity-backlog items. Current gates pass 91/91 Developer Studio tests and
+114/114 A.E.G.I.S.-9 backend tests.
+
+The next ten shared reasoning tools are also complete: `activateToolGroup`,
+`analyzeChangeImpact`, `estimateContextBudget`, `findSymbolUsages`,
+`getBuildTestOwnership`, `getDefinitionsAndReferences`,
+`getProjectExecutionPlan`, `getProjectImprovementSuggestions`,
+`getRepositoryMemory`, and `getSymbolGraph`. They are offline, read-only, and
+revision-sandbox confined. Symbol and impact results identify their bounded
+lexical basis; activation cannot grant authority. Parity is now 55 shared
+capabilities with 11 items remaining. Current backend validation is 118/118.
+
+The next ten portable tools are complete: `applyUnifiedPatch`,
+`compareDiagnostics`, `deletePath`, `getMcpTools`, `getWorkspaceSymbols`,
+`movePath`, `renamePath`, `runWorkspaceCommand`, `scaffoldWorkspaceProject`,
+and `searchAvailableTools`. Mutations remain workflow-sandbox confined;
+deletion is recoverable, relocation refuses overwrite, command execution is a
+typed validation enum, and scaffolding targets only a new non-production
+directory. MCP discovery reads an empty-by-default approved registry and grants
+no authority. Parity is 65 shared tools with one remaining. Gates pass 93/93
+Developer Studio tests and 123/123 A.E.G.I.S.-9 tests.
+
+The final portable parity item, `delegateToAgentHostSession`, is complete.
+A.E.G.I.S.-9 delegates a bounded subtask to its own approved local-model role
+without passing tools or production authority; Developer Studio retains its
+native agent-host path. Shared parity is 66/66 with an empty backlog. Current
+gates pass 93/93 Developer Studio and 124/124 A.E.G.I.S.-9 tests. Continue with
+the seven platform backlog capabilities, beginning with MCP registry/lifecycle
+governance rather than installing third-party servers.
+
+`independentLocalMcpRegistry` is complete in both products. Each now has the
+same JSON Schema, air-gapped/local-network/online profiles, strict validator,
+and healthy-enabled discovery filter. Catalogs remain empty and no process or
+network lifecycle exists. Six platform capabilities remain, beginning with
+`stdioAndLoopbackMcpLifecycle`. Current gates pass 94/94 Developer Studio tests
+and 129/129 A.E.G.I.S.-9 tests.
+
+The next two platform capabilities are complete independently in both products:
+pinned stdio/policy-approved loopback MCP lifecycle and shared network
+destination enforcement. Lifecycle includes initialize/initialized, tools/list,
+allowlisted tools/call, timeout, stop, failure counting, and quarantine. Network
+policy enforces exact host/port allowlists, DNS/address class, TLS off loopback,
+no proxy bypass, and redirect revalidation. Catalogs remain empty and private
+LAN is still disabled. Platform status is 3/7 complete; gates pass 98/98
+Developer Studio and 133/133 A.E.G.I.S.-9 tests.
+
+Private-LAN MCP policy, local redacted audit storage, and outbound DLP/schema
+enforcement are implemented independently in both products. Private endpoints
+remain catalog-empty and require local-network, organization-controlled, TLS,
+role, target, field, approval, and destination-policy gates. Code-level air-gap
+scripts pass; a real firewall-isolated DMR/Ollama run is still required. Platform
+status is 6/7 complete. Gates pass 101/101 Developer Studio and 136/136
+A.E.G.I.S.-9 tests.
+
 A.E.G.I.S.-9 workflow planning and post-plan implementation generation now use
 the provider-neutral structured tool pattern being established in Developer
-Studio. The model is offered only `get_workflow_request`,
-`list_workflow_attachments`, and `read_workflow_attachment`. Requests pass
+Studio. Planning is offered bounded read-only workflow context tools;
+approved-plan implementation additionally receives the revision sandbox tool
+catalog described above. Requests pass
 through the security-control registry; attached text is returned in bounded
 slices, unrelated file IDs are rejected, unoffered tools fail closed, tool
 errors support controlled model recovery, and the loop has a bounded turn
@@ -108,13 +254,34 @@ and Ollama evidence. Its live run qualified both configured models through
 
 ## Developer Studio Copilot-style tool priority — 2026-09-06
 
+The MCP recommendation document at the repository root has been evaluated and
+incorporated into `docs/mcp-strategy-roadmap-assessment.md`. The governing
+decision is to implement `getMcpTools` next as a read-only view over an approved
+local registry, not as automatic process/package discovery. Live server
+adoption follows governance and broker foundations. Native tools remain primary,
+public MCP is optional and zero-protected-data only, internal MCP requires exact
+ownership/endpoint/data/retention policy, and privileged Windows/AD/MOVEit
+operations require first-party typed servers.
+
 The supplied `AEGIS_PRIORITY_COPILOT_STYLE_AGENT_TOOL_ARCHITECTURE.md` is now
 incorporated as Developer Studio Priority 7. "Copilot-style" describes
 composable Agent behavior, not a Copilot dependency. The implementation plan lives in
 `docs/project/COPILOT-STYLE-TOOL-INTEROPERABILITY-PLAN.md` in the separate
 Aegis Developer Studio repository. The approved approach uses public VS Code
 Language Model Tool and MCP APIs: DMR/Qwen remains primary, Ollama remains the
-only failover, and GitHub Copilot remains an explicitly enabled interoperability
+only automatic failover. Post-plan hardening now adds the shared governed
+`callMcpTool` capability to workflow implementation. It is limited to enabled
+R0/R1 tools with no outstanding per-call approval or credential requirement;
+registry, network, DLP, audit, role, and target checks remain authoritative.
+Shared parity now contains 67 capabilities. Developer Studio additionally has
+opt-in signed-catalog verification and configurable index/session budgets;
+Aegis-side signature verification and authorization-monitor drift reporting are
+implemented. `/api/security/policy-status` checks the security-control, MCP
+catalog, and shared parity artifacts; the desktop Security Posture shows LOCAL,
+VERIFIED, or DRIFT. Set `JARVIS_REQUIRE_SIGNED_POLICIES=true` only after placing
+the Ed25519 public key and detached `.sig` files. Workflow subprocess and MCP
+starts also enforce the configured memory, CPU, and child-process budgets.
+GitHub Copilot remains an explicitly enabled interoperability
 mode rather than a provider or hidden dependency. The same provider-neutral
 tools must pass with DMR and Ollama; other local providers require capability
 qualification. Unknown registered tools are denied by default, and strict

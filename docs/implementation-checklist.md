@@ -1,10 +1,21 @@
 # A.E.G.I.S.-9 and Aegis Developer Studio Implementation Checklist
 
-**Updated:** 2026-09-05
+**Updated:** 2026-09-07 — reconciled against the documentation-gap audit
 
 `[x]` means implemented with current evidence. `[ ]` includes incomplete,
 configuration-blocked, or live-acceptance work. Cross-product items are labeled
 **A.E.G.I.S. ↔ Developer Studio**.
+
+## Offline post-acceptance enhancements
+
+- [x] Add encrypted, clearable offline semantic-index primitives to both products.
+- [ ] Add a replaceable qualified local embedding-model provider, lifecycle controls, A.E.G.I.S. UI/workflow integration, and large-repository acceptance.
+- [x] Add bounded local review-history retention and a Developer Studio review view.
+- [ ] Correlate fixes, validation, identity, immutable revisions, and approvals; add tamper evidence and A.E.G.I.S. lifecycle UI.
+- [x] Generate CycloneDX SBOMs and exact-version-match user-provided offline vulnerability records without network access.
+- [ ] Complete transitive ecosystem/license coverage, advisory ranges, signed database provenance, suppressions, UI/history, and real-project acceptance.
+- [x] Export and inspect integrity-checked, selected non-secret migration bundles without automatic application.
+- [ ] Add dry-run restore, conflict/rollback, ACL/ownership, signed bundles, full product-state selection, and clean-machine restore acceptance.
 
 ## Repository and continuity safety
 
@@ -27,8 +38,8 @@ configuration-blocked, or live-acceptance work. Cross-product items are labeled
 - [x] Standardize family routing on DMR primary and Ollama-only failover.
 - [x] Exclude providers and models without verified native tool calling.
 - [x] Windows dependency manifest, installer, validator, and service templates.
-- [x] Current backend suite: 97 tests passing on 2026-09-06.
-- [x] Current WPF solution: build succeeds with 0 warnings/errors on 2026-09-06.
+- [x] Current backend suite: 142 tests passing on 2026-09-07.
+- [x] Current WPF solution: build succeeds with 0 warnings/errors on 2026-09-07.
 - [ ] Validate model profiles across different CPU/GPU hardware.
 - [ ] Validate DMR primary, Ollama failover, and local services after reboot.
 - [ ] Complete clean-machine production installer/package acceptance.
@@ -80,7 +91,8 @@ configuration-blocked, or live-acceptance work. Cross-product items are labeled
 - [ ] Complete accessibility, performance, stale-data, failure-isolation, and
   large-inventory tests.
 - [ ] Complete approved remote agent/hub connectivity for all production hosts.
-- [ ] Add notification outbox, retry, escalation, and delivery state.
+- [x] Add notification outbox, bounded retries, and delivery state foundation.
+- [ ] Add incident-linked escalation policy and complete live notification delivery acceptance.
 - [ ] Validate SMTP/recipient policy and managed secret storage.
 
 ### MoveIT
@@ -126,6 +138,45 @@ configuration-blocked, or live-acceptance work. Cross-product items are labeled
   bounded attached text, and clarification answers.
 - [x] Deny unoffered workflow tools and prevent access to files not attached to
   the current workflow.
+- [x] Expose bounded workflow coordination tools for questions, execution
+  state, deterministic completion gates, retained validation evidence, and
+  artifact identity. Keep every tool read-only and security-policy gated.
+- [x] Route model-requested questions into the existing user review process;
+  tools cannot invent answers or advance user/supervisor approvals.
+- [x] Add workflow-sandbox adapters for `listDirectory`, typed validation
+  sessions, retained output, exact-session cancellation, and structured
+  failures. Expose them only after plan and test-plan approval, within the
+  revision-specific non-production workspace; never expose unrestricted host
+  or production shell access to the workflow model.
+- [x] Add independently persisted, workflow-revision-scoped todo management
+  with evidence required before completion.
+- [x] Add bounded sandbox file reads and transactional create/edit operations
+  with expected-hash stale-content protection.
+- [x] Require begin, preview, validation, and commit phases; support exact
+  change-set rollback and changed-file inspection.
+- [x] Add bounded file/text search, repository-instruction discovery, typed
+  validation recipes, and project-structure inspection inside the sandbox.
+- [x] Add the versioned shared-tool parity contract and automated gates. Require
+  new portable tools in both products and explicit reasons for exceptions.
+- [x] Add multi-file reads, transactional directory creation, guarded
+  replacement/multi-file edits, test discovery, and typed build/test/format/
+  lint/static-analysis tools to A.E.G.I.S.-9.
+- [x] Add bounded diagnostics, outline/dependency/repository intelligence and
+  fixed-argument read-only Git context/history/blame/comparison tools to the
+  workflow sandbox; shared parity is now 45 tools with 21 items remaining.
+- [x] Add ten offline repository-reasoning tools for progressive group
+  discovery, context budgeting, symbols/impact, ownership, planning,
+  suggestions, and repository memory; shared parity is now 55 tools with 11
+  items remaining.
+- [x] Add guarded patch/path/scaffold/typed-command operations, diagnostic
+  comparison, workspace symbols, tool search, and registry-only MCP discovery;
+  shared parity is now 65 tools with one item remaining.
+- [x] Add identical schema-versioned, empty-by-default MCP catalog files to both
+  products and ensure discovery filters disabled/unhealthy servers and grants
+  no tool authority.
+- [x] Complete `delegateToAgentHostSession` parity with bounded A.E.G.I.S.-9
+  local-role delegation that grants neither tools nor production authority;
+  shared portable parity is now 66/66 with no backlog.
 - [ ] Live-accept the workflow tool loop against both DMR and Ollama, including
   tool-result continuation, failover, malformed calls, and bounded-turn behavior.
 
@@ -147,7 +198,9 @@ configuration-blocked, or live-acceptance work. Cross-product items are labeled
 - [x] Allowlisted PowerShell runs with events/history/timeout/cancel/retry/recovery.
 - [x] Portable `.aegisworkflow` transfer and safe conflict/import behavior.
 - [ ] Disposable Windows Sandbox/VM runner for external capabilities.
-- [ ] Safe C# runtime execution inside the sandbox.
+- [x] Add A.E.G.I.S. Test Lab planning, synthetic fixtures, separate package/launch approvals, a network-disabled Windows Sandbox profile, immutable input manifests, and evidence review in both products. See `docs/AEGIS-TEST-LAB.md`.
+- [x] Complete live Windows Sandbox acceptance on the current Windows 11 Enterprise workstation: restricted profile launch, read-only input mapping, dedicated evidence output, and harmless PowerShell parser evidence passed on 2026-09-07.
+- [ ] Provision and accept an approved offline .NET SDK/dependency image for C# compilation. Submitted scripts remain parse-only until a separately approved behavioral harness exists.
 - [ ] External-system functional adapters and non-production credentials.
 - [ ] Authenticated supervisor roles and managed production secrets.
 - [ ] Administrative UI/API for authorized security-policy changes and kill-switch status.
@@ -183,16 +236,44 @@ configuration-blocked, or live-acceptance work. Cross-product items are labeled
 - [x] Project plans, proactive suggestions, and explicit proceed gate.
 - [x] Protected paths, recovery fixture, benchmarks, and release matrix.
 - [x] Repository tool priorities 1–6: guarded edits/filesystem, bounded inspection, typed validation, read-only Git, and progressive context/tool budgeting.
-- [x] Current Local AI suite: 69 tests passing on 2026-09-05.
-- [x] Current deterministic release matrix: all 10 checks passing.
+- [x] Current Local AI suite: 114 tests passing on 2026-09-07.
+- [x] Current deterministic release matrix: all 14 checks passing.
 - [ ] Live native-agent handoff validation.
 - [ ] Live MCP discovery/approval/result/failure/cancel validation.
-- [ ] Persistent dependency/import index, multi-root and unsaved context.
-- [ ] Diff annotations, inline findings, secret/branch/conflict assistance.
+- [x] Assess the MCP server strategy and map it into Priority 7F phases; see
+  `docs/mcp-strategy-roadmap-assessment.md`.
+- [x] Implement identical local MCP registry schemas, connectivity profiles,
+  fail-closed validators, and registry-only `getMcpTools` discovery in both
+  products; discovery grants no authority.
+- [x] Add lifecycle, health/quarantine, risk/approval metadata, credential-reference schemas, local audit, destination policy, and outbound DLP foundations.
+- [ ] Add an OS-protected A.E.G.I.S.-9 credential broker before enabling MCP records that require credentials.
+- [x] Implement pinned stdio and policy-approved loopback MCP lifecycle in both
+  products with initialization, discovery/calls, timeout, stop, failure limits,
+  and quarantine.
+- [x] Implement exact host/port, DNS/address-class, TLS, proxy, redirect, and
+  profile-aware network destination policy in both products.
+- [ ] Pilot pinned local/read-only MCP servers, then approved internal services;
+  keep public zero-protected-data integrations optional and disabled by default.
+- [ ] Build typed first-party Windows, AD, and MOVEit MCP servers after the
+  shared core and lab security gates exist; never expose arbitrary shell/SQL.
+- [x] Add bounded local JSONL audit/telemetry with recursive secret redaction,
+  local querying, and retention compaction in both products.
+- [x] Add outbound field allowlisting and DLP denial for secrets, protected
+  external data, oversized payloads, and unclassified destinations.
+- [x] Gate private-LAN MCP on local-network profile, organization ownership,
+  TLS destination policy, role, target, outbound fields, and approval.
+- [x] Add code-level air-gap readiness scripts to both products.
+- [ ] Run the readiness scripts and live DMR/Ollama/native-tool/local-MCP flows
+  with public networking blocked at the OS/firewall layer; retain evidence.
+- [x] Persistent metadata-only dependency/import index, multi-root and unsaved context.
+- [x] Diff diagnostics and secret/protected-path/conflict findings foundation.
+- [ ] Complete protected-branch assistance and live fix-review workflow acceptance.
 - [x] Governed rename/move/delete and multi-file rollback.
 - [x] Governed C#/WPF/WinForms/PowerShell project scaffolding foundation.
 - [ ] VB.NET→C#, VB.NET→PowerShell, and C#→PowerShell conversion with repair.
 - [x] DMR-first tool-capable provider filtering, failover, and preflight context budgeting.
+- [x] Signed-policy verification and visible policy-drift status.
+- [x] CPU, memory, child-process, output, session, and MCP concurrency budgets.
 - [ ] Broader model/hardware benchmarks and explicit release criteria.
 - [x] Developer Studio Priority 7 foundation: provider-neutral tool call/result
   and capability contracts with identical DMR/Ollama unit scenarios.
@@ -212,19 +293,18 @@ configuration-blocked, or live-acceptance work. Cross-product items are labeled
   protocol capability, not merely a provider/model tool-calling claim.
 - [ ] Complete cancellation/context stress and induced live failover acceptance;
   apply the qualification gate to additional local providers before admission.
-- [ ] Add bounded directory listing, terminal-output sessions, structured test
+- [x] Add bounded directory listing, terminal-output sessions, structured test
   failures, request todos, and question/answer coordination tools.
 - [ ] Prove fully offline/local-only operation with external networking blocked;
   separately test explicitly enabled Copilot interoperability without adding
   Copilot to the provider failover chain.
-- [ ] Add offline MCP registry/lifecycle support for local process and loopback
-  servers; permit internal company-network MCP and resources under exact
-  identity, capability, data-scope, credential, retention, and audit policy.
-- [ ] Add redacted, bounded local telemetry storage/viewing and optional
-  loopback/private OpenTelemetry collection with cloud exporters disabled.
-- [ ] Add a shared destination-policy layer for loopback/private network tools,
+- [x] Add offline MCP registry/lifecycle support for local process and loopback servers plus policy foundations for governed internal-company services.
+- [ ] Pilot an internal-company MCP service with exact identity, capability, data-scope, credential, retention, and audit policy.
+- [x] Add redacted, bounded local telemetry storage and querying.
+- [ ] Add optional loopback/private OpenTelemetry collection with cloud exporters disabled, if operationally justified.
+- [x] Add a shared destination-policy layer for loopback/private network tools,
   with DNS/redirect/proxy revalidation and explicit host/port allowlists.
-- [ ] Add outbound schema classification and DLP/redaction enforcement; prohibit
+- [x] Add outbound schema classification and DLP/redaction enforcement; prohibit
   third-party transmission of prompts, code, repository/user data, credentials,
   telemetry, tool arguments, or results that an external provider could retain.
 

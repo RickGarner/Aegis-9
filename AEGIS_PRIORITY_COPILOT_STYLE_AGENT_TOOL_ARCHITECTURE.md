@@ -1,7 +1,7 @@
 # AEGIS 9 Priority: Align Local Agent Tooling with GitHub Copilot Agent Architecture
 
 **Priority:** High
-**Status:** Incorporated into roadmap; initial provider-neutral qualification and security foundation implemented
+**Status:** Incorporated into roadmap; provider-neutral qualification, shared coordination/evidence, typed validation sessions, and the 15-tool transactional workflow sandbox foundation are implemented
 **Project:** AEGIS Developer Studio / AEGIS 9
 **Focus:** Local AI Agent tooling, orchestration, and Copilot-like behavior
 
@@ -1065,3 +1065,23 @@ The most immediate technical priorities are:
 ```
 
 This architecture should become the foundation for future AEGIS local coding-agent development.
+
+## 21. Implementation checkpoint — 2026-09-06
+
+The portable tool contract is now enforced across A.E.G.I.S.-9 and Aegis
+Developer Studio. Forty-five capabilities are implemented in both products;
+twenty-one Developer Studio capabilities remain in the parity backlog. The
+latest A.E.G.I.S.-9 block adds bounded diagnostics, outline/dependency and
+repository-context tools plus read-only Git context, history, blame, and branch
+comparison. These tools are local-provider neutral, revision-sandbox confined,
+and available to the approved workflow implementation model without requiring
+Developer Studio. Current regression gates pass 91/91 Developer Studio tests
+and 114/114 A.E.G.I.S.-9 backend tests.
+
+The following ten-tool increment adds offline repository reasoning to the
+A.E.G.I.S.-9 implementation sandbox: tool-group discovery, local context
+budgeting, bounded lexical symbol usage/definitions/graphs and change impact,
+build/test ownership, project plans and suggestions, and deterministic
+repository memory. It raises parity to 55 shared capabilities with 11 remaining
+and passes 118/118 A.E.G.I.S.-9 backend tests. Tool activation is informational
+and never expands the authority established by workflow approval gates.
