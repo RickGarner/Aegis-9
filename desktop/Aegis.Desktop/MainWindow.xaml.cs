@@ -42,9 +42,11 @@ public partial class MainWindow : Window
     private CancellationTokenSource? _voiceCaptureCancellation;
     private TaskCompletionSource<bool>? _providerTransitionAcknowledgement;
     private bool _alertPhraseSpoken;
+    private readonly StartupState? _startupState;
 
-    public MainWindow()
+    public MainWindow(StartupState? startupState = null)
     {
+        _startupState = startupState;
         _speechService = new KokoroSpeechService(_desktopOptions.Speech);
         _developerStudioService = new DeveloperStudioService(_desktopOptions.DeveloperStudio);
         _avatarService = new AvatarService(
@@ -66,18 +68,29 @@ public partial class MainWindow : Window
         _speechRecognition.WakePhraseRecognized += SpeechRecognition_WakePhraseRecognized;
         ApplyAvatarPreferences();
         ConversationList.Items.Clear();
-        ConversationList.Items.Add("New A.E.G.I.S.-9 startup command channel ready.");
+        ConversationList.Items.Add("Command channel ready.");
         Loaded += async (_, _) =>
         {
             await _avatarService.InitializeAsync();
             await InitializeInlineAvatarAsync();
-            await WaitForProviderReadyAsync();
-            await LoadSystemHealthAsync();
+            if (_startupState is not null) ApplyStartupState(_startupState);
+            else { await LoadProviderHealthAsync(); await LoadSystemHealthAsync(); }
             await LoadMonitoringAsync();
             await LoadWorkflowsAsync();
             await ConfigureWakePhraseAsync();
         };
         Closed += MainWindow_Closed;
+    }
+
+    private void ApplyStartupState(StartupState state)
+    {
+        var provider = state.Provider;
+        ConnectionText.Text = provider?.Available == true ? $"{provider.Location.ToUpperInvariant()} command center · {provider.Provider} · {provider.Model}" : "Local command center · degraded mode";
+        SecurityProviderRouteText.Text = provider?.Available == true ? provider.Location.ToUpperInvariant() : "DEGRADED";
+        SecurityProviderRouteText.Foreground = (Brush)FindResource(provider?.Available == true ? "Cyan" : "Amber");
+        if (state.Policy is not null) { SecurityPolicyIntegrityText.Text = state.Policy.DriftDetected ? "DRIFT" : state.Policy.SignatureRequired ? "VERIFIED" : "LOCAL"; SecurityPolicyIntegrityText.Foreground = (Brush)FindResource(state.Policy.DriftDetected ? "Amber" : "Cyan"); }
+        HealthList.ItemsSource = state.System?.Components ?? [];
+        CommandInput.IsEnabled = true; VoiceInputButton.IsEnabled = true; AvatarStatusText.Text = state.Degraded ? "DEGRADED MODE" : "READY FOR COMMANDS";
     }
 
     private async void IssueCommandButton_Click(object sender, RoutedEventArgs e) => await IssueCommandAsync();

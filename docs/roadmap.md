@@ -347,31 +347,37 @@ migration validation.
 No production-ready claim should be made until external integrations, privacy,
 workflow isolation, authorization, packaging, and recovery pass documented tests.
 
-## Current execution order — reconciled 2026-09-07
+## Current execution order — reprioritized 2026-09-08
 
 The detailed evidence and gap classifications are in
 `docs/DOCUMENTATION-GAP-AND-FUTURE-IDEAS-AUDIT-2026-09-07.md`.
 
-1. Run Developer Studio interactive acceptance on representative C#/WPF and
+1. Finish Xerox FreeFlow Core read-only acceptance. The status, capabilities,
+   devices, workflows, queues, bounded `QueueStatus` job history, caching, and
+   native desktop views are implemented against the 8.0.0 primary and 8.1.2
+   backup. Complete outage/recovery and refresh-soak validation and reconcile the
+   differing server inventories. Keep submission, cancellation, hold/release,
+   and every other mutation out of scope.
+2. Run Developer Studio interactive acceptance on representative C#/WPF and
    PowerShell/Pester repositories, induced DMR→Ollama failover, and one approved
    pinned local MCP server.
-2. Prove product-wide Local-Only Mode with public/cloud egress blocked while
+3. Prove product-wide Local-Only Mode with public/cloud egress blocked while
    local models, native tools, local MCP, and redacted telemetry remain usable.
-3. Implement authenticated roles, protected credential brokers, tamper-evident
+4. Implement authenticated roles, protected credential brokers, tamper-evident
    audit, workflow-artifact signing, grounded-output policy, and complete
    two-mode emergency stop controls.
-4. Complete the scoped, replay-resistant immutable workflow job and evidence
+5. Complete the scoped, replay-resistant immutable workflow job and evidence
    round trip between A.E.G.I.S.-9 and Developer Studio.
-5. Complete disposable workflow isolation, safe C# execution, scheduler edge
+6. Complete disposable workflow isolation, safe C# execution, scheduler edge
    cases, notification delivery, backup/restore, and clean-machine packaging.
-6. Perform onsite MOVEit, FreeFlow, Qualys, and Windows-server acceptance when
-   internal systems and approved credentials are available.
-7. Implement the normalized operations catalog, component/GPU/Event Log health,
+7. Perform onsite MOVEit, Qualys, and Windows-server acceptance when internal
+   systems and approved credentials are available.
+8. Implement the normalized operations catalog, component/GPU/Event Log health,
    durable incident lifecycle, and Monitoring Center accessibility/performance.
-8. Approve and implement the managed knowledge/document-library architecture;
+9. Approve and implement the managed knowledge/document-library architecture;
    finish local embedding-provider, review-history, SBOM/advisory, and migration
    product integration identified by the documentation audit.
-9. Resume controlled research/web intake, general automation/workspaces,
+10. Resume controlled research/web intake, general automation/workspaces,
    conversions, preference memory, and final voice/avatar/lip-sync acceptance.
 
 ## Offline post-acceptance enhancement foundations — 2026-09-07

@@ -2,14 +2,20 @@
   {
     "name": "BSOXERALB001",
     "role": "Primary",
+    "version": "8.0.0",
+    "build": "33969",
     "webUrl": "http://BSOXERALB001/FreeFlowCore",
+    "jmfUrl": "http://BSOXERALB001:7751/FreeFlowCore",
     "expectedText": "",
     "enabled": true
   },
   {
     "name": "BSOXERALB002",
-    "role": "Secondary",
+    "role": "Backup",
+    "version": "8.1.2",
+    "build": "35113",
     "webUrl": "http://BSOXERALB002/FreeFlowCore",
+    "jmfUrl": "http://BSOXERALB002:7751/FreeFlowCore",
     "expectedText": "",
     "enabled": true
   }

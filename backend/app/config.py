@@ -129,7 +129,7 @@ class Settings(BaseSettings):
     server_remote_cim_enabled: bool = Field(default=False, validation_alias="JARVIS_SERVER_REMOTE_CIM_ENABLED")
     server_remote_cim_timeout_seconds: int = Field(default=45, ge=10, le=180, validation_alias="JARVIS_SERVER_REMOTE_CIM_TIMEOUT_SECONDS")
     freeflow_inventory_path: Path = Field(default=Path("config/freeflow-servers.json"), validation_alias="JARVIS_FREEFLOW_INVENTORY_PATH")
-    freeflow_timeout_seconds: float = Field(default=10, ge=1, le=60, validation_alias="JARVIS_FREEFLOW_TIMEOUT_SECONDS")
+    freeflow_timeout_seconds: float = Field(default=30, ge=1, le=60, validation_alias="JARVIS_FREEFLOW_TIMEOUT_SECONDS")
     freeflow_verify_tls: bool = Field(default=True, validation_alias="JARVIS_FREEFLOW_VERIFY_TLS")
     qualys_base_url: str | None = Field(default=None, validation_alias="JARVIS_QUALYS_BASE_URL")
     qualys_username: str | None = Field(default=None, validation_alias="JARVIS_QUALYS_USERNAME")

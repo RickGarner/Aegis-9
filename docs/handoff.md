@@ -1,5 +1,49 @@
 # A.E.G.I.S.-9 Handoff
 
+## Current priority checkpoint — 2026-09-08
+
+Xerox FreeFlow Core API integration is now the active priority. The supplied
+`Aegis9-FreeFlow-Codex-Review-Bundle` was reviewed but its apply scripts were not
+run: its generated backend/desktop modules duplicate current systems, use a
+parallel configuration namespace, and its manifest records an empty-file SHA-256
+for a nonempty desktop installer. Useful pieces were integrated natively.
+
+The first safe increment adds a bounded, read-only JMF `KnownDevices` client,
+explicit `jmfUrl` values for `BSOXERALB001` and `BSOXERALB002`, and
+`GET /api/integrations/freeflow/devices`. Next, run it on the internal network,
+confirm the installed FreeFlow Core/SDK version and exact response contract, and
+then normalize workflows/queues into the existing monitor and desktop view.
+`Status`/`QueueInfo` and all mutations remain disabled pending that evidence.
+Backend validation after this increment is **147/147 tests passing**.
+
+Live JMF evidence on 2026-09-08: the bundle's minimal query reached both gateway
+servlets but triggered HTTP 500 in `processQueryKnownDevices`. Adding the CIP4
+typed query (`xsi:type="QueryKnownDevices"`), `MaxVersion`, and a Brief
+`DeviceFilter` produced HTTP 200 without authentication. The primary returned 40
+devices in about 2.5 seconds; the secondary returned 41 in about 25.6 seconds.
+The default timeout is now 30 seconds. Investigate the 40/41 difference and
+sanitize a representative response fixture before mapping device types. A
+second read-only comparison found 37 shared device IDs, 2 primary-only IDs, 3
+secondary-only IDs, and no blank IDs; identifiers were not written to the repo.
+These servers are not an HA pair: `BSOXERALB001` is the primary on FreeFlow Core
+8.0.0 build 33969, while `BSOXERALB002` is the backup on 8.1.2 build 35113.
+Treat version/configuration drift as the leading explanation for device variance.
+
+The supported read-only integration is now wired end to end. The backend exposes
+status, capabilities, all devices, filtered workflows, filtered queues, and
+bounded job history. Live `KnownMessages` advertised `QueueStatus`; that query
+returned 200 capped recent primary entries and one backup entry, whereas the
+legacy `Status/QueueInfo` form returned JMF code 7. The desktop FreeFlow window
+now shows server version/build/latency, classified device status, and recent
+queue entries. Mutating commands remain unimplemented. Validation is **151/151
+backend tests passing**, and the WPF build succeeds with zero errors.
+
+The discovery response also includes a deterministic, privacy-preserving
+primary/backup comparison. It reports only shared, server-only, blank, and
+duplicate identity counts; it does not retain the compared device identifiers
+and refuses to compare partial/unhealthy results. Validation is now **153/153
+backend tests passing**. Live outage/recovery and refresh-soak acceptance remain.
+
 ## Authoritative reconciled checkpoint — 2026-09-07
 
 Start with `DOCUMENTATION-GAP-AND-FUTURE-IDEAS-AUDIT-2026-09-07.md`, then

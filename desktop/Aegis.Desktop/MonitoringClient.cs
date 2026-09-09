@@ -28,6 +28,22 @@ public sealed class MonitoringClient
             ?? throw new InvalidOperationException("Monitoring API returned an empty response.");
     }
 
+    public async Task<FreeFlowJmfDiscovery> GetFreeFlowDiscoveryAsync(CancellationToken cancellationToken)
+    {
+        using var response = await _httpClient.GetAsync("api/integrations/freeflow/devices", cancellationToken);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<FreeFlowJmfDiscovery>(JsonOptions, cancellationToken)
+            ?? throw new InvalidOperationException("FreeFlow JMF API returned an empty response.");
+    }
+
+    public async Task<FreeFlowJmfJobs> GetFreeFlowJobsAsync(CancellationToken cancellationToken)
+    {
+        using var response = await _httpClient.GetAsync("api/integrations/freeflow/jobs", cancellationToken);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<FreeFlowJmfJobs>(JsonOptions, cancellationToken)
+            ?? throw new InvalidOperationException("FreeFlow QueueStatus API returned an empty response.");
+    }
+
     public async Task<OperationsMonitoringSnapshot> GetOperationsMonitoringAsync(CancellationToken cancellationToken)
     {
         using var response = await _httpClient.GetAsync("api/operations/monitoring", cancellationToken);
@@ -619,6 +635,94 @@ public sealed class FreeFlowServer
     [JsonPropertyName("http_status")] public int? HttpStatus { get; set; }
     [JsonPropertyName("response_ms")] public int? ResponseMs { get; set; }
     public string Detail { get; set; } = string.Empty;
+}
+
+public sealed class FreeFlowJmfDiscovery
+{
+    [JsonPropertyName("generated_at")] public string GeneratedAt { get; set; } = string.Empty;
+    [JsonPropertyName("read_only")] public bool ReadOnly { get; set; }
+    public string Query { get; set; } = string.Empty;
+    public List<FreeFlowJmfServerResult> Servers { get; set; } = [];
+}
+
+public sealed class FreeFlowJmfServerResult
+{
+    public string Name { get; set; } = string.Empty;
+    public string Role { get; set; } = string.Empty;
+    public string Version { get; set; } = string.Empty;
+    public string Build { get; set; } = string.Empty;
+    [JsonPropertyName("jmf_url")] public string JmfUrl { get; set; } = string.Empty;
+    public string State { get; set; } = string.Empty;
+    public string Detail { get; set; } = string.Empty;
+    [JsonPropertyName("http_status")] public int? HttpStatus { get; set; }
+    [JsonPropertyName("response_ms")] public int? ResponseMs { get; set; }
+    public List<FreeFlowJmfDevice> Devices { get; set; } = [];
+}
+
+public sealed class FreeFlowJmfDevice
+{
+    [JsonPropertyName("device_id")] public string DeviceId { get; set; } = string.Empty;
+    [JsonPropertyName("descriptive_name")] public string DescriptiveName { get; set; } = string.Empty;
+    [JsonPropertyName("device_class")] public string DeviceClass { get; set; } = string.Empty;
+    [JsonPropertyName("model_description")] public string ModelDescription { get; set; } = string.Empty;
+    public string Kind { get; set; } = string.Empty;
+    public string Status { get; set; } = string.Empty;
+    public Dictionary<string, string> Attributes { get; set; } = [];
+}
+
+public sealed class FreeFlowDeviceRow
+{
+    public string Server { get; set; } = string.Empty;
+    public string Role { get; set; } = string.Empty;
+    public string Kind { get; set; } = string.Empty;
+    public string DeviceId { get; set; } = string.Empty;
+    public string DisplayName { get; set; } = string.Empty;
+    public string Status { get; set; } = string.Empty;
+    public string Condition { get; set; } = string.Empty;
+    public string Details { get; set; } = string.Empty;
+}
+
+public sealed class FreeFlowJmfJobs
+{
+    [JsonPropertyName("generated_at")] public string GeneratedAt { get; set; } = string.Empty;
+    public bool Supported { get; set; }
+    [JsonPropertyName("read_only")] public bool ReadOnly { get; set; }
+    public string Detail { get; set; } = string.Empty;
+    public List<FreeFlowJmfServerJobs> Servers { get; set; } = [];
+}
+
+public sealed class FreeFlowJmfServerJobs
+{
+    public string Name { get; set; } = string.Empty;
+    public string Role { get; set; } = string.Empty;
+    public string State { get; set; } = string.Empty;
+    public List<FreeFlowJmfJob> Jobs { get; set; } = [];
+}
+
+public sealed class FreeFlowJmfJob
+{
+    [JsonPropertyName("queue_entry_id")] public string QueueEntryId { get; set; } = string.Empty;
+    [JsonPropertyName("job_id")] public string JobId { get; set; } = string.Empty;
+    [JsonPropertyName("job_name")] public string JobName { get; set; } = string.Empty;
+    public string Status { get; set; } = string.Empty;
+    [JsonPropertyName("status_details")] public string StatusDetails { get; set; } = string.Empty;
+    public string Priority { get; set; } = string.Empty;
+    [JsonPropertyName("submission_time")] public string SubmissionTime { get; set; } = string.Empty;
+    [JsonPropertyName("start_time")] public string StartTime { get; set; } = string.Empty;
+    [JsonPropertyName("end_time")] public string EndTime { get; set; } = string.Empty;
+}
+
+public sealed class FreeFlowJobRow
+{
+    public string Server { get; set; } = string.Empty;
+    public string Role { get; set; } = string.Empty;
+    public string QueueEntryId { get; set; } = string.Empty;
+    public string Status { get; set; } = string.Empty;
+    public string StatusDetails { get; set; } = string.Empty;
+    public string Priority { get; set; } = string.Empty;
+    public string SubmissionTime { get; set; } = string.Empty;
+    public string StartTime { get; set; } = string.Empty;
+    public string EndTime { get; set; } = string.Empty;
 }
 
 public sealed class QualysMonitor

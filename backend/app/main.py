@@ -41,6 +41,7 @@ from app.workflow_governance import WORKFLOW_ARCHITECT_INSTRUCTIONS, workflow_im
 from app.workflow_documentation import WorkflowDocumentationManager
 from app.moveit_ha import MoveItHaService
 from app.moveit_ha.models import HaStatus
+from app.freeflow_jmf import FreeFlowJmfCapabilities, FreeFlowJmfDiscovery, FreeFlowJmfJobs, FreeFlowJmfService, FreeFlowJmfStatus
 
 
 class ChatRequest(BaseModel):
@@ -286,6 +287,7 @@ async def lifespan(app: FastAPI):
     for workflow in app.state.store.get_workflows():
         app.state.workflow_documentation.ensure(workflow)
     app.state.moveit_ha = MoveItHaService(settings.moveit_ha_config_path, settings.moveit_ha_state_path)
+    app.state.freeflow_jmf = FreeFlowJmfService(settings)
     collect_operations_snapshot(app.state.monitoring)
 
     async def monitoring_loop() -> None:
@@ -349,6 +351,10 @@ def get_workflow_execution() -> WorkflowExecutionManager:
 
 def get_monitoring() -> MonitoringCollector:
     return app.state.monitoring
+
+
+def get_freeflow_jmf() -> FreeFlowJmfService:
+    return app.state.freeflow_jmf
 
 
 def document_workflow(workflow: Workflow, event: str, detail: str = "") -> Workflow:
@@ -578,6 +584,37 @@ async def monitoring_dashboard(
 async def moveit_ha_status() -> HaStatus:
     """Return fail-closed HA readiness until the live, version-specific adapter is bound."""
     return app.state.moveit_ha.status()
+
+
+@app.get("/api/integrations/freeflow/devices", response_model=FreeFlowJmfDiscovery)
+async def freeflow_known_devices(service: FreeFlowJmfService = Depends(get_freeflow_jmf)) -> FreeFlowJmfDiscovery:
+    """Run the vendor-documented, read-only JMF KnownDevices discovery query."""
+    return await asyncio.to_thread(service.discover)
+
+
+@app.get("/api/integrations/freeflow/status", response_model=FreeFlowJmfStatus)
+async def freeflow_status(service: FreeFlowJmfService = Depends(get_freeflow_jmf)) -> FreeFlowJmfStatus:
+    return await asyncio.to_thread(service.status)
+
+
+@app.get("/api/integrations/freeflow/workflows", response_model=FreeFlowJmfDiscovery)
+async def freeflow_workflows(service: FreeFlowJmfService = Depends(get_freeflow_jmf)) -> FreeFlowJmfDiscovery:
+    return await asyncio.to_thread(service.filtered, "workflow")
+
+
+@app.get("/api/integrations/freeflow/queues", response_model=FreeFlowJmfDiscovery)
+async def freeflow_queues(service: FreeFlowJmfService = Depends(get_freeflow_jmf)) -> FreeFlowJmfDiscovery:
+    return await asyncio.to_thread(service.filtered, "queue")
+
+
+@app.get("/api/integrations/freeflow/capabilities", response_model=FreeFlowJmfCapabilities)
+async def freeflow_capabilities() -> FreeFlowJmfCapabilities:
+    return FreeFlowJmfCapabilities()
+
+
+@app.get("/api/integrations/freeflow/jobs", response_model=FreeFlowJmfJobs)
+async def freeflow_jobs(service: FreeFlowJmfService = Depends(get_freeflow_jmf)) -> FreeFlowJmfJobs:
+    return await asyncio.to_thread(service.jobs)
 
 
 @app.get("/api/operations/monitoring", response_model=OperationsMonitoringSnapshot)

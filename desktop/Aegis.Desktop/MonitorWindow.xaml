@@ -4,6 +4,24 @@
     <Style TargetType="TextBlock"><Setter Property="Foreground" Value="{StaticResource Text}"/></Style>
     <Style TargetType="Button"><Setter Property="Foreground" Value="{StaticResource Green}"/><Setter Property="Background" Value="{StaticResource Raised}"/><Setter Property="BorderBrush" Value="{StaticResource Line}"/><Setter Property="Padding" Value="12,7"/><Setter Property="Margin" Value="0,0,8,0"/><Setter Property="Cursor" Value="Hand"/><Setter Property="FontWeight" Value="SemiBold"/></Style>
     <Style TargetType="ListView"><Setter Property="Background" Value="Transparent"/><Setter Property="BorderThickness" Value="0"/><Setter Property="Foreground" Value="{StaticResource Text}"/></Style>
+    <DataTemplate x:Key="FreeFlowDeviceTemplate">
+      <Border BorderBrush="#3338C9EA" BorderThickness="0,0,0,1" Padding="2,3,2,4">
+        <Grid>
+          <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+          <Grid Grid.Row="0">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="72"/></Grid.ColumnDefinitions>
+            <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip="{Binding DisplayName}" Margin="0,0,8,0"/>
+            <TextBlock Grid.Column="1" Text="{Binding Status}" Foreground="{StaticResource Green}" TextTrimming="CharacterEllipsis" ToolTip="{Binding Status}" HorizontalAlignment="Right"/>
+          </Grid>
+          <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="72"/><ColumnDefinition Width="1.25*"/></Grid.ColumnDefinitions>
+            <TextBlock Text="{Binding Server}" Foreground="{StaticResource Muted}" FontSize="10" TextTrimming="CharacterEllipsis" ToolTip="{Binding Server}" Margin="0,2,6,0"/>
+            <TextBlock Grid.Column="1" Text="{Binding Condition}" Foreground="{StaticResource Muted}" FontSize="10" TextTrimming="CharacterEllipsis" ToolTip="{Binding Condition}" Margin="0,2,6,0"/>
+            <TextBlock Grid.Column="2" Text="{Binding Details}" Foreground="{StaticResource Muted}" FontSize="10" TextTrimming="CharacterEllipsis" ToolTip="{Binding Details}" Margin="0,2,0,0"/>
+          </Grid>
+        </Grid>
+      </Border>
+    </DataTemplate>
   </Window.Resources>
   <Grid Margin="24">
     <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
@@ -30,11 +48,33 @@
         </GridView></ListView.View></ListView></Border>
         <TextBlock Grid.Row="1" Text="Automatic services: Good when all automatic-start services are running; Needs Attention when any are stopped. Remote Windows hosts use read-only CIM with the operator's current domain identity." Foreground="{StaticResource Muted}" FontSize="10" Margin="0,12,0,0" TextWrapping="Wrap"/>
       </Grid>
-      <Grid x:Name="FreeFlowView" Visibility="Collapsed">
-        <Border Background="{StaticResource Panel}" BorderBrush="{StaticResource Line}" BorderThickness="1" Padding="12"><ListView x:Name="FreeFlowServersList"><ListView.View><GridView>
-          <GridViewColumn Header="Server" DisplayMemberBinding="{Binding Name}" Width="190"/><GridViewColumn Header="Role" DisplayMemberBinding="{Binding Role}" Width="120"/><GridViewColumn Header="Web portal" DisplayMemberBinding="{Binding WebUrl}" Width="360"/><GridViewColumn Header="HTTP" DisplayMemberBinding="{Binding HttpStatus}" Width="85"/><GridViewColumn Header="Latency ms" DisplayMemberBinding="{Binding ResponseMs}" Width="100"/><GridViewColumn Header="Status" DisplayMemberBinding="{Binding Status}" Width="120"/><GridViewColumn Header="Detail" DisplayMemberBinding="{Binding Detail}" Width="380"/>
-        </GridView></ListView.View></ListView></Border>
-      </Grid>
+      <ScrollViewer x:Name="FreeFlowView" Visibility="Collapsed" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+       <Grid MinHeight="360" Height="{Binding ActualHeight, ElementName=FreeFlowView}">
+        <Grid.RowDefinitions><RowDefinition Height="1*" MinHeight="140"/><RowDefinition Height="1.2*" MinHeight="82"/><RowDefinition Height="1.8*" MinHeight="110"/></Grid.RowDefinitions>
+        <Border Background="{StaticResource Panel}" BorderBrush="{StaticResource Line}" BorderThickness="1" Padding="8" Margin="0,0,0,12">
+          <DockPanel><TextBlock Text="JMF SERVERS" FontSize="13" FontWeight="Bold" DockPanel.Dock="Top" Margin="0,0,0,4"/><ListView x:Name="FreeFlowJmfServersList"><ListView.View><GridView>
+            <GridViewColumn Header="Server" DisplayMemberBinding="{Binding Name}" Width="170"/><GridViewColumn Header="Role" DisplayMemberBinding="{Binding Role}" Width="90"/><GridViewColumn Header="Version" DisplayMemberBinding="{Binding Version}" Width="90"/><GridViewColumn Header="Build" DisplayMemberBinding="{Binding Build}" Width="80"/><GridViewColumn Header="JMF endpoint" DisplayMemberBinding="{Binding JmfUrl}" Width="300"/><GridViewColumn Header="HTTP" DisplayMemberBinding="{Binding HttpStatus}" Width="65"/><GridViewColumn Header="Latency ms" DisplayMemberBinding="{Binding ResponseMs}" Width="90"/><GridViewColumn Header="State" DisplayMemberBinding="{Binding State}" Width="90"/><GridViewColumn Header="Detail" DisplayMemberBinding="{Binding Detail}" Width="300"/>
+          </GridView></ListView.View></ListView></DockPanel>
+        </Border>
+        <Grid Grid.Row="1" Margin="0,0,0,12">
+          <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+          <Border Background="{StaticResource Panel}" BorderBrush="{StaticResource Line}" BorderThickness="1" Padding="8" Margin="0,0,8,0">
+            <DockPanel><DockPanel DockPanel.Dock="Top" Margin="0,0,0,5"><TextBlock Text="WORKFLOWS" FontSize="13" FontWeight="Bold"/><TextBlock x:Name="FreeFlowWorkflowCountText" Text="0" Foreground="{StaticResource Green}" FontSize="13" FontWeight="Bold" HorizontalAlignment="Right"/></DockPanel><ListView x:Name="FreeFlowWorkflowsList" ItemTemplate="{StaticResource FreeFlowDeviceTemplate}" ScrollViewer.HorizontalScrollBarVisibility="Disabled"><ListView.ItemContainerStyle><Style TargetType="ListViewItem"><Setter Property="HorizontalContentAlignment" Value="Stretch"/><Setter Property="Padding" Value="0"/></Style></ListView.ItemContainerStyle></ListView></DockPanel>
+          </Border>
+          <Border Grid.Column="1" Background="{StaticResource Panel}" BorderBrush="{StaticResource Line}" BorderThickness="1" Padding="8" Margin="4,0">
+            <DockPanel><DockPanel DockPanel.Dock="Top" Margin="0,0,0,5"><TextBlock Text="QUEUES" FontSize="13" FontWeight="Bold"/><TextBlock x:Name="FreeFlowQueueCountText" Text="0" Foreground="{StaticResource Green}" FontSize="13" FontWeight="Bold" HorizontalAlignment="Right"/></DockPanel><ListView x:Name="FreeFlowQueuesList" ItemTemplate="{StaticResource FreeFlowDeviceTemplate}" ScrollViewer.HorizontalScrollBarVisibility="Disabled"><ListView.ItemContainerStyle><Style TargetType="ListViewItem"><Setter Property="HorizontalContentAlignment" Value="Stretch"/><Setter Property="Padding" Value="0"/></Style></ListView.ItemContainerStyle></ListView></DockPanel>
+          </Border>
+          <Border Grid.Column="2" Background="{StaticResource Panel}" BorderBrush="{StaticResource Line}" BorderThickness="1" Padding="8" Margin="8,0,0,0">
+            <DockPanel><DockPanel DockPanel.Dock="Top" Margin="0,0,0,5"><TextBlock Text="PRINTERS" FontSize="13" FontWeight="Bold"/><TextBlock x:Name="FreeFlowPrinterCountText" Text="0" Foreground="{StaticResource Green}" FontSize="13" FontWeight="Bold" HorizontalAlignment="Right"/></DockPanel><ListView x:Name="FreeFlowPrintersList" ItemTemplate="{StaticResource FreeFlowDeviceTemplate}" ScrollViewer.HorizontalScrollBarVisibility="Disabled"><ListView.ItemContainerStyle><Style TargetType="ListViewItem"><Setter Property="HorizontalContentAlignment" Value="Stretch"/><Setter Property="Padding" Value="0"/></Style></ListView.ItemContainerStyle></ListView></DockPanel>
+          </Border>
+        </Grid>
+        <Border Grid.Row="2" Background="{StaticResource Panel}" BorderBrush="{StaticResource Line}" BorderThickness="1" Padding="8">
+          <DockPanel><TextBlock Text="RECENT QUEUE ENTRIES · READ ONLY · MAXIMUM 200 PER SERVER" FontSize="13" FontWeight="Bold" DockPanel.Dock="Top" Margin="0,0,0,4"/><ListView x:Name="FreeFlowJobsList"><ListView.View><GridView>
+            <GridViewColumn Header="Server" DisplayMemberBinding="{Binding Server}" Width="135"/><GridViewColumn Header="Role" DisplayMemberBinding="{Binding Role}" Width="70"/><GridViewColumn Header="Entry ID" DisplayMemberBinding="{Binding QueueEntryId}" Width="90"/><GridViewColumn Header="Status" DisplayMemberBinding="{Binding Status}" Width="95"/><GridViewColumn Header="Details" DisplayMemberBinding="{Binding StatusDetails}" Width="190"/><GridViewColumn Header="Priority" DisplayMemberBinding="{Binding Priority}" Width="65"/><GridViewColumn Header="Submitted" DisplayMemberBinding="{Binding SubmissionTime}" Width="190"/><GridViewColumn Header="Started" DisplayMemberBinding="{Binding StartTime}" Width="190"/><GridViewColumn Header="Ended" DisplayMemberBinding="{Binding EndTime}" Width="190"/>
+          </GridView></ListView.View></ListView></DockPanel>
+        </Border>
+       </Grid>
+      </ScrollViewer>
       <Grid x:Name="QualysView" Visibility="Collapsed">
         <Border Background="{StaticResource Panel}" BorderBrush="{StaticResource Line}" BorderThickness="1" Padding="12"><ListView x:Name="QualysFindingsList"><ListView.View><GridView>
           <GridViewColumn Header="Priority" DisplayMemberBinding="{Binding SeverityLabel}" Width="100"/><GridViewColumn Header="Severity" DisplayMemberBinding="{Binding Severity}" Width="80"/><GridViewColumn Header="Asset" DisplayMemberBinding="{Binding Asset}" Width="220"/><GridViewColumn Header="QID" DisplayMemberBinding="{Binding Qid}" Width="90"/><GridViewColumn Header="Status" DisplayMemberBinding="{Binding Status}" Width="110"/><GridViewColumn Header="First found" DisplayMemberBinding="{Binding FirstFoundAt}" Width="180"/><GridViewColumn Header="Last found" DisplayMemberBinding="{Binding LastFoundAt}" Width="180"/><GridViewColumn Header="Title" DisplayMemberBinding="{Binding Title}" Width="350"/>

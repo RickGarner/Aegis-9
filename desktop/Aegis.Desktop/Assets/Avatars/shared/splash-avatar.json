@@ -1,0 +1,16 @@
+{
+  "id": "aegis9-fullbody-splash",
+  "displayName": "A.E.G.I.S.-9 Cyber Lupine Warrior",
+  "version": 1,
+  "profile": "splash",
+  "format": "glb",
+  "model": "cyber_lupine_warrior.glb",
+  "cameraOrbit": "0deg 82deg 105%",
+  "animationNames": {},
+  "morphTargets": {},
+  "licenseName": "Creative Commons Attribution 4.0 International",
+  "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+  "redistributionAllowed": true,
+  "localUseAllowed": true,
+  "attribution": "Cyber Lupine Warrior by MAROUANE, https://sketchfab.com/3d-models/cyber-lupine-warrior-728c44b7520b43ffa77c3a61b1e463c7, licensed under CC BY 4.0."
+}

@@ -18,6 +18,7 @@ let eyePulseTimer = null;
 let speechCueTimers = [];
 let morphTargetNames = {};
 let animationNames = {};
+let presentationTimer = null;
 
 nameEl.textContent = "A.E.G.I.S.-9";
 metaEl.textContent = "Runtime initialized";
@@ -356,17 +357,17 @@ const loadAvatarFromManifest = async (manifestUrl, selectedAvatarId, compact = f
   }
   modelViewer.addEventListener("load", () => {
     scheduleBlink();
+    postMessageToHost("avatar.ready", {
+      avatarId: selectedAvatarId || manifest.id || "unknown",
+      animations: availableAnimations,
+      morphTargets: Object.values(manifest.morphTargets || {})
+    });
   }, { once: true });
   nameEl.textContent = String(manifest.displayName || selectedAvatarId || "A.E.G.I.S.-9").toUpperCase();
   attributionEl.textContent = manifest.attribution ? `Attribution: ${manifest.attribution}` : "";
   metaEl.textContent = `Model format: ${format}`;
   fallback.classList.add("hidden");
 
-  postMessageToHost("avatar.ready", {
-    avatarId: selectedAvatarId || manifest.id || "unknown",
-    animations: availableAnimations,
-    morphTargets: Object.values(manifest.morphTargets || {})
-  });
   applyState("ready", "Avatar loaded");
 };
 
@@ -383,11 +384,20 @@ const handleEnvelope = async (envelope) => {
         const manifestUrl = payload.manifestUrl;
         const selectedAvatarId = payload.selectedAvatarId;
         document.body.classList.toggle("compact", payload.compact === true);
+        document.body.classList.toggle("splash-presentation", payload.presentation === "splash");
         if (!manifestUrl) {
           throw new Error("avatar.load payload is missing manifestUrl.");
         }
         applyState("loading", "Loading avatar manifest");
         await loadAvatarFromManifest(manifestUrl, selectedAvatarId, payload.compact === true);
+        if (presentationTimer) clearInterval(presentationTimer);
+        if (payload.presentation === "splash" && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+          let headingRight = true;
+          presentationTimer = setInterval(() => {
+            headingRight = !headingRight;
+            viewer.cameraOrbit = `${headingRight ? 5 : -5}deg 82deg 105%`;
+          }, 4200);
+        }
         break;
       }
       case "avatar.state": {

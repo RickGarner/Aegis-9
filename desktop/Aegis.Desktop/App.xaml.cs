@@ -13,36 +13,53 @@ namespace Aegis.Desktop;
 public partial class App : Application
 {
     private BackendLauncher? _backendLauncher;
+    private Task? _shutdownTask;
     private readonly MonitoringClient _monitoringClient = new(Environment.GetEnvironmentVariable("JARVIS_MONITORING_URL") ?? "http://127.0.0.1:8000");
+    public string? BackendDirectory { get; private set; }
+    public string? PythonExecutable { get; private set; }
 
-    protected override async void OnStartup(StartupEventArgs e)
+    protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
 
-        try
+        ShutdownMode = ShutdownMode.OnExplicitShutdown;
+        var coordinator = new StartupCoordinator(_monitoringClient, EnsureBackendAsync);
+        var splash = new StartupSplashWindow(coordinator);
+        MainWindow = splash;
+        splash.EntryRequested += window =>
         {
-            var ready = await WaitForBackendReadyAsync(TimeSpan.FromSeconds(1));
-            if (!ready)
-            {
-                var (backendDir, pythonExe) = ResolveBackendRuntime();
-                _backendLauncher = new BackendLauncher(backendDir, pythonExe);
-                await _backendLauncher.StartAsync(CancellationToken.None);
+            var main = new MainWindow(window.StartupState);
+            MainWindow = main;
+            ShutdownMode = ShutdownMode.OnExplicitShutdown;
+            main.Closing += async (_, args) => { if (_shutdownTask is not null) return; args.Cancel = true; await ShutdownOwnedBackendAsync(); };
+            main.Show();
+            window.Close();
+        };
+        splash.Closed += async (_, _) => { if (!splash.Entered) await ShutdownOwnedBackendAsync(); };
+        splash.Show();
+    }
 
-                ready = await WaitForBackendReadyAsync(TimeSpan.FromSeconds(30));
-                if (!ready)
-                {
-                    MessageBox.Show("A.E.G.I.S.-9 could not start the local backend within the timeout. See backend/logs for details.", "A.E.G.I.S.-9", MessageBoxButton.OK, MessageBoxImage.Warning);
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            MessageBox.Show($"Failed to start the local backend: {ex.Message}", "A.E.G.I.S.-9", MessageBoxButton.OK, MessageBoxImage.Error);
-        }
+    public async Task ShutdownOwnedBackendAsync()
+    {
+        _shutdownTask ??= ShutdownCoreAsync();
+        await _shutdownTask;
+    }
 
-        var mainWindow = new MainWindow();
-        MainWindow = mainWindow;
-        mainWindow.Show();
+    private async Task ShutdownCoreAsync()
+    {
+        var launcher = _backendLauncher; _backendLauncher = null;
+        if (launcher != null) { await launcher.StopAsync(); launcher.Dispose(); }
+        Shutdown();
+    }
+
+    private async Task<(bool Ready, string Detail)> EnsureBackendAsync(CancellationToken token)
+    {
+        if (await WaitForBackendReadyAsync(TimeSpan.FromSeconds(1), token)) return (true, "Existing backend recognized on the local command channel.");
+        var runtime = ResolveBackendRuntime(); BackendDirectory = runtime.BackendDirectory; PythonExecutable = runtime.PythonExecutable;
+        _backendLauncher = new BackendLauncher(runtime.BackendDirectory, runtime.PythonExecutable);
+        await _backendLauncher.StartAsync(token);
+        var ready = await WaitForBackendReadyAsync(TimeSpan.FromSeconds(30), token);
+        return (ready, ready ? $"Owned backend started with {Path.GetFileName(runtime.PythonExecutable)}." : "Backend did not become ready within 30 seconds.");
     }
 
     private static (string BackendDirectory, string PythonExecutable) ResolveBackendRuntime()
@@ -65,25 +82,22 @@ public partial class App : Application
         throw new DirectoryNotFoundException("Could not locate the A.E.G.I.S.-9 backend directory.");
     }
 
-    private async Task<bool> WaitForBackendReadyAsync(TimeSpan timeout)
+    private async Task<bool> WaitForBackendReadyAsync(TimeSpan timeout, CancellationToken token)
     {
         var sw = Stopwatch.StartNew();
         while (sw.Elapsed < timeout)
         {
-            if (await _monitoringClient.CheckHealthAsync(CancellationToken.None)) return true;
-            await Task.Delay(500);
+            token.ThrowIfCancellationRequested();
+            if (await _monitoringClient.CheckHealthAsync(token)) return true;
+            await Task.Delay(500, token);
         }
         return false;
     }
 
-    protected override async void OnExit(ExitEventArgs e)
+    protected override void OnExit(ExitEventArgs e)
     {
         base.OnExit(e);
-        if (_backendLauncher != null)
-        {
-            await _backendLauncher.StopAsync();
-            _backendLauncher.Dispose();
-        }
+        _backendLauncher?.Dispose();
     }
 }
 

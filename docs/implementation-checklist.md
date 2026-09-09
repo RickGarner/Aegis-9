@@ -1,6 +1,6 @@
 # A.E.G.I.S.-9 and Aegis Developer Studio Implementation Checklist
 
-**Updated:** 2026-09-07 — reconciled against the documentation-gap audit
+**Updated:** 2026-09-08 — Xerox FreeFlow Core API promoted to current priority
 
 `[x]` means implemented with current evidence. `[ ]` includes incomplete,
 configuration-blocked, or live-acceptance work. Cross-product items are labeled
@@ -38,7 +38,7 @@ configuration-blocked, or live-acceptance work. Cross-product items are labeled
 - [x] Standardize family routing on DMR primary and Ollama-only failover.
 - [x] Exclude providers and models without verified native tool calling.
 - [x] Windows dependency manifest, installer, validator, and service templates.
-- [x] Current backend suite: 142 tests passing on 2026-09-07.
+- [x] Current backend suite: 153 tests passing on 2026-09-08.
 - [x] Current WPF solution: build succeeds with 0 warnings/errors on 2026-09-07.
 - [ ] Validate model profiles across different CPU/GPU hardware.
 - [ ] Validate DMR primary, Ollama failover, and local services after reboot.
@@ -105,10 +105,44 @@ configuration-blocked, or live-acceptance work. Cross-product items are labeled
 
 ### Xerox FreeFlow Core
 
-- [x] Register `BSOXERALB001` primary and `BSOXERALB002` secondary.
+- [x] Register `BSOXERALB001` primary (8.0.0 build 33969) and
+  `BSOXERALB002` backup (8.1.2 build 35113); this is not an HA pair.
 - [x] Check protected routes and retain response/latency/diagnostics.
-- [ ] Decide whether HTTP 401 route availability is sufficient.
-- [ ] If needed, configure an authenticated API/application health transaction.
+- [x] Review the supplied FreeFlow Codex bundle without applying its installers;
+  reject its parallel generated architecture and stale SHA-256 manifest.
+- [x] Add a bounded, read-only JMF `KnownDevices` client and
+  `GET /api/integrations/freeflow/devices` using the existing inventory and settings.
+- [x] Configure explicit port-7751 JMF endpoints for both HA servers.
+- [x] Run `KnownDevices` against both servers on the internal network: both
+  `/FreeFlowCore` endpoints returned HTTP 200 without authentication after the
+  standards-compliant typed query and `DeviceFilter` were added. Primary returned
+  40 devices in 2.5 seconds; secondary returned 41 in 25.6 seconds.
+- [x] Raise the shared FreeFlow timeout default from 10 to 30 seconds based on the
+  observed secondary response time.
+- [x] Confirm the installed FreeFlow Core versions on both servers.
+- [ ] Confirm the matching SDK contracts and retain representative, sanitized
+  response fixtures for deterministic tests.
+- [x] Normalize version-confirmed workflow and queue device types into the native
+  FreeFlow view and dedicated integration contracts.
+- [ ] Determine whether the 8.0.0/8.1.2 version difference or configuration drift
+  explains the 40-versus-41 result. The API now reports a privacy-preserving
+  primary/backup comparison with shared/only/blank/duplicate counts, fails the
+  comparison closed on partial results, and retains no compared identifiers.
+  Live evidence remains 37 shared IDs, 2 primary-only IDs, 3 backup-only IDs,
+  and no blank IDs; stale-data and recovery acceptance remain open.
+- [x] Normalize live `Device/DeviceClass` values: `Preset` as workflow,
+  `PrinterDestination` as queue, `PrintingPress` as printer, and `Controller` as controller.
+- [x] Validate job visibility: legacy `Status/QueueInfo` returns JMF code 7, while
+  the advertised `QueueStatus` query succeeds on both installed versions.
+- [x] Add bounded read-only job history (newest 200 per server), 30-second caching,
+  typed status/error handling, and native desktop server/device/job tables.
+- [ ] Define approved read-only authentication and protected credential handling if
+  required; HTTP 401 remains reachability evidence only.
+- [x] Add malformed and oversized XML rejection, JMF return-code validation,
+  bounded history, timeout isolation, and deterministic parser tests.
+- [ ] Complete live outage/recovery and extended refresh-soak tests.
+- [ ] Keep submission, cancellation, hold/release, queue control, and every other
+  mutating JMF operation unimplemented until separately designed and approved.
 
 ### Qualys
 
