@@ -18,7 +18,6 @@ let eyePulseTimer = null;
 let speechCueTimers = [];
 let morphTargetNames = {};
 let animationNames = {};
-let presentationTimer = null;
 
 nameEl.textContent = "A.E.G.I.S.-9";
 metaEl.textContent = "Runtime initialized";
@@ -60,7 +59,8 @@ const applyState = (state, detail) => {
   };
   const resolved = map[normalized] || map.ready;
   setRuntimeStateClass(normalized);
-  playAnimation(resolved.animation || animationNames[normalized] || animationNames.idle, normalized === "thinking" || normalized === "speaking");
+  const loopSplashIdle = document.body.classList.contains("splash-presentation") && (normalized === "ready" || normalized === "idle");
+  playAnimation(resolved.animation || animationNames[normalized] || animationNames.idle, normalized === "thinking" || normalized === "speaking" || loopSplashIdle);
   stateBadgeEl.textContent = resolved.label;
   stateEl.textContent = resolved.text;
   setBadgeClass(resolved.badge);
@@ -390,14 +390,6 @@ const handleEnvelope = async (envelope) => {
         }
         applyState("loading", "Loading avatar manifest");
         await loadAvatarFromManifest(manifestUrl, selectedAvatarId, payload.compact === true);
-        if (presentationTimer) clearInterval(presentationTimer);
-        if (payload.presentation === "splash" && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-          let headingRight = true;
-          presentationTimer = setInterval(() => {
-            headingRight = !headingRight;
-            viewer.cameraOrbit = `${headingRight ? 5 : -5}deg 82deg 105%`;
-          }, 4200);
-        }
         break;
       }
       case "avatar.state": {

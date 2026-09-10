@@ -16,7 +16,7 @@ public partial class StartupSplashWindow : Window
     private readonly CancellationTokenSource _closing = new();
     private readonly ObservableCollection<CheckRow> _rows = [];
     private bool _avatarRuntimeReady;
-    private const string SplashAvatarId = "aegis9-fullbody-splash";
+    private const string SplashAvatarId = "aegis9-head-splash";
     private string _avatarRuntimeDetail = "AEGIS AO visual core initializing.";
     public bool Entered { get; private set; }
     public StartupState StartupState => _state;
@@ -49,18 +49,71 @@ public partial class StartupSplashWindow : Window
         try
         {
             var host = ResolveAsset("AvatarHost"); var assets = ResolveAsset("Avatars");
-            await AvatarWebView.EnsureCoreWebView2Async().WaitAsync(TimeSpan.FromSeconds(8), _closing.Token);
+            await AvatarWebView.EnsureCoreWebView2Async().WaitAsync(TimeSpan.FromSeconds(15), _closing.Token);
+            AvatarWebView.DefaultBackgroundColor = System.Drawing.Color.Transparent;
             var core = AvatarWebView.CoreWebView2; core.Settings.AreDevToolsEnabled = false; core.Settings.AreDefaultContextMenusEnabled = false; core.Settings.IsStatusBarEnabled = false;
             core.SetVirtualHostNameToFolderMapping("jarvis.local", host, CoreWebView2HostResourceAccessKind.DenyCors); core.SetVirtualHostNameToFolderMapping("jarvis-assets.local", assets, CoreWebView2HostResourceAccessKind.Allow);
             var ready = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-            core.WebMessageReceived += (_, e) => { try { var m = JsonSerializer.Deserialize<AvatarMessage>(e.WebMessageAsJson); if (m?.Type == "avatar.ready" && m.Payload.TryGetProperty("avatarId", out var id) && id.GetString() == SplashAvatarId) ready.TrySetResult(true); else if (m?.Type == "avatar.error") { ready.TrySetResult(false); _avatarRuntimeReady = false; _avatarRuntimeDetail = "3D visual core unavailable; branded guardian telemetry remains active."; Dispatcher.Invoke(() => { AvatarWebView.Visibility = Visibility.Collapsed; AvatarFallback.Visibility = Visibility.Visible; AvatarFallbackDetail.Text = "3D VISUAL CORE UNAVAILABLE"; ApplyAvatarResult(); }); } } catch { ready.TrySetResult(false); } };
+            core.WebMessageReceived += (_, e) =>
+            {
+                try
+                {
+                    var message = JsonSerializer.Deserialize<AvatarMessage>(e.WebMessageAsJson);
+                    if (message?.Type == "avatar.ready" && message.Payload.TryGetProperty("avatarId", out var id) && id.GetString() == SplashAvatarId)
+                    {
+                        ready.TrySetResult(true);
+                        Dispatcher.BeginInvoke(ShowLoadedAvatar);
+                    }
+                    else if (message?.Type == "avatar.error")
+                    {
+                        ready.TrySetResult(false);
+                        Dispatcher.BeginInvoke(() => ShowAvatarFallback("3D VISUAL CORE UNAVAILABLE", "3D visual core unavailable; branded guardian telemetry remains active."));
+                    }
+                }
+                catch (Exception ex)
+                {
+                    ready.TrySetResult(false);
+                    Dispatcher.BeginInvoke(() => ShowAvatarFallback("3D VISUAL CORE UNAVAILABLE", $"3D visual core message failed. {StartupCoordinator.Sanitize(ex.Message)}"));
+                }
+            };
             core.NavigationCompleted += (_, e) => { if (!e.IsSuccess) ready.TrySetResult(false); else core.PostWebMessageAsJson(AvatarProtocol.Build("avatar.load", new { manifestUrl = "https://jarvis-assets.local/shared/splash-avatar.json", selectedAvatarId = SplashAvatarId, compact = true, presentation = "splash" })); };
             core.Navigate("https://jarvis.local/index.html"); AvatarFallback.Visibility = Visibility.Visible;
-            _avatarRuntimeReady = await ready.Task.WaitAsync(TimeSpan.FromSeconds(8), _closing.Token);
-            if (_avatarRuntimeReady) { AvatarWebView.Visibility = Visibility.Visible; AvatarFallback.Visibility = Visibility.Collapsed; _avatarRuntimeDetail = "A.E.G.I.S.-9 Cyber Lupine Warrior full-body GLB runtime ready."; core.PostWebMessageAsJson(AvatarProtocol.Build("avatar.state", new { state = "idle", detail = "Guardian startup sequence" })); }
-            else { AvatarWebView.Visibility = Visibility.Collapsed; AvatarFallbackDetail.Text = "3D VISUAL CORE UNAVAILABLE"; }
+            try
+            {
+                _avatarRuntimeReady = await ready.Task.WaitAsync(TimeSpan.FromSeconds(30), _closing.Token);
+            }
+            catch (TimeoutException)
+            {
+                _avatarRuntimeReady = false;
+                _avatarRuntimeDetail = "AEGIS animated avatar visual core is still loading and will appear when ready.";
+                AvatarFallbackDetail.Text = "VISUAL CORE STILL INITIALIZING";
+                return;
+            }
+            if (_avatarRuntimeReady) ShowLoadedAvatar();
+            else ShowAvatarFallback("3D VISUAL CORE UNAVAILABLE", "3D visual core unavailable; branded guardian telemetry remains active.");
         }
-        catch (Exception ex) { AvatarWebView.Visibility = Visibility.Collapsed; AvatarFallback.Visibility = Visibility.Visible; AvatarFallbackDetail.Text = "3D VISUAL CORE UNAVAILABLE"; _avatarRuntimeDetail = $"3D visual core unavailable. {StartupCoordinator.Sanitize(ex.Message)}"; }
+        catch (OperationCanceledException) when (_closing.IsCancellationRequested) { }
+        catch (Exception ex) { ShowAvatarFallback("3D VISUAL CORE UNAVAILABLE", $"3D visual core unavailable. {StartupCoordinator.Sanitize(ex.Message)}"); }
+    }
+    private void ShowLoadedAvatar()
+    {
+        if (_closing.IsCancellationRequested || !IsLoaded || AvatarWebView.CoreWebView2 is null) return;
+        _avatarRuntimeReady = true;
+        _avatarRuntimeDetail = "A.E.G.I.S.-9 animated avatar head visual core ready.";
+        AvatarWebView.Visibility = Visibility.Visible;
+        AvatarFallback.Visibility = Visibility.Collapsed;
+        AvatarWebView.CoreWebView2.PostWebMessageAsJson(AvatarProtocol.Build("avatar.state", new { state = "idle", detail = "Guardian startup sequence" }));
+        ApplyAvatarResult();
+    }
+    private void ShowAvatarFallback(string label, string detail)
+    {
+        if (_closing.IsCancellationRequested || !IsLoaded) return;
+        _avatarRuntimeReady = false;
+        _avatarRuntimeDetail = detail;
+        AvatarWebView.Visibility = Visibility.Collapsed;
+        AvatarFallback.Visibility = Visibility.Visible;
+        AvatarFallbackDetail.Text = label;
+        ApplyAvatarResult();
     }
     private void ApplyAvatarResult() { var check = _state.Checks.Single(x => x.Id == "avatar"); check.State = _avatarRuntimeReady ? StartupCheckState.Passed : StartupCheckState.Warning; check.Detail = _avatarRuntimeDetail; OnCheckChanged(check); }
     private static string ResolveAsset(string name) { for (var d = new DirectoryInfo(AppDomain.CurrentDomain.BaseDirectory); d != null; d = d.Parent) { var a = Path.Combine(d.FullName, "Assets", name); if (Directory.Exists(a)) return a; var s = Path.Combine(d.FullName, "desktop", "Aegis.Desktop", "Assets", name); if (Directory.Exists(s)) return s; } throw new DirectoryNotFoundException($"{name} assets were not found."); }
