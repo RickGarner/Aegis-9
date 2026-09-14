@@ -16,6 +16,16 @@ then normalize workflows/queues into the existing monitor and desktop view.
 `Status`/`QueueInfo` and all mutations remain disabled pending that evidence.
 Backend validation after this increment is **147/147 tests passing**.
 
+Acceptance update on 2026-09-13: representative sanitized `KnownDevices` and
+`QueueStatus` fixtures now use synthetic identifiers, deterministic
+timeout/outage-to-recovery behavior passes, and a 100-cycle forced-refresh soak
+passes. The full backend baseline is **156/156 tests passing**. Live FreeFlow
+acceptance remains environment-blocked because the current off-network DNS
+cannot resolve either configured server; exact installed-version SDK contract
+confirmation and live recovery/soak evidence therefore remain open. Native
+startup evidence and its remaining manual button checks are recorded in
+`docs/STARTUP-DESKTOP-ACCEPTANCE-2026-09-13.md`.
+
 Live JMF evidence on 2026-09-08: the bundle's minimal query reached both gateway
 servlets but triggered HTTP 500 in `processQueryKnownDevices`. Adding the CIP4
 typed query (`xsi:type="QueryKnownDevices"`), `MaxVersion`, and a Brief

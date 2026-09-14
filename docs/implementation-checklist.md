@@ -44,6 +44,23 @@ configuration-blocked, or live-acceptance work. Cross-product items are labeled
 - [ ] Validate DMR primary, Ollama failover, and local services after reboot.
 - [ ] Complete clean-machine production installer/package acceptance.
 
+### Startup and desktop acceptance
+
+- [x] Release-build the native WPF desktop and verify that it reaches the
+  `A.E.G.I.S.-9 · Guardian Boot Chamber` startup surface.
+- [x] Verify the startup gate calls the local health, provider, policy-integrity,
+  and system-health endpoints successfully when a healthy backend is available.
+- [x] Verify a missing backend enters the halted startup path and does not open
+  the command center automatically.
+- [x] Verify sanitized startup diagnostics can be generated beneath
+  `%LOCALAPPDATA%\Aegis-9\logs`.
+- [ ] Manually accept the Continue, Continue Degraded, Generate Diagnostic, and
+  Close A.E.G.I.S. button flows with native desktop automation or an operator.
+  The 2026-09-13 automation session exposed no native-app surface, so these
+  controls were not marked accepted from process/API evidence alone.
+- [ ] Resume splash avatar acceptance later; the avatar remains explicitly
+  pending and is not a release pass condition for this acceptance increment.
+
 ## File intake and research
 
 - [x] Local drag/drop and picker upload with type/size controls.
@@ -120,8 +137,10 @@ configuration-blocked, or live-acceptance work. Cross-product items are labeled
 - [x] Raise the shared FreeFlow timeout default from 10 to 30 seconds based on the
   observed secondary response time.
 - [x] Confirm the installed FreeFlow Core versions on both servers.
-- [ ] Confirm the matching SDK contracts and retain representative, sanitized
-  response fixtures for deterministic tests.
+- [ ] Confirm the matching SDK contracts against the installed 8.0.0/8.1.2
+  versions.
+- [x] Retain representative, sanitized `KnownDevices` and `QueueStatus` response
+  fixtures for deterministic tests; all retained identifiers are synthetic.
 - [x] Normalize version-confirmed workflow and queue device types into the native
   FreeFlow view and dedicated integration contracts.
 - [ ] Determine whether the 8.0.0/8.1.2 version difference or configuration drift
@@ -140,7 +159,11 @@ configuration-blocked, or live-acceptance work. Cross-product items are labeled
   required; HTTP 401 remains reachability evidence only.
 - [x] Add malformed and oversized XML rejection, JMF return-code validation,
   bounded history, timeout isolation, and deterministic parser tests.
-- [ ] Complete live outage/recovery and extended refresh-soak tests.
+- [x] Complete deterministic timeout/outage-to-recovery acceptance and a
+  100-cycle forced-refresh soak with mocked read-only JMF responses.
+- [ ] Complete live outage/recovery and extended refresh-soak tests. The
+  2026-09-13 off-network run was blocked because neither FreeFlow hostname could
+  be resolved by the current DNS/network environment.
 - [ ] Keep submission, cancellation, hold/release, queue control, and every other
   mutating JMF operation unimplemented until separately designed and approved.
 

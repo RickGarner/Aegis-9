@@ -4,11 +4,23 @@ import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch
 
+import httpx
+
 from app.config import Settings
 from app.freeflow_jmf import FreeFlowJmfDevice, FreeFlowJmfError, FreeFlowJmfServerResult, FreeFlowJmfService, build_known_devices_request, build_queue_status_request, compare_server_devices, parse_known_devices, parse_queue_status
 
+FIXTURES = Path(__file__).parent / "fixtures" / "freeflow"
+
 
 class FreeFlowJmfTests(unittest.TestCase):
+    def test_parses_sanitized_freeflow_8x_contract_fixtures(self):
+        devices = parse_known_devices((FIXTURES / "known_devices_sanitized.xml").read_bytes())
+        jobs = parse_queue_status((FIXTURES / "queue_status_sanitized.xml").read_bytes())
+        self.assertEqual(
+            (["workflow", "queue", "printer"], "SYNTHETIC-JOB-001"),
+            ([device.kind for device in devices], jobs[0].job_id),
+        )
+
     def test_compares_primary_and_backup_without_exposing_identifiers(self):
         servers = [
             FreeFlowJmfServerResult(name="FFC1", role="Primary", state="healthy", detail="ok", devices=[FreeFlowJmfDevice(device_id="sensitive-a"), FreeFlowJmfDevice(device_id="sensitive-b"), FreeFlowJmfDevice(device_id="sensitive-b"), FreeFlowJmfDevice(device_id="")]),
@@ -86,6 +98,45 @@ class FreeFlowJmfTests(unittest.TestCase):
             inventory.write_text(json.dumps([{"name": "FFC1", "enabled": True}]), encoding="utf-8")
             result = FreeFlowJmfService(Settings(JARVIS_FREEFLOW_INVENTORY_PATH=str(inventory))).discover()
         self.assertEqual("unconfigured", result.servers[0].state)
+
+    @patch("app.freeflow_jmf.httpx.post")
+    def test_forced_refresh_recovers_after_a_partial_outage(self, post: Mock):
+        healthy = Mock(status_code=200, content=(FIXTURES / "known_devices_sanitized.xml").read_bytes())
+        healthy.raise_for_status.return_value = None
+        post.side_effect = [healthy, httpx.ReadTimeout("synthetic outage"), healthy, healthy]
+        with tempfile.TemporaryDirectory() as directory:
+            inventory = Path(directory) / "freeflow.json"
+            inventory.write_text(json.dumps([
+                {"name": "FFC1", "role": "Primary", "jmfUrl": "http://ffc1:7751/FreeFlowCore"},
+                {"name": "FFC2", "role": "Backup", "jmfUrl": "http://ffc2:7751/FreeFlowCore"},
+            ]), encoding="utf-8")
+            service = FreeFlowJmfService(Settings(JARVIS_FREEFLOW_INVENTORY_PATH=str(inventory)))
+            degraded = service.discover(force=True)
+            recovered = service.discover(force=True)
+            cached = service.discover()
+        self.assertEqual(
+            ("partial", "matched", 4, recovered.model_dump()),
+            (degraded.comparison.state, recovered.comparison.state, post.call_count, cached.model_dump()),
+        )
+
+    @patch("app.freeflow_jmf.httpx.post")
+    def test_repeated_forced_refresh_remains_bounded_and_isolated(self, post: Mock):
+        response = Mock(status_code=200, content=(FIXTURES / "known_devices_sanitized.xml").read_bytes())
+        response.raise_for_status.return_value = None
+        post.return_value = response
+        with tempfile.TemporaryDirectory() as directory:
+            inventory = Path(directory) / "freeflow.json"
+            inventory.write_text(json.dumps([
+                {"name": "FFC1", "role": "Primary", "jmfUrl": "http://ffc1:7751/FreeFlowCore"},
+                {"name": "FFC2", "role": "Backup", "jmfUrl": "http://ffc2:7751/FreeFlowCore"},
+            ]), encoding="utf-8")
+            service = FreeFlowJmfService(Settings(JARVIS_FREEFLOW_INVENTORY_PATH=str(inventory)))
+            results = [service.discover(force=True) for _ in range(100)]
+        self.assertEqual((100, 200, {"healthy"}, {"matched"}), (
+            len(results), post.call_count,
+            {server.state for result in results for server in result.servers},
+            {result.comparison.state for result in results},
+        ))
 
     @patch("app.freeflow_jmf.httpx.post")
     def test_filtered_results_reuse_discovery_and_status_reports_roles(self, post: Mock):

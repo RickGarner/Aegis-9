@@ -15,6 +15,7 @@ let amplitudeTimer = null;
 let blinkTimer = null;
 let speakingTimer = null;
 let eyePulseTimer = null;
+let splashAnimationTimer = null;
 let speechCueTimers = [];
 let morphTargetNames = {};
 let animationNames = {};
@@ -86,6 +87,23 @@ const playAnimation = (name, loop = false) => {
   if (typeof modelViewer.play === "function") {
     modelViewer.play({ repetitions: loop ? Infinity : 1 });
   }
+};
+
+const startSplashAnimationCycle = () => {
+  if (splashAnimationTimer) {
+    clearInterval(splashAnimationTimer);
+  }
+  const sequence = [animationNames.idle, animationNames.listening, animationNames.thinking]
+    .filter((name, index, names) => name && names.indexOf(name) === index);
+  if (sequence.length === 0) {
+    return;
+  }
+  let index = 0;
+  playAnimation(sequence[index], true);
+  splashAnimationTimer = setInterval(() => {
+    index = (index + 1) % sequence.length;
+    playAnimation(sequence[index], true);
+  }, 4200);
 };
 
 const loadLocalScript = (relativePath) => new Promise((resolve, reject) => {
@@ -357,6 +375,11 @@ const loadAvatarFromManifest = async (manifestUrl, selectedAvatarId, compact = f
   }
   modelViewer.addEventListener("load", () => {
     scheduleBlink();
+    if (document.body.classList.contains("splash-presentation")) {
+      startSplashAnimationCycle();
+    } else {
+      playAnimation(animationNames.idle, true);
+    }
     postMessageToHost("avatar.ready", {
       avatarId: selectedAvatarId || manifest.id || "unknown",
       animations: availableAnimations,
