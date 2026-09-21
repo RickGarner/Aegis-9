@@ -56,7 +56,7 @@ From the repository root, create or update `.env` from `.env.example`, then run:
 ## Recent handoff updates (migration work completed so far)
 
 - 2026-08-31: continued the cinematic application on
-  `feature/workflow-automation-monitoring-2026-08-31` with FreeFlow/Qualys
+  `feature/workflow-automation-monitoring-2026-08-31` with FreeFlow
   monitoring and the staged daily-workflow Design Review, model routing,
   approval, test, and scheduling foundation. See
   `docs/MIGRATION-2026-08-31.md`.

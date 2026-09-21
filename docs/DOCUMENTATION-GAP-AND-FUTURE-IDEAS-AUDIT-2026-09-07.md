@@ -68,7 +68,6 @@ The authenticated bridge is status-only. Still required:
 
 - **MOVEit:** onsite version/API/role/SQL/service/Web Admin/task-query/WinRM-JEA discovery; read-only service identity; retention/log-share validation; production alert/recovery policy; exclusive locking, assisted failback, rollback, and fault-injection evidence. Automatic failback must remain disabled until operations/security approval.
 - **FreeFlow Core:** obtain exact URLs/ports; decide whether HTTP 401 proves adequate availability or add an authenticated application transaction; run primary/secondary failover and alert acceptance.
-- **Qualys:** supply module, platform URL, read-only authentication, asset scope, classic severity/QDS/QVSS policy, cadence, recipients, and live alert/recovery tests.
 - **Server monitoring:** reconcile separate warning/critical threshold semantics, SMTP/recipient policy, remote access, and service remediation authorization.
 
 ## Priority 2 — incomplete original and expanded features
@@ -175,7 +174,7 @@ Still required: versioned product manifests, dry-run compatibility report, selec
 4. Implement authenticated roles, managed secrets, tamper-evident audit, workflow artifact signing, and two-mode kill controls.
 5. Complete the immutable A.E.G.I.S.–Developer Studio job/evidence round trip.
 6. Finish workflow isolation, scheduler/notification/recovery hardening, and clean-machine packaging.
-7. Perform onsite MOVEit/FreeFlow/Qualys/server acceptance when internal resources are available.
+7. Perform onsite MOVEit/FreeFlow/server acceptance when internal resources are available.
 8. Approve the managed knowledge/document-library architecture, then complete the four post-acceptance features as integrated product experiences.
 9. Resume controlled research, voice/avatar acceptance, operations-catalog enrichment, and general automation only after the security/release gates above.
 

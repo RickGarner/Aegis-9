@@ -68,7 +68,7 @@ The roadmap and checklist have not always been updated in lockstep. For example,
 
 ### Native operations command center
 
-The project moved beyond the initial browser-oriented shell to a native .NET 8 WPF application. Separate native surfaces were added for chat, workflows, MoveIT Automation, server health, Xerox FreeFlow Core, Qualys, settings and Developer Studio. The React/Vite client was separated into the legacy `Jarvis_Web` project and is not the production operator UI.
+The project moved beyond the initial browser-oriented shell to a native .NET 8 WPF application. Separate native surfaces were added for chat, workflows, MoveIT Automation, server health, Xerox FreeFlow Core, settings and Developer Studio. The React/Vite client was separated into the legacy `Jarvis_Web` project and is not the production operator UI.
 
 ### Cinematic UI and cyber-lupine avatars
 
@@ -85,7 +85,6 @@ The app grew into an operations dashboard:
 - MoveIT task catalog and task-run history are collected read-only. Results normalize Success, No Transfer and Failure; recovered failures resolve after a confirmed success.
 - Local and remote Windows telemetry covers CPU, available memory, fixed disks and stopped automatic services through PowerShell remoting/CIM.
 - Xerox FreeFlow Core monitoring is implemented for `BSOXERALB001` (primary) and `BSOXERALB002` (secondary). The current `/FreeFlowCore` routes return Windows-authentication challenges, which are treated as evidence that IIS and the protected route are reachable.
-- Qualys VM/VMDR-style vulnerability collection is scaffolded read-only and prioritizes severity 5 then 4, but production details are still required.
 
 ### Governed daily workflow automation
 
@@ -150,7 +149,6 @@ The product name, ownership boundary and hybrid UX were approved. A native Aegis
 - Alert persistence/deduplication and recovered MoveIT failure handling.
 - Remote Windows telemetry collector.
 - FreeFlow inventory and reachability checks for the two named servers.
-- Qualys severity-first collector foundation and native window.
 
 ### Avatar and voice foundation
 
@@ -175,7 +173,6 @@ The product name, ownership boundary and hybrid UX were approved. A native Aegis
 | Notifications | Durable workflow terminal notification records and monitoring alerts | Delivery outbox/retry policy, SMTP acceptance, recipient/escalation configuration and operator-visible delivery state. |
 | Server monitoring | Concurrent CIM/PowerShell remote collector | Deploy/connect the intended remote agent/hub feeds where remoting is not the approved production path; validate all target hosts and permissions. |
 | FreeFlow | Named inventory and verified protected application routes | Decide whether a 401 reachability check is sufficient or configure an authenticated API/application transaction. |
-| Qualys | Read-only collector, severity ordering, alerts and UI | Platform URL, product/module, auth method, scope, prioritization policy, cadence and recipients. This is configuration blocked. |
 | MoveIT | Task catalog and report endpoint run history | Production alert-policy acceptance, retention/fallback validation and managed read-only credentials. |
 | Avatars | Working cyber-lupine models and host | Final animation/movement expansion, lip sync and asset/license/package validation across clean machines. Some older Blender/MakeHuman checklist entries are superseded by the newer integrated assets. |
 | Workstation portability | Installer/validator and transfer documentation | Reboot/service validation on each machine, LM Studio service credential validation, GPU routing/model-profile testing and final installer packaging. |
@@ -345,8 +342,7 @@ Copilot and Copilot Chat are default-disabled for fresh product profiles and Loc
 
 ## Priority 2 — Finish externally blocked operations work
 
-1. Supply and securely configure Qualys module, platform URL, read-only authentication, scope and prioritization policy.
-2. Decide the required FreeFlow health depth beyond the currently proven protected-route reachability.
+1. Decide the required FreeFlow health depth beyond the currently proven protected-route reachability.
 3. Validate MoveIT production alert policy and managed credentials.
 4. Validate remote server access/hub topology and notification delivery.
 

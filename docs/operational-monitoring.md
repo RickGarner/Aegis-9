@@ -1,4 +1,4 @@
-# FreeFlow Core and Qualys monitoring handoff
+# Operational monitoring handoff
 
 ## Unified Operations Monitoring Center direction — 2026-09-03
 
@@ -10,9 +10,9 @@ evidence and failure detail. See `OPERATIONS-MONITORING-CENTER-PLAN.md`.
 
 ## Implemented foundation
 
-A.E.G.I.S.-9 now exposes dedicated cinematic Operations windows for Xerox
-FreeFlow Core and Qualys vulnerabilities alongside MoveIT Automation and Server
-Status. Both collectors are read-only and configuration-driven.
+A.E.G.I.S.-9 exposes dedicated cinematic Operations windows for Xerox FreeFlow
+Core, MoveIT Automation, and Server Status. The collectors are read-only and
+configuration-driven.
 
 FreeFlow inventory is stored in `config/freeflow-servers.json`. The registered
 servers are:
@@ -30,16 +30,6 @@ When configured, each portal check records the final HTTP response, response
 latency, expected page-content match, status, diagnostic detail, and check time.
 Configured endpoints that cannot be reached create deduplicated FreeFlow alerts.
 
-Qualys initially uses the read-only VM/VMDR host detection endpoint and requests
-New, Active, and Re-Opened findings. Results are sorted by severity descending:
-
-1. Severity 5 — Urgent
-2. Severity 4 — Critical
-3. Severity 3 — Serious, when the configured minimum is lowered to 3
-
-The default minimum is severity 4. Urgent findings create error-level alerts;
-Critical findings create warning-level alerts. No remediation is executed.
-
 Remote Windows server telemetry now uses read-only PowerShell remoting/CIM with
 the current operator domain identity. It collects CPU load, available memory,
 fixed-disk capacity, and stopped non-delayed automatic services concurrently.
@@ -53,15 +43,6 @@ FreeFlow:
 
 - Whether HTTP 401 route availability is sufficient, or whether an authenticated
   application/API health transaction is required
-
-Qualys:
-
-- Product/module (VMDR, WAS, CSAM, or other)
-- Subscription platform/API base URL
-- Approved read-only API account or token method
-- Asset tags/groups/IP scope
-- Whether prioritization should use classic severity, QDS, QVSS, or a combined policy
-- Polling cadence and notification/digest recipients
 
 MoveIT execution history is now read from the installed Web Admin report endpoint,
 `POST /api/v1/reports/taskruns`, using the existing read-only bearer token. The

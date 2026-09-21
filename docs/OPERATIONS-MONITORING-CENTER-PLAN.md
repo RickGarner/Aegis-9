@@ -13,14 +13,13 @@ Aegis components. Existing specialized monitoring windows remain authoritative
 for platform-specific detail and actions.
 
 The center is an aggregation and navigation surface, not a replacement for the
-MoveIT, Server, FreeFlow, Qualys, Workflow, or Developer Studio windows.
+MoveIT, Server, FreeFlow, Workflow, or Developer Studio windows.
 
 ## Initial monitored areas
 
 - MoveIT Automation
 - Windows servers
 - Xerox FreeFlow Core primary and secondary
-- Qualys vulnerabilities
 - Workflow runs, approvals, prerequisites, and schedules
 - A.E.G.I.S.-9 backend and local model providers
 - Aegis Developer Studio and the future authenticated bridge
@@ -78,7 +77,6 @@ Future monitors join through contracts rather than direct changes to the window.
 ### Alerts and incidents
 
 - Unified severity-first queue across monitoring providers.
-- Qualys severity 5 then 4 findings naturally sort with other critical alerts.
 - Store source, resource, severity, first seen, last seen, acknowledgement,
   owner, evidence, related workflow/runbook, escalation, and recovery state.
 - Deduplicate recurring observations without losing occurrence history.
@@ -203,7 +201,7 @@ backend contract.
 
 ### Increment 2 — Existing monitor aggregation
 
-- Register MoveIT, Windows Server, FreeFlow, and Qualys collectors.
+- Register MoveIT, Windows Server, and FreeFlow collectors.
 - Show summary, resources, alerts, evidence, staleness, and collector failures.
 - Navigate to existing specialized windows.
 - Preserve current specialized-window behavior.
@@ -286,7 +284,6 @@ Recommended combined order:
 - [x] Register existing MoveIT monitor in the normalization layer.
 - [x] Register existing Windows Server monitor in the normalization layer.
 - [x] Register existing FreeFlow monitor in the normalization layer.
-- [x] Register existing Qualys monitor in the normalization layer.
 - [ ] Add workflow/schedule aggregation.
 - [ ] Add backend/provider/runtime health.
 - [ ] Add authenticated Developer Studio status.
@@ -329,7 +326,7 @@ legacy `/api/monitoring` response:
 - `GET /api/operations/collectors` — configuration and collector health
 
 The normalization layer registers the existing MoveIT, Windows Server,
-FreeFlow, and Qualys adapters without changing collection behavior. It reports
+and FreeFlow adapters without changing collection behavior. It reports
 target state separately from collector state; for example, an unconfigured
 credential produces an `unknown` target and a `misconfigured` collector rather
 than a healthy target. The preview WPF client now consumes the versioned

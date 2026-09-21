@@ -4,6 +4,7 @@ from email.message import EmailMessage
 from typing import Callable
 
 from app.config import Settings
+from app.credential_broker import resolve_credential
 from app.storage import JarvisStore, NotificationOutboxItem
 
 
@@ -48,4 +49,11 @@ class WorkflowNotificationWorker:
             else smtplib.SMTP(self.settings.alert_smtp_server, self.settings.alert_smtp_port, timeout=10)
         )
         with smtp:
+            credential = resolve_credential(
+                self.settings.alert_smtp_credential_target,
+                self.settings.alert_smtp_username,
+                self.settings.alert_smtp_password,
+            )
+            if credential:
+                smtp.login(credential.username, credential.password)
             smtp.send_message(message)

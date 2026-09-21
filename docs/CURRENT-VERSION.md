@@ -15,7 +15,7 @@ versioned read-only normalized aggregation endpoint. Normalized snapshots are
 durable with bounded retention and explicit last-known-good/staleness behavior.
 The preview Systems panel now presents selectable normalized resource cards
 with target/collector state, freshness, alerts, configuration, and navigation.
-Existing MoveIT, Server, FreeFlow, Qualys,
+Existing MoveIT, Server, FreeFlow,
 and Workflow windows remain authoritative. Read
 `docs/OPERATIONS-MONITORING-CENTER-PLAN.md`, then the
 Enterprise evaluation and selective-adoption plan in the sibling
@@ -226,8 +226,7 @@ service issues. Both Xerox FreeFlow Core application routes are configured and
 actively checked; their Windows authentication challenges are treated as proof
 that the protected portal route is available. MoveIT execution history is now
 collected from the installed Web Admin Task Run report endpoint, with the latest
-confirmed result retained per task. Qualys authentication remains a configuration
-dependency.
+confirmed result retained per task.
 
 Workflow plan approval is now separated from design review. Creating a draft
 opens Workflow Design Review and starts plan analysis automatically. The review

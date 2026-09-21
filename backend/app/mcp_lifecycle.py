@@ -1,6 +1,7 @@
 """Supervised MCP lifecycle for pinned stdio and exact-loopback HTTP servers."""
 
 import hashlib
+import base64
 import json
 import subprocess
 import threading
@@ -14,6 +15,7 @@ from app.mcp_registry import McpRegistryError, validate_registry
 from app.network_destination_policy import NetworkDestinationPolicy, NetworkPolicyError
 from app.local_audit import LocalAuditStore
 from app.outbound_dlp import DlpDenied, enforce_outbound
+from app.credential_broker import ProtectedCredential, resolve_credential
 
 
 class McpLifecycleError(RuntimeError):
@@ -36,6 +38,22 @@ class McpSession:
         self.audit = audit
         self.role = role
         self.target = target
+        self.credential: ProtectedCredential | None = None
+        if server.get("credentialRef"):
+            self.credential = resolve_credential(f"Aegis-9/MCP/{server['credentialRef']}")
+            if self.credential is None:
+                raise McpLifecycleError("The approved MCP credential reference is not configured.")
+
+    def _http_headers(self) -> dict[str, str]:
+        headers = {"Content-Type": "application/json"}
+        if not self.credential:
+            return headers
+        if self.server.get("credentialAuth") == "bearer":
+            headers["Authorization"] = f"Bearer {self.credential.password}"
+        else:
+            value = base64.b64encode(f"{self.credential.username}:{self.credential.password}".encode()).decode()
+            headers["Authorization"] = f"Basic {value}"
+        return headers
 
     def start(self) -> dict[str, Any]:
         if self.quarantined:
@@ -90,7 +108,7 @@ class McpSession:
             else:
                 assert self.network_policy
                 self.network_policy.approve(self.server["endpoint"])
-                request = urllib.request.Request(self.server["endpoint"], data=json.dumps(payload).encode(), headers={"Content-Type": "application/json"}, method="POST")
+                request = urllib.request.Request(self.server["endpoint"], data=json.dumps(payload).encode(), headers=self._http_headers(), method="POST")
                 opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), _NoRedirect())
                 with opener.open(request, timeout=timeout) as result:
                     response = json.loads(result.read(1_000_001))
@@ -111,7 +129,7 @@ class McpSession:
             return
         assert self.network_policy
         self.network_policy.approve(self.server["endpoint"])
-        request = urllib.request.Request(self.server["endpoint"], data=payload.encode(), headers={"Content-Type": "application/json"}, method="POST")
+        request = urllib.request.Request(self.server["endpoint"], data=payload.encode(), headers=self._http_headers(), method="POST")
         opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), _NoRedirect())
         with opener.open(request, timeout=self.server["timeoutSeconds"]):
             pass

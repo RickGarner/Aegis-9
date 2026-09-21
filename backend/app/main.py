@@ -42,6 +42,7 @@ from app.workflow_documentation import WorkflowDocumentationManager
 from app.moveit_ha import MoveItHaService
 from app.moveit_ha.models import HaStatus
 from app.freeflow_jmf import FreeFlowJmfCapabilities, FreeFlowJmfDiscovery, FreeFlowJmfJobs, FreeFlowJmfService, FreeFlowJmfStatus
+from app.authorization import AuthorizationError, RoleAuthorizer
 
 
 class ChatRequest(BaseModel):
@@ -851,12 +852,13 @@ async def review_workflow(
         if store.save_prepared_artifact(workflow_id, artifact.sha256, artifact.manifest.model_dump()) is None:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Workflow changed before its test artifact could be stored.")
     if request.decision == "supervisor_approve":
-        identity = getpass.getuser()
-        allowed = {item.strip().casefold() for item in settings.workflow_supervisor_identities.split(",") if item.strip()}
-        candidates = {identity.casefold(), f"{os.environ.get('USERDOMAIN', '')}\\{identity}".casefold()}
-        if not allowed or allowed.isdisjoint(candidates):
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=f"Windows identity '{identity}' is not configured as an A.E.G.I.S.-9 workflow supervisor.")
-        result = store.approve_workflow_for_production(workflow_id, identity)
+        authorizer = RoleAuthorizer(settings.role_mapping_path)
+        principal = authorizer.current_principal()
+        try:
+            authorizer.require("workflow.supervisor-approve", principal)
+        except AuthorizationError as error:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(error)) from error
+        result = store.approve_workflow_for_production(workflow_id, principal.identity)
     else:
         result = store.review_workflow(workflow_id, request.decision)
     if result is None:

@@ -1,6 +1,6 @@
 # A.E.G.I.S.-9 and Aegis Developer Studio Implementation Checklist
 
-**Updated:** 2026-09-08 — Xerox FreeFlow Core API promoted to current priority
+**Updated:** 2026-09-21 — monitoring scope and authorization/credential increment reconciled
 
 `[x]` means implemented with current evidence. `[ ]` includes incomplete,
 configuration-blocked, or live-acceptance work. Cross-product items are labeled
@@ -88,7 +88,7 @@ configuration-blocked, or live-acceptance work. Cross-product items are labeled
 
 ## Operational monitoring
 
-- [x] Native MoveIT, Server, FreeFlow, and Qualys windows.
+- [x] Native MoveIT, Server, and FreeFlow windows.
 - [x] Read-only configuration-driven collectors and deduplicated alerts.
 - [x] Local/remote Windows CPU, memory, disk, filesystem, and service checks.
 - [x] Approve the separate movable/resizable Operations Monitoring Center
@@ -96,7 +96,7 @@ configuration-blocked, or live-acceptance work. Cross-product items are labeled
 - [x] Implement and enable the native read-only Monitoring Center window shell.
 - [x] Add normalized monitor, resource, observation, alert, and collector-health
   contracts plus aggregation endpoints.
-- [x] Aggregate MoveIT, Server, FreeFlow, and Qualys without replacing their
+- [x] Aggregate MoveIT, Server, and FreeFlow without replacing their
   specialized windows or collectors.
 - [x] Add workflow, approval, prerequisite, and schedule status.
 - [ ] Add A.E.G.I.S. backend, provider, voice/runtime, and dependency health.
@@ -166,15 +166,6 @@ configuration-blocked, or live-acceptance work. Cross-product items are labeled
   be resolved by the current DNS/network environment.
 - [ ] Keep submission, cancellation, hold/release, queue control, and every other
   mutating JMF operation unimplemented until separately designed and approved.
-
-### Qualys
-
-- [x] Native window and severity-first read-only collector foundation.
-- [x] Prioritize severity 5 then 4 and create severity-based alerts.
-- [ ] Supply module, platform URL, and read-only authentication.
-- [ ] Define asset scope and classic severity/QDS/QVSS policy.
-- [ ] Define cadence, notifications, and digest recipients.
-- [ ] Run live API and alert/recovery acceptance tests.
 
 ## Workflow design and review
 
@@ -259,7 +250,13 @@ configuration-blocked, or live-acceptance work. Cross-product items are labeled
 - [x] Complete live Windows Sandbox acceptance on the current Windows 11 Enterprise workstation: restricted profile launch, read-only input mapping, dedicated evidence output, and harmless PowerShell parser evidence passed on 2026-09-07.
 - [ ] Provision and accept an approved offline .NET SDK/dependency image for C# compilation. Submitted scripts remain parse-only until a separately approved behavioral harness exists.
 - [ ] External-system functional adapters and non-production credentials.
-- [ ] Authenticated supervisor roles and managed production secrets.
+- [x] Add a fail-closed backend role service for exact Windows users/groups and
+  enforce Supervisor/PlatformAdministrator on workflow production approval.
+- [x] Bootstrap temporary full access through the exact domain group
+  `BSOC\BSOC - G - Architecture` mapped to `PlatformAdministrator`.
+- [ ] Enforce the role service across every remaining privileged API, add
+  governed role-policy administration, replace the temporary Architecture
+  mapping with least-privilege groups, and accept production group mappings.
 - [ ] Administrative UI/API for authorized security-policy changes and kill-switch status.
 - [ ] Artifact signing beyond hashing.
 - [ ] Advanced missed-run/compensation/escalation/concurrency/stop policies.
@@ -303,7 +300,15 @@ configuration-blocked, or live-acceptance work. Cross-product items are labeled
   fail-closed validators, and registry-only `getMcpTools` discovery in both
   products; discovery grants no authority.
 - [x] Add lifecycle, health/quarantine, risk/approval metadata, credential-reference schemas, local audit, destination policy, and outbound DLP foundations.
-- [ ] Add an OS-protected A.E.G.I.S.-9 credential broker before enabling MCP records that require credentials.
+- [x] Add a current-user Windows Credential Manager broker with non-secret
+  target references and safe status/set/delete tooling.
+- [x] Wire protected credential targets into MOVEit and optional
+  authenticated SMTP, with protected entries taking precedence over legacy
+  environment values.
+- [x] Resolve authenticated HTTP MCP `credentialRef` entries from protected
+  `Aegis-9/MCP/<reference>` targets at request time with explicit Basic/Bearer
+  mode; keep secrets out of payloads, registries, errors, and audit events.
+- [ ] Remove plaintext environment fallback after migration acceptance.
 - [x] Implement pinned stdio and policy-approved loopback MCP lifecycle in both
   products with initialization, discovery/calls, timeout, stop, failure limits,
   and quarantine.

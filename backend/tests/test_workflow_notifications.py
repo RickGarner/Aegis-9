@@ -1,8 +1,10 @@
 import json
 import tempfile
 from pathlib import Path
+from unittest.mock import Mock, patch
 
 from app.config import Settings
+from app.credential_broker import ProtectedCredential
 from app.storage import JarvisStore
 from app.workflow_notifications import WorkflowNotificationWorker
 
@@ -108,3 +110,23 @@ def test_only_failed_notifications_can_be_requeued() -> None:
         assert retried.status == "pending"
         assert retried.attempts == 0
         assert retried.last_error == ""
+
+
+@patch("app.workflow_notifications.resolve_credential")
+@patch("app.workflow_notifications.smtplib.SMTP")
+def test_authenticated_smtp_uses_protected_credential(smtp_factory: Mock, resolve: Mock) -> None:
+    resolve.return_value = ProtectedCredential("protected-sender", "protected-secret")
+    smtp = smtp_factory.return_value
+    smtp.__enter__.return_value = smtp
+    with tempfile.TemporaryDirectory() as directory:
+        store = JarvisStore(Path(directory) / "aegis.db")
+        store.initialize()
+        item_id = create_outbox_item(store)
+        item = next(item for item in store.get_notification_outbox_items(limit=10) if item.id == item_id)
+        worker = WorkflowNotificationWorker(store, Settings())
+
+        worker._send_email(item)
+
+    resolve.assert_called_once_with("Aegis-9/SMTP/Alerts", None, None)
+    smtp.login.assert_called_once_with("protected-sender", "protected-secret")
+    smtp.send_message.assert_called_once()

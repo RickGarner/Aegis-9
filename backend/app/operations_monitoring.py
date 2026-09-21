@@ -149,7 +149,6 @@ MONITORS = (
     ("moveit", "MOVEit Automation", "moveit", 300, "moveit-rest", "transfer-task"),
     ("server", "Windows Servers", "windows-server", 60, "windows-cim", "server"),
     ("freeflow", "Xerox FreeFlow Core", "freeflow-core", 60, "http-probe", "web-application"),
-    ("qualys", "Qualys VMDR", "qualys-vmdr", 300, "qualys-api", "vulnerability"),
 )
 
 
@@ -172,7 +171,7 @@ def build_operations_snapshot(
             monitor_id=monitor_id,
             display_name=display_name,
             source_type=source_type,
-            criticality="high" if monitor_id != "qualys" else "critical",
+            criticality="high",
             collection_interval_seconds=interval,
             stale_after_seconds=interval * 2,
             adapter_id=adapter_id,

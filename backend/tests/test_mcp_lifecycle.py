@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from app.credential_broker import ProtectedCredential
 from app.mcp_lifecycle import McpLifecycleError, create_session
 from app.network_destination_policy import NetworkDestinationPolicy
 
@@ -40,10 +41,12 @@ def test_rejects_unpinned_executable(tmp_path: Path) -> None:
 
 def test_private_lan_requires_profile_policy_role_target_and_dlp(monkeypatch) -> None:
     tool = {"name": "status.get", "description": "status", "enabled": True, "risk": "R1", "allowedRoles": ["operator"], "allowedTargets": ["service-a"], "outboundFields": ["query"], "approvalRequired": False}
-    server = {"id": "internal.status", "displayName": "Internal", "enabled": True, "transport": "private-http", "connectivity": "organization-controlled", "version": "1", "health": "healthy", "credentialRef": "internal.read", "timeoutSeconds": 3, "concurrencyLimit": 1, "audit": True, "endpoint": "https://internal.test:8443/mcp", "tools": [tool]}
+    server = {"id": "internal.status", "displayName": "Internal", "enabled": True, "transport": "private-http", "connectivity": "organization-controlled", "version": "1", "health": "healthy", "credentialRef": "internal.read", "credentialAuth": "bearer", "timeoutSeconds": 3, "concurrencyLimit": 1, "audit": True, "endpoint": "https://internal.test:8443/mcp", "tools": [tool]}
     value = {"schemaVersion": 1, "connectivityProfile": "local-network", "servers": [server]}
     policy = NetworkDestinationPolicy(profile="local-network", allowed_hosts={"internal.test": {8443}}, resolver=lambda _: ["10.1.2.3"], allow_proxy=True)
+    monkeypatch.setattr("app.mcp_lifecycle.resolve_credential", lambda _: ProtectedCredential("token", "protected-token"))
     session = create_session(value, "internal.status", policy, role="operator", target="service-a")
+    assert session._http_headers()["Authorization"] == "Bearer protected-token"
     monkeypatch.setattr(session, "request", lambda method, params: params)
     assert session.call_tool("status.get", {"query": "health"})["arguments"] == {"query": "health"}
     with pytest.raises(McpLifecycleError, match="absent"):

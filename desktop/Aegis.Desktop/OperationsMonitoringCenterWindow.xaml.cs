@@ -175,7 +175,6 @@ public partial class OperationsMonitoringCenterWindow : Window
         {
             "moveit" => MonitorWindowKind.MoveIt,
             "freeflow" => MonitorWindowKind.FreeFlow,
-            "qualys" => MonitorWindowKind.Qualys,
             _ => MonitorWindowKind.ServerStatus,
         };
         OpenMonitorRequested?.Invoke(this, kind);

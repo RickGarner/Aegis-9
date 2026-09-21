@@ -93,7 +93,6 @@ Delivered:
 - MoveIT task catalog and report-based run history with recovery-aware alerts
 - local/remote Windows CPU, memory, disk, filesystem, and service checks
 - FreeFlow checks for `BSOXERALB001` primary and `BSOXERALB002` secondary
-- severity-first read-only Qualys collector foundation
 - durable, deduplicated alerts
 - observe-only MOVEit HA pair contracts and deterministic fail-closed state
   evaluation for preferred `BSOAUTALB001` / secondary `BSOAUTALB002`
@@ -113,8 +112,6 @@ Remaining:
 
 - decide whether FreeFlow HTTP 401 protected-route reachability is sufficient or
   supply an authenticated application/API transaction
-- configure Qualys module, URL, read-only authentication, asset scope,
-  prioritization, cadence, and recipients
 - accept MoveIT alert policy and managed service credentials
 - finish approved remote agent/hub connectivity where required
 - add notification delivery outbox, retry, escalation, and visible delivery state
@@ -370,7 +367,7 @@ The detailed evidence and gap classifications are in
    round trip between A.E.G.I.S.-9 and Developer Studio.
 6. Complete disposable workflow isolation, safe C# execution, scheduler edge
    cases, notification delivery, backup/restore, and clean-machine packaging.
-7. Perform onsite MOVEit, Qualys, and Windows-server acceptance when internal
+7. Perform onsite MOVEit and Windows-server acceptance when internal
    systems and approved credentials are available.
 8. Implement the normalized operations catalog, component/GPU/Event Log health,
    durable incident lifecycle, and Monitoring Center accessibility/performance.

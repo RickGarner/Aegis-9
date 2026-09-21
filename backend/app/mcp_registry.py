@@ -54,7 +54,7 @@ def validate_registry(value: Any) -> None:
 
 def _validate_server(server: Any, profile: str) -> None:
     required = {"id", "displayName", "enabled", "transport", "connectivity", "version", "health", "credentialRef", "timeoutSeconds", "concurrencyLimit", "audit", "tools"}
-    optional = {"command", "args", "endpoint", "sha256", "allowedRoles", "allowedTargets", "owner", "retentionPolicy"}
+    optional = {"command", "args", "endpoint", "sha256", "allowedRoles", "allowedTargets", "owner", "retentionPolicy", "credentialAuth"}
     if not isinstance(server, dict) or not required <= set(server) or not set(server) <= required | optional:
         raise McpRegistryError("An MCP server entry has missing or unknown fields.")
     if not isinstance(server["id"], str) or not ID.fullmatch(server["id"]):
@@ -67,9 +67,15 @@ def _validate_server(server: Any, profile: str) -> None:
         raise McpRegistryError("MCP version or health is invalid.")
     if server["credentialRef"] is not None and (not isinstance(server["credentialRef"], str) or not ID.fullmatch(server["credentialRef"])):
         raise McpRegistryError("credentialRef must be null or a non-secret identifier.")
+    if server["credentialRef"] is not None and server.get("credentialAuth") not in {"basic", "bearer"}:
+        raise McpRegistryError("Credentialed MCP servers require credentialAuth basic or bearer.")
+    if server["credentialRef"] is None and "credentialAuth" in server:
+        raise McpRegistryError("credentialAuth requires a credentialRef.")
     if not isinstance(server["timeoutSeconds"], int) or not 1 <= server["timeoutSeconds"] <= 300 or not isinstance(server["concurrencyLimit"], int) or not 1 <= server["concurrencyLimit"] <= 32 or not isinstance(server["audit"], bool):
         raise McpRegistryError("MCP timeout, concurrency, or audit setting is invalid.")
     if server["transport"] == "stdio":
+        if server["credentialRef"] is not None:
+            raise McpRegistryError("Credential brokering is supported only for HTTP MCP servers.")
         if not isinstance(server.get("command"), str) or not Path(server["command"]).is_absolute() or not SHA256.fullmatch(str(server.get("sha256", ""))):
             raise McpRegistryError("stdio servers require an absolute command and pinned SHA-256.")
         if not isinstance(server.get("args", []), list) or any(not isinstance(item, str) for item in server.get("args", [])):

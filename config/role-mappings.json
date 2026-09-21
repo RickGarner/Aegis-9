@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "assignments": [
+    {
+      "type": "group",
+      "subject": "BSOC\\BSOC - G - Architecture",
+      "roles": ["PlatformAdministrator"]
+    }
+  ]
+}

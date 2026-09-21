@@ -45,8 +45,8 @@ class WorkflowMcpToolContext:
         if not isinstance(server_id, str) or not isinstance(tool_name, str) or not isinstance(payload, dict):
             raise WorkflowAgentToolError("MCP serverId, toolName, and object arguments are required.")
         server = next((item for item in catalog["servers"] if item["id"] == server_id and item["enabled"]), None)
-        if server is None or server.get("credentialRef"):
-            raise WorkflowAgentToolError("The MCP server is unavailable or requires a separately configured secure credential broker.")
+        if server is None:
+            raise WorkflowAgentToolError("The MCP server is unavailable.")
         tool = next((item for item in server["tools"] if item["name"] == tool_name and item["enabled"]), None)
         if tool is None or tool["approvalRequired"] or tool["risk"] not in {"R0", "R1"}:
             raise WorkflowAgentToolError("Only enabled read-only MCP tools without an outstanding per-call approval may run in workflow creation.")

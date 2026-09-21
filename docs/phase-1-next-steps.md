@@ -120,7 +120,7 @@ The app should be able to:
 
 Current work continues on
 `feature/workflow-automation-monitoring-2026-08-31`. The native cinematic shell
-now includes FreeFlow/Qualys monitoring foundations and staged workflow
+now includes FreeFlow monitoring foundations and staged workflow
 automation with mandatory Design Review, individual clarification answers,
 re-evaluation notification, final plan approval, coding-model generation,
 test-plan requests, and schedule capture. Actual isolated execution,

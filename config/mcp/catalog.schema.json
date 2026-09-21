@@ -24,6 +24,7 @@
           "version": { "type": "string", "minLength": 1, "maxLength": 100 },
           "health": { "enum": ["healthy", "degraded", "unavailable", "disabled", "quarantined", "version-mismatch", "authentication-failure"] },
           "credentialRef": { "type": ["string", "null"], "pattern": "^[a-z][a-z0-9.-]{0,127}$" },
+          "credentialAuth": { "enum": ["basic", "bearer"] },
           "timeoutSeconds": { "type": "integer", "minimum": 1, "maximum": 300 },
           "concurrencyLimit": { "type": "integer", "minimum": 1, "maximum": 32 },
           "audit": { "type": "boolean" },

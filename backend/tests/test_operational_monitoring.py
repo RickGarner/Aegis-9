@@ -8,16 +8,29 @@ from subprocess import CompletedProcess
 from unittest.mock import Mock, patch
 
 from app.config import Settings
+from app.credential_broker import ProtectedCredential
 from app.monitoring import (
     DeveloperStudioBridgeAdapter, DeveloperStudioMonitor, FreeFlowAdapter, FreeFlowMonitor, LocalServerAdapter, MonitoringAlert,
     MonitoringDashboard, MonitoringStore, MoveItAdapter, MoveItMonitor,
-    MoveItTask, QualysAdapter, QualysMonitor, ServerMonitor,
+    MoveItTask, ServerMonitor,
 )
 from app.operations_monitoring import OperationsMonitoringSnapshot, build_operations_snapshot
 from app.storage import JarvisStore
 
 
 class OperationalMonitoringTests(unittest.TestCase):
+    @patch("app.monitoring.resolve_credential")
+    def test_moveit_prefers_protected_credential(self, resolve: Mock):
+        resolve.return_value = ProtectedCredential("protected-reader", "protected-secret")
+
+        adapter = MoveItAdapter(Settings(
+            JARVIS_MOVEIT_USERNAME="legacy-reader",
+            JARVIS_MOVEIT_PASSWORD="legacy-secret",
+        ))
+
+        resolve.assert_called_once_with("Aegis-9/MoveIT/ReadOnly", "legacy-reader", "legacy-secret")
+        self.assertEqual(("protected-reader", "protected-secret"), (adapter._username, adapter._password))
+
     @patch("app.monitoring.httpx.get")
     def test_developer_studio_bridge_uses_authenticated_read_only_status(self, get: Mock):
         response = Mock(status_code=200)
@@ -68,7 +81,6 @@ class OperationalMonitoringTests(unittest.TestCase):
             moveit=MoveItMonitor(status="healthy", adapter="moveit-rest", last_checked_at=captured_at, detail="Ready"),
             server=ServerMonitor(status="healthy", last_checked_at=captured_at, detail="Ready"),
             freeflow=FreeFlowMonitor(status="healthy", last_checked_at=captured_at, detail="Ready"),
-            qualys=QualysMonitor(status="healthy", last_checked_at=captured_at, detail="Ready"),
             developer_studio=DeveloperStudioMonitor(
                 status="healthy", last_checked_at=captured_at, detail="Authenticated session is active.",
                 product_version="1.134.0", session_id="session-1", provider="dockerModelRunner", model="qwen3", activity="active",
@@ -87,9 +99,8 @@ class OperationalMonitoringTests(unittest.TestCase):
             generated_at=captured_at,
             moveit=MoveItMonitor(status="unavailable", adapter="moveit-rest", last_checked_at=captured_at, detail="MoveIT credentials are not configured."),
             server=ServerMonitor(status="warning", last_checked_at=captured_at, detail="One automatic service requires attention."),
-            freeflow=FreeFlowMonitor(status="healthy", last_checked_at=captured_at, detail="Both portals responded."),
-            qualys=QualysMonitor(status="error", last_checked_at=captured_at, detail="Urgent findings detected."),
-            alerts=[MonitoringAlert(id=7, source="qualys", severity="error", title="Urgent finding", detail="Review required", status="active", created_at=captured_at)],
+            freeflow=FreeFlowMonitor(status="error", last_checked_at=captured_at, detail="A configured portal is unavailable."),
+            alerts=[MonitoringAlert(id=7, source="freeflow", severity="error", title="Portal unavailable", detail="Review required", status="active", created_at=captured_at)],
         )
 
         snapshot = build_operations_snapshot(dashboard)
@@ -98,7 +109,7 @@ class OperationalMonitoringTests(unittest.TestCase):
 
         self.assertEqual("1.0", snapshot.contract_version)
         self.assertEqual("critical", snapshot.summary.overall_state)
-        self.assertEqual(1, snapshot.summary.counts.healthy)
+        self.assertEqual(0, snapshot.summary.counts.healthy)
         self.assertEqual(1, snapshot.summary.counts.degraded)
         self.assertEqual(1, snapshot.summary.counts.critical)
         self.assertEqual(1, snapshot.summary.counts.unknown)
@@ -115,7 +126,6 @@ class OperationalMonitoringTests(unittest.TestCase):
             moveit=MoveItMonitor(status="healthy", adapter="moveit-rest", last_checked_at=captured_at, detail="Ready"),
             server=ServerMonitor(status="healthy", last_checked_at=captured_at, detail="Ready"),
             freeflow=FreeFlowMonitor(status="healthy", last_checked_at=captured_at, detail="Ready"),
-            qualys=QualysMonitor(status="healthy", last_checked_at=captured_at, detail="Ready"),
         )
 
         payload = build_operations_snapshot(dashboard).model_dump(by_alias=True)
@@ -132,7 +142,6 @@ class OperationalMonitoringTests(unittest.TestCase):
             moveit=MoveItMonitor(status="healthy", adapter="moveit-rest", last_checked_at=captured_at, detail="Ready"),
             server=ServerMonitor(status="healthy", last_checked_at=captured_at, detail="Ready"),
             freeflow=FreeFlowMonitor(status="healthy", last_checked_at=captured_at, detail="Ready"),
-            qualys=QualysMonitor(status="healthy", last_checked_at=captured_at, detail="Ready"),
         )
         with tempfile.TemporaryDirectory() as directory:
             store = JarvisStore(Path(directory) / "aegis.db")
@@ -163,7 +172,6 @@ class OperationalMonitoringTests(unittest.TestCase):
             moveit=MoveItMonitor(status="healthy", adapter="moveit-rest", last_checked_at=captured_at, detail="Ready"),
             server=ServerMonitor(status="healthy", last_checked_at=captured_at, detail="Ready"),
             freeflow=FreeFlowMonitor(status="healthy", last_checked_at=captured_at, detail="Ready"),
-            qualys=QualysMonitor(status="healthy", last_checked_at=captured_at, detail="Ready"),
         )
         with tempfile.TemporaryDirectory() as directory:
             store = JarvisStore(Path(directory) / "aegis.db")
@@ -207,7 +215,6 @@ class OperationalMonitoringTests(unittest.TestCase):
             moveit=MoveItMonitor(status="healthy", adapter="moveit-rest", last_checked_at=captured_at, detail="Last run succeeded"),
             server=ServerMonitor(status="healthy", last_checked_at=captured_at, detail="Ready"),
             freeflow=FreeFlowMonitor(status="healthy", last_checked_at=captured_at, detail="Ready"),
-            qualys=QualysMonitor(status="healthy", last_checked_at=captured_at, detail="Ready"),
         )
         previous = build_operations_snapshot(healthy, now=datetime(2026, 9, 3, 12, 0, tzinfo=timezone.utc))
         failed_at = "2026-09-03T12:01:00Z"
@@ -231,7 +238,6 @@ class OperationalMonitoringTests(unittest.TestCase):
             moveit=MoveItMonitor(status="healthy", adapter="moveit-rest", last_checked_at=captured_at, detail="Ready"),
             server=ServerMonitor(status="healthy", last_checked_at=captured_at, detail="Ready"),
             freeflow=FreeFlowMonitor(status="healthy", last_checked_at=captured_at, detail="Ready"),
-            qualys=QualysMonitor(status="healthy", last_checked_at=captured_at, detail="Ready"),
         )
 
         snapshot = build_operations_snapshot(dashboard, now=datetime(2026, 9, 3, 12, 20, tzinfo=timezone.utc))
@@ -267,12 +273,6 @@ class OperationalMonitoringTests(unittest.TestCase):
             self.assertEqual("unavailable", monitor.status)
             self.assertEqual(["BSOXERALB001", "BSOXERALB002"], [server.name for server in monitor.servers])
             self.assertTrue(all("awaiting configuration" in server.detail for server in monitor.servers))
-
-    def test_qualys_remains_configuration_required_without_credentials(self):
-        monitor = QualysAdapter(Settings()).collect("2026-08-30T00:00:00+00:00")
-        self.assertEqual("unavailable", monitor.status)
-        self.assertEqual([], monitor.findings)
-        self.assertIn("awaiting configuration", monitor.detail)
 
     @patch("app.monitoring.httpx.get")
     def test_freeflow_windows_auth_challenge_confirms_portal_availability(self, get: Mock):

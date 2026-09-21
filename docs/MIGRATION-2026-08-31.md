@@ -25,7 +25,7 @@ git status --short --branch
 - `desktop/Aegis.Desktop/MainWindow*` and `MonitoringClient.cs`: Workflow Center,
   state-aware actions, and re-evaluation notifications.
 - `backend/app/monitoring.py`, `config.py`, `.env.example`, and monitor UI files:
-  FreeFlow Core and Qualys read-only monitoring foundations.
+  FreeFlow Core read-only monitoring foundations.
 - `config/freeflow-servers.json` and `config/monitored-servers.json`: Xerox
   primary/secondary inventory without credentials.
 - `backend/tests/`: provider routing, workflow gates, malformed-response handling,
@@ -52,7 +52,7 @@ Generated code is not executed in production by this slice.
 
 Do not migrate `.env`, SQLite databases, uploads, generated artifacts, model
 caches, `.venv`, build output, logs, or user preferences through Git. Exact
-FreeFlow URLs, Qualys credentials, and other secrets belong in local ignored
+FreeFlow URLs and other secrets belong in local ignored
 configuration or managed secret storage.
 
 ## Verification
@@ -78,5 +78,4 @@ Verified before push on 2026-08-31:
 - Production scheduler and condition evaluator
 - Live execution events, cancellation, retry, recovery, and notifications
 - Exact FreeFlow portal configuration and health semantics
-- Exact Qualys platform/module/authentication/scope and finding enrichment
 - MOVEit execution-history correlation and remote ServerMonitoring feeds

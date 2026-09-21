@@ -5,7 +5,7 @@ using System.Windows.Threading;
 
 namespace Aegis.Desktop;
 
-public enum MonitorWindowKind { MoveIt, ServerStatus, FreeFlow, Qualys }
+public enum MonitorWindowKind { MoveIt, ServerStatus, FreeFlow }
 
 public partial class MonitorWindow : Window
 {
@@ -19,7 +19,7 @@ public partial class MonitorWindow : Window
     {
         InitializeComponent();
         _kind = kind;
-        _timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(kind is MonitorWindowKind.MoveIt or MonitorWindowKind.Qualys ? 300 : 60) };
+        _timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(kind == MonitorWindowKind.MoveIt ? 300 : 60) };
         _timer.Tick += async (_, _) => await RefreshAsync();
         Loaded += async (_, _) => await RefreshAsync();
         Closed += (_, _) => { _timer.Stop(); _refreshCancellation?.Cancel(); };
@@ -28,12 +28,11 @@ public partial class MonitorWindow : Window
 
     private void ConfigureView()
     {
-        WindowTitleText.Text = _kind switch { MonitorWindowKind.MoveIt => "MOVEIT AUTOMATION", MonitorWindowKind.ServerStatus => "SERVER STATUS", MonitorWindowKind.FreeFlow => "XEROX FREEFLOW CORE", _ => "QUALYS VULNERABILITIES" };
-        WindowSubtitleText.Text = _kind switch { MonitorWindowKind.MoveIt => "LIVE TASK CATALOG / FIVE MINUTE MONITOR", MonitorWindowKind.ServerStatus => "STARTER SERVER INVENTORY / RESOURCE AND SERVICE MONITOR", MonitorWindowKind.FreeFlow => "READ-ONLY JMF / PRIMARY AND BACKUP DISCOVERY", _ => "URGENT AND CRITICAL FINDINGS FIRST" };
+        WindowTitleText.Text = _kind switch { MonitorWindowKind.MoveIt => "MOVEIT AUTOMATION", MonitorWindowKind.ServerStatus => "SERVER STATUS", _ => "XEROX FREEFLOW CORE" };
+        WindowSubtitleText.Text = _kind switch { MonitorWindowKind.MoveIt => "LIVE TASK CATALOG / FIVE MINUTE MONITOR", MonitorWindowKind.ServerStatus => "STARTER SERVER INVENTORY / RESOURCE AND SERVICE MONITOR", _ => "READ-ONLY JMF / PRIMARY AND BACKUP DISCOVERY" };
         MoveItView.Visibility = _kind == MonitorWindowKind.MoveIt ? Visibility.Visible : Visibility.Collapsed;
         ServerView.Visibility = _kind == MonitorWindowKind.ServerStatus ? Visibility.Visible : Visibility.Collapsed;
         FreeFlowView.Visibility = _kind == MonitorWindowKind.FreeFlow ? Visibility.Visible : Visibility.Collapsed;
-        QualysView.Visibility = _kind == MonitorWindowKind.Qualys ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private async Task RefreshAsync()
@@ -56,7 +55,7 @@ public partial class MonitorWindow : Window
             else
             {
                 var dashboard = await dashboardTask;
-                switch (_kind) { case MonitorWindowKind.MoveIt: UpdateMoveIt(dashboard); break; case MonitorWindowKind.ServerStatus: UpdateServer(dashboard); break; case MonitorWindowKind.Qualys: UpdateQualys(dashboard); break; }
+                switch (_kind) { case MonitorWindowKind.MoveIt: UpdateMoveIt(dashboard); break; case MonitorWindowKind.ServerStatus: UpdateServer(dashboard); break; }
             }
             ConnectionText.Text = "CONNECTED";
             ConnectionText.Foreground = (TryFindResource("GreenBrush") as Brush) ?? Brushes.Green;
@@ -124,12 +123,6 @@ public partial class MonitorWindow : Window
         FreeFlowQueueCountText.Text = queueRows.Count.ToString();
         FreeFlowPrinterCountText.Text = printerRows.Count.ToString();
         FreeFlowJobsList.ItemsSource = jobRows;
-    }
-
-    private void UpdateQualys(MonitoringDashboard dashboard)
-    {
-        DetailText.Text = $"{dashboard.Qualys.Detail} Urgent: {dashboard.Qualys.UrgentCount} · Critical: {dashboard.Qualys.CriticalCount} · Serious: {dashboard.Qualys.SeriousCount}";
-        QualysFindingsList.ItemsSource = dashboard.Qualys.Findings;
     }
 
     private async void RefreshButton_Click(object sender, RoutedEventArgs e) => await RefreshAsync();

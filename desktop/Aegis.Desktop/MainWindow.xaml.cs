@@ -934,7 +934,6 @@ public partial class MainWindow : Window
 
     private void OpenMoveItWindow_Click(object sender, RoutedEventArgs e) => OpenMonitorWindow("MoveIT Automation");
     private void OpenFreeFlowWindow_Click(object sender, RoutedEventArgs e) => OpenMonitorWindow("Xerox FreeFlow Core");
-    private void OpenQualysWindow_Click(object sender, RoutedEventArgs e) => OpenMonitorWindow("Qualys Vulnerabilities");
     private void OpenServerWindow_Click(object sender, RoutedEventArgs e) => OpenMonitorWindow("Server Status");
 
     private void OpenOperationsMonitoringCenter_Click(object sender, RoutedEventArgs e)
@@ -944,7 +943,6 @@ public partial class MainWindow : Window
         {
             MonitorWindowKind.MoveIt => "MoveIT Automation",
             MonitorWindowKind.FreeFlow => "Xerox FreeFlow Core",
-            MonitorWindowKind.Qualys => "Qualys Vulnerabilities",
             _ => "Server Status"
         });
         window.OpenWorkflowRequested += (_, workflowId) => new WorkflowWindow(workflowId) { Owner = this }.Show();
@@ -955,7 +953,7 @@ public partial class MainWindow : Window
 
     private void OpenMonitorWindow(string title)
     {
-        var kind = title switch { "MoveIT Automation" => MonitorWindowKind.MoveIt, "Xerox FreeFlow Core" => MonitorWindowKind.FreeFlow, "Qualys Vulnerabilities" => MonitorWindowKind.Qualys, _ => MonitorWindowKind.ServerStatus };
+        var kind = title switch { "MoveIT Automation" => MonitorWindowKind.MoveIt, "Xerox FreeFlow Core" => MonitorWindowKind.FreeFlow, _ => MonitorWindowKind.ServerStatus };
         var window = new MonitorWindow(kind) { Owner = this };
         window.Show();
     }

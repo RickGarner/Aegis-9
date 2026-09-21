@@ -615,7 +615,6 @@ public sealed class MonitoringDashboard
     [JsonPropertyName("moveit")] public MoveItMonitor MoveIt { get; set; } = new();
     [JsonPropertyName("server")] public ServerMonitor Server { get; set; } = new();
     [JsonPropertyName("freeflow")] public FreeFlowMonitor FreeFlow { get; set; } = new();
-    [JsonPropertyName("qualys")] public QualysMonitor Qualys { get; set; } = new();
     [JsonPropertyName("alerts")] public List<MonitoringAlert> Alerts { get; set; } = [];
 }
 
@@ -723,28 +722,6 @@ public sealed class FreeFlowJobRow
     public string SubmissionTime { get; set; } = string.Empty;
     public string StartTime { get; set; } = string.Empty;
     public string EndTime { get; set; } = string.Empty;
-}
-
-public sealed class QualysMonitor
-{
-    public string Status { get; set; } = "unavailable";
-    public string Detail { get; set; } = string.Empty;
-    [JsonPropertyName("urgent_count")] public int UrgentCount { get; set; }
-    [JsonPropertyName("critical_count")] public int CriticalCount { get; set; }
-    [JsonPropertyName("serious_count")] public int SeriousCount { get; set; }
-    public List<QualysFinding> Findings { get; set; } = [];
-}
-
-public sealed class QualysFinding
-{
-    public string Qid { get; set; } = string.Empty;
-    public string Asset { get; set; } = string.Empty;
-    public int Severity { get; set; }
-    [JsonPropertyName("severity_label")] public string SeverityLabel { get; set; } = string.Empty;
-    public string Status { get; set; } = string.Empty;
-    public string Title { get; set; } = string.Empty;
-    [JsonPropertyName("first_found_at")] public string? FirstFoundAt { get; set; }
-    [JsonPropertyName("last_found_at")] public string? LastFoundAt { get; set; }
 }
 
 public sealed class MoveItMonitor

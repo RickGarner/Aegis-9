@@ -75,11 +75,6 @@
         </Border>
        </Grid>
       </ScrollViewer>
-      <Grid x:Name="QualysView" Visibility="Collapsed">
-        <Border Background="{StaticResource Panel}" BorderBrush="{StaticResource Line}" BorderThickness="1" Padding="12"><ListView x:Name="QualysFindingsList"><ListView.View><GridView>
-          <GridViewColumn Header="Priority" DisplayMemberBinding="{Binding SeverityLabel}" Width="100"/><GridViewColumn Header="Severity" DisplayMemberBinding="{Binding Severity}" Width="80"/><GridViewColumn Header="Asset" DisplayMemberBinding="{Binding Asset}" Width="220"/><GridViewColumn Header="QID" DisplayMemberBinding="{Binding Qid}" Width="90"/><GridViewColumn Header="Status" DisplayMemberBinding="{Binding Status}" Width="110"/><GridViewColumn Header="First found" DisplayMemberBinding="{Binding FirstFoundAt}" Width="180"/><GridViewColumn Header="Last found" DisplayMemberBinding="{Binding LastFoundAt}" Width="180"/><GridViewColumn Header="Title" DisplayMemberBinding="{Binding Title}" Width="350"/>
-        </GridView></ListView.View></ListView></Border>
-      </Grid>
     </Grid>
     <StatusBar Grid.Row="3" Background="Transparent" Foreground="{StaticResource Muted}" Margin="0,14,0,0"><StatusBarItem><TextBlock Text="Actions and email controls remain approval/configuration gated."/></StatusBarItem><StatusBarItem HorizontalContentAlignment="Right"><TextBlock Text="Movable · resizable · scrollable" Foreground="{StaticResource Green}"/></StatusBarItem></StatusBar>
   </Grid>

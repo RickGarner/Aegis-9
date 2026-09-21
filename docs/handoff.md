@@ -74,7 +74,7 @@ Current next work, in order:
 3. Authenticated roles, protected credentials, tamper-evident audit, workflow-artifact signing, grounding, and emergency-stop completion.
 4. Immutable A.E.G.I.S.–Developer Studio workflow-job/evidence exchange.
 5. Workflow isolation, scheduler/notification/recovery, and clean-machine packaging.
-6. Onsite MOVEit/FreeFlow/Qualys/server acceptance when internal access is available.
+6. Onsite MOVEit/FreeFlow/server acceptance when internal access is available.
 7. Operations catalog/incidents and managed knowledge/document/research increments.
 
 The 2026-09-07 semantic index, review history, SBOM/offline scan, and migration
@@ -594,7 +594,7 @@ Validation on this machine: live A.E.G.I.S.-9 discovery selected local DMR `dock
 
 A.E.G.I.S.-9 will add a separate movable, resizable, expandable Operations
 Monitoring Center as its one-stop monitoring space. It will aggregate MoveIT,
-Windows servers, FreeFlow, Qualys, workflows/schedules, A.E.G.I.S. runtime
+Windows servers, FreeFlow, workflows/schedules, A.E.G.I.S. runtime
 health, collector health, and authenticated Developer Studio status. Existing
 specialized windows remain authoritative for detail and platform-specific
 actions. Read `docs/OPERATIONS-MONITORING-CENTER-PLAN.md` before implementing it.
@@ -666,8 +666,8 @@ that branch and `main` remain unchanged recovery points.
 
 Completed today:
 
-- Added read-only Xerox FreeFlow Core and Qualys Operations windows and backend
-  collectors. FreeFlow registers `BSOXERALB001` primary and `BSOXERALB002`
+- Added a read-only Xerox FreeFlow Core Operations window and backend collector.
+  FreeFlow registers `BSOXERALB001` primary and `BSOXERALB002`
   secondary; exact portal details remain intentionally unconfigured.
 - Rebuilt Workflow Center with recent activity, awaiting-action queue, and
   create/edit/review/delete/approval/schedule surfaces.

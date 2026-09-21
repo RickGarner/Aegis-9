@@ -20,6 +20,7 @@ import httpx
 from pydantic import BaseModel, Field
 
 from app.config import Settings
+from app.credential_broker import resolve_credential
 from app.security_control import SecurityControlError, SecurityControlPolicy
 
 
@@ -120,27 +121,6 @@ class FreeFlowMonitor(BaseModel):
     servers: list[FreeFlowServer] = Field(default_factory=list)
 
 
-class QualysFinding(BaseModel):
-    qid: str
-    asset: str
-    severity: int
-    severity_label: str
-    status: str
-    title: str = ""
-    first_found_at: str | None = None
-    last_found_at: str | None = None
-
-
-class QualysMonitor(BaseModel):
-    status: MonitorStatus
-    last_checked_at: str
-    detail: str
-    urgent_count: int = 0
-    critical_count: int = 0
-    serious_count: int = 0
-    findings: list[QualysFinding] = Field(default_factory=list)
-
-
 class DeveloperStudioMonitor(BaseModel):
     status: MonitorStatus
     last_checked_at: str
@@ -177,13 +157,12 @@ class MonitoringDashboard(BaseModel):
     moveit: MoveItMonitor
     server: ServerMonitor
     freeflow: FreeFlowMonitor
-    qualys: QualysMonitor
     developer_studio: DeveloperStudioMonitor | None = None
     alerts: list[MonitoringAlert] = Field(default_factory=list)
 
 
 class MonitoringActionRequest(BaseModel):
-    source: Literal["moveit", "server", "freeflow", "qualys"]
+    source: Literal["moveit", "server", "freeflow"]
     issue: str = Field(min_length=1, max_length=120)
 
 
@@ -199,8 +178,9 @@ class MoveItAdapter:
 
     def __init__(self, settings: Settings) -> None:
         self._servers = [server.strip() for server in settings.moveit_servers.split(",") if server.strip()]
-        self._username = settings.moveit_username
-        self._password = settings.moveit_password
+        credential = resolve_credential(settings.moveit_credential_target, settings.moveit_username, settings.moveit_password)
+        self._username = credential.username if credential else None
+        self._password = credential.password if credential else None
         self._verify_tls = settings.moveit_verify_tls
         self._log_root = settings.moveit_log_root
         self._history_days = settings.moveit_history_days
@@ -212,7 +192,7 @@ class MoveItAdapter:
                 status="unavailable",
                 adapter="moveit-rest",
                 last_checked_at=checked_at,
-                detail="MoveIT credentials are not configured. Set JARVIS_MOVEIT_USERNAME and JARVIS_MOVEIT_PASSWORD.",
+                detail="MoveIT read-only credentials are not configured in protected storage.",
             )
         if not self._servers:
             return MoveItMonitor(status="unavailable", adapter="moveit-rest", last_checked_at=checked_at, detail="No MoveIT servers are configured.")
@@ -608,45 +588,6 @@ class FreeFlowAdapter:
         return FreeFlowMonitor(status=overall, last_checked_at=checked_at, detail=detail, servers=servers)
 
 
-class QualysAdapter:
-    SEVERITY_LABELS = {5: "Urgent", 4: "Critical", 3: "Serious", 2: "Medium", 1: "Minimal"}
-
-    def __init__(self, settings: Settings) -> None:
-        self._base_url = (settings.qualys_base_url or "").rstrip("/")
-        self._username = settings.qualys_username
-        self._password = settings.qualys_password
-        self._verify_tls = settings.qualys_verify_tls
-        self._minimum_severity = settings.qualys_minimum_severity
-        self._limit = settings.qualys_max_findings
-
-    def collect(self, checked_at: str) -> QualysMonitor:
-        if not self._base_url or not self._username or not self._password:
-            return QualysMonitor(status="unavailable", last_checked_at=checked_at, detail="Qualys platform URL and read-only API credentials are awaiting configuration.")
-        try:
-            response = httpx.get(
-                f"{self._base_url}/api/2.0/fo/asset/host/vm/detection/",
-                params={"action": "list", "status": "New,Active,Re-Opened", "severities": ",".join(str(value) for value in range(self._minimum_severity, 6)), "truncation_limit": self._limit},
-                headers={"X-Requested-With": "A.E.G.I.S.-9"}, auth=(self._username, self._password), timeout=60, verify=self._verify_tls,
-            )
-            response.raise_for_status()
-            root = ET.fromstring(response.text)
-            findings: list[QualysFinding] = []
-            for host in root.findall(".//HOST"):
-                asset = host.findtext("DNS") or host.findtext("IP") or host.findtext("ID") or "Unknown asset"
-                for detection in host.findall(".//DETECTION"):
-                    severity = int(detection.findtext("SEVERITY") or 0)
-                    if severity < self._minimum_severity:
-                        continue
-                    findings.append(QualysFinding(qid=detection.findtext("QID") or "", asset=asset, severity=severity, severity_label=self.SEVERITY_LABELS.get(severity, str(severity)), status=detection.findtext("STATUS") or "Unknown", first_found_at=detection.findtext("FIRST_FOUND_DATETIME"), last_found_at=detection.findtext("LAST_FOUND_DATETIME")))
-            findings.sort(key=lambda finding: (-finding.severity, finding.asset, finding.qid))
-            urgent = sum(finding.severity == 5 for finding in findings)
-            critical = sum(finding.severity == 4 for finding in findings)
-            serious = sum(finding.severity == 3 for finding in findings)
-            return QualysMonitor(status="error" if urgent else "warning" if critical or serious else "healthy", last_checked_at=checked_at, detail=f"{len(findings)} active prioritized Qualys finding(s) returned.", urgent_count=urgent, critical_count=critical, serious_count=serious, findings=findings)
-        except (httpx.HTTPError, ET.ParseError, ValueError) as error:
-            return QualysMonitor(status="unavailable", last_checked_at=checked_at, detail=f"Qualys monitoring request failed: {error}")
-
-
 class DeveloperStudioBridgeAdapter:
     PATH = "/aegis/bridge/v1/status"
 
@@ -706,7 +647,6 @@ class MonitoringCollector:
         self.moveit = MoveItAdapter(settings)
         self.server = LocalServerAdapter(settings)
         self.freeflow = FreeFlowAdapter(settings)
-        self.qualys = QualysAdapter(settings)
         self.developer_studio = DeveloperStudioBridgeAdapter(settings)
         self.settings = settings
 
@@ -717,7 +657,6 @@ class MonitoringCollector:
         moveit = self.moveit.collect(checked_at)
         server = self.server.collect(checked_at, audit_events)
         freeflow = self.freeflow.collect(checked_at)
-        qualys = self.qualys.collect(checked_at)
         developer_studio = self.developer_studio.collect(checked_at)
         server.servers = self._server_inventory(server)
         snapshot_id = self.store.save_snapshot(moveit, server, checked_at)
@@ -736,14 +675,11 @@ class MonitoringCollector:
                 )
         for endpoint in freeflow.servers:
             self.store.ensure_alert(source="freeflow", severity="error", title=f"FreeFlow portal unavailable: {endpoint.name}", detail=endpoint.detail, active=bool(endpoint.web_url) and endpoint.status == "error")
-        self.store.ensure_alert(source="qualys", severity="error", title="Urgent Qualys vulnerabilities detected", detail=qualys.detail, active=qualys.urgent_count > 0)
-        self.store.ensure_alert(source="qualys", severity="warning", title="Critical Qualys vulnerabilities detected", detail=qualys.detail, active=qualys.critical_count > 0)
         return MonitoringDashboard(
             generated_at=checked_at,
             moveit=moveit,
             server=server,
             freeflow=freeflow,
-            qualys=qualys,
             developer_studio=developer_studio,
             alerts=self.store.get_alerts(),
         )
@@ -757,6 +693,13 @@ class MonitoringCollector:
         try:
             smtp = smtplib.SMTP_SSL(self.settings.alert_smtp_server, self.settings.alert_smtp_port, timeout=10) if self.settings.alert_email_ssl else smtplib.SMTP(self.settings.alert_smtp_server, self.settings.alert_smtp_port, timeout=10)
             with smtp:
+                credential = resolve_credential(
+                    self.settings.alert_smtp_credential_target,
+                    self.settings.alert_smtp_username,
+                    self.settings.alert_smtp_password,
+                )
+                if credential:
+                    smtp.login(credential.username, credential.password)
                 smtp.send_message(message)
         except OSError:
             self.store.ensure_alert(source="server", severity="error", title="Alert email delivery failed", detail="The SMTP relay could not accept the monitoring alert.", active=True)
