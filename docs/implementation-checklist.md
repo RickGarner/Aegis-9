@@ -254,7 +254,9 @@ configuration-blocked, or live-acceptance work. Cross-product items are labeled
   enforce Supervisor/PlatformAdministrator on workflow production approval.
 - [x] Bootstrap temporary full access through the exact domain group
   `BSOC\BSOC - G - Architecture` mapped to `PlatformAdministrator`.
-- [ ] Enforce the role service across every remaining privileged API, add
+- [x] Enforce decision-specific backend roles across monitoring and workflow
+  read, design, approval, execution, acknowledgement, and configuration APIs.
+- [ ] Enforce the role service across remaining privileged non-workflow APIs, add
   governed role-policy administration, replace the temporary Architecture
   mapping with least-privilege groups, and accept production group mappings.
 - [ ] Administrative UI/API for authorized security-policy changes and kill-switch status.

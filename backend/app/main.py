@@ -338,6 +338,35 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="A.E.G.I.S.-9 API", version="0.1.0", lifespan=lifespan)
 
 
+def require_capability(capability: str):
+    def dependency(settings: Settings = Depends(get_settings)) -> frozenset[str]:
+        try:
+            return RoleAuthorizer(settings.role_mapping_path).require(capability)
+        except AuthorizationError as error:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(error)) from error
+
+    dependency.__name__ = f"require_{capability.replace('.', '_').replace('-', '_')}"
+    dependency.required_capability = capability
+    return dependency
+
+
+def require_workflow_review_capability(
+    request: WorkflowReviewRequest,
+    settings: Settings = Depends(get_settings),
+) -> frozenset[str]:
+    capability = (
+        "workflow.supervisor-approve"
+        if request.decision == "supervisor_approve"
+        else "workflow.design"
+        if request.decision == "submit_for_test"
+        else "workflow.approve"
+    )
+    try:
+        return RoleAuthorizer(settings.role_mapping_path).require(capability)
+    except AuthorizationError as error:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(error)) from error
+
+
 def get_provider(settings: Settings = Depends(get_settings)) -> OpenAICompatibleProvider:
     return OpenAICompatibleProvider(settings)
 
@@ -483,7 +512,7 @@ def _bounded_test_lab_files(files: dict[str, str]) -> dict[str, str]:
     return files
 
 
-@app.post("/api/test-lab/plan")
+@app.post("/api/test-lab/plan", dependencies=[Depends(require_capability("workflow.design"))])
 async def create_test_lab_plan(request: TestLabPlanRequest, provider: OpenAICompatibleProvider = Depends(get_provider)) -> dict:
     files = _bounded_test_lab_files(request.files)
     ai_cases: list[dict] = []
@@ -510,7 +539,7 @@ async def create_test_lab_plan(request: TestLabPlanRequest, provider: OpenAIComp
     return plan
 
 
-@app.post("/api/test-lab/package", status_code=status.HTTP_201_CREATED)
+@app.post("/api/test-lab/package", status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_capability("workflow.design"))])
 async def create_approved_test_lab_package(request: TestLabPackageRequest, settings: Settings = Depends(get_settings)) -> dict:
     if not request.approved:
         raise HTTPException(status_code=409, detail="Explicit user approval of the displayed Test Lab plan is required.")
@@ -574,72 +603,72 @@ async def transcribe_speech(
     )
 
 
-@app.get("/api/monitoring", response_model=MonitoringDashboard)
+@app.get("/api/monitoring", response_model=MonitoringDashboard, dependencies=[Depends(require_capability("monitoring.read"))])
 async def monitoring_dashboard(
     monitoring: MonitoringCollector = Depends(get_monitoring),
 ) -> MonitoringDashboard:
     return monitoring.collect()
 
 
-@app.get("/api/monitoring/moveit-ha", response_model=HaStatus)
+@app.get("/api/monitoring/moveit-ha", response_model=HaStatus, dependencies=[Depends(require_capability("monitoring.read"))])
 async def moveit_ha_status() -> HaStatus:
     """Return fail-closed HA readiness until the live, version-specific adapter is bound."""
     return app.state.moveit_ha.status()
 
 
-@app.get("/api/integrations/freeflow/devices", response_model=FreeFlowJmfDiscovery)
+@app.get("/api/integrations/freeflow/devices", response_model=FreeFlowJmfDiscovery, dependencies=[Depends(require_capability("monitoring.read"))])
 async def freeflow_known_devices(service: FreeFlowJmfService = Depends(get_freeflow_jmf)) -> FreeFlowJmfDiscovery:
     """Run the vendor-documented, read-only JMF KnownDevices discovery query."""
     return await asyncio.to_thread(service.discover)
 
 
-@app.get("/api/integrations/freeflow/status", response_model=FreeFlowJmfStatus)
+@app.get("/api/integrations/freeflow/status", response_model=FreeFlowJmfStatus, dependencies=[Depends(require_capability("monitoring.read"))])
 async def freeflow_status(service: FreeFlowJmfService = Depends(get_freeflow_jmf)) -> FreeFlowJmfStatus:
     return await asyncio.to_thread(service.status)
 
 
-@app.get("/api/integrations/freeflow/workflows", response_model=FreeFlowJmfDiscovery)
+@app.get("/api/integrations/freeflow/workflows", response_model=FreeFlowJmfDiscovery, dependencies=[Depends(require_capability("monitoring.read"))])
 async def freeflow_workflows(service: FreeFlowJmfService = Depends(get_freeflow_jmf)) -> FreeFlowJmfDiscovery:
     return await asyncio.to_thread(service.filtered, "workflow")
 
 
-@app.get("/api/integrations/freeflow/queues", response_model=FreeFlowJmfDiscovery)
+@app.get("/api/integrations/freeflow/queues", response_model=FreeFlowJmfDiscovery, dependencies=[Depends(require_capability("monitoring.read"))])
 async def freeflow_queues(service: FreeFlowJmfService = Depends(get_freeflow_jmf)) -> FreeFlowJmfDiscovery:
     return await asyncio.to_thread(service.filtered, "queue")
 
 
-@app.get("/api/integrations/freeflow/capabilities", response_model=FreeFlowJmfCapabilities)
+@app.get("/api/integrations/freeflow/capabilities", response_model=FreeFlowJmfCapabilities, dependencies=[Depends(require_capability("monitoring.read"))])
 async def freeflow_capabilities() -> FreeFlowJmfCapabilities:
     return FreeFlowJmfCapabilities()
 
 
-@app.get("/api/integrations/freeflow/jobs", response_model=FreeFlowJmfJobs)
+@app.get("/api/integrations/freeflow/jobs", response_model=FreeFlowJmfJobs, dependencies=[Depends(require_capability("monitoring.read"))])
 async def freeflow_jobs(service: FreeFlowJmfService = Depends(get_freeflow_jmf)) -> FreeFlowJmfJobs:
     return await asyncio.to_thread(service.jobs)
 
 
-@app.get("/api/operations/monitoring", response_model=OperationsMonitoringSnapshot)
+@app.get("/api/operations/monitoring", response_model=OperationsMonitoringSnapshot, dependencies=[Depends(require_capability("monitoring.read"))])
 async def operations_monitoring_snapshot(
     monitoring: MonitoringCollector = Depends(get_monitoring),
 ) -> OperationsMonitoringSnapshot:
     return collect_operations_snapshot(monitoring)
 
 
-@app.get("/api/operations/summary", response_model=OperationsSummary)
+@app.get("/api/operations/summary", response_model=OperationsSummary, dependencies=[Depends(require_capability("monitoring.read"))])
 async def operations_monitoring_summary(
     monitoring: MonitoringCollector = Depends(get_monitoring),
 ) -> OperationsSummary:
     return collect_operations_snapshot(monitoring).summary
 
 
-@app.get("/api/operations/collectors", response_model=list[MonitorDescriptor])
+@app.get("/api/operations/collectors", response_model=list[MonitorDescriptor], dependencies=[Depends(require_capability("monitoring.read"))])
 async def operations_monitoring_collectors(
     monitoring: MonitoringCollector = Depends(get_monitoring),
 ) -> list[MonitorDescriptor]:
     return collect_operations_snapshot(monitoring).monitors
 
 
-@app.post("/api/monitoring/actions", response_model=MonitoringActionResult, status_code=status.HTTP_202_ACCEPTED)
+@app.post("/api/monitoring/actions", response_model=MonitoringActionResult, status_code=status.HTTP_202_ACCEPTED, dependencies=[Depends(require_capability("monitoring.configure"))])
 async def monitoring_action(request: MonitoringActionRequest) -> MonitoringActionResult:
     return MonitoringActionResult(
         status="not_configured",
@@ -649,7 +678,7 @@ async def monitoring_action(request: MonitoringActionRequest) -> MonitoringActio
     )
 
 
-@app.post("/api/monitoring/alerts/{alert_id}/resolve", response_model=MonitoringDashboard)
+@app.post("/api/monitoring/alerts/{alert_id}/resolve", response_model=MonitoringDashboard, dependencies=[Depends(require_capability("monitoring.acknowledge"))])
 async def resolve_monitoring_alert(
     alert_id: int,
     monitoring: MonitoringCollector = Depends(get_monitoring),
@@ -659,7 +688,7 @@ async def resolve_monitoring_alert(
     return monitoring.collect()
 
 
-@app.post("/api/files/upload", response_model=FileEntry, status_code=status.HTTP_201_CREATED)
+@app.post("/api/files/upload", response_model=FileEntry, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_capability("workflow.design"))])
 async def upload_file(
     file: UploadFile = File(...),
     settings: Settings = Depends(get_settings),
@@ -697,7 +726,7 @@ async def upload_file(
     )
 
 
-@app.get("/api/files/{file_id}/content")
+@app.get("/api/files/{file_id}/content", dependencies=[Depends(require_capability("workflow.read"))])
 async def file_content(
     file_id: int,
     store: JarvisStore = Depends(get_store),
@@ -708,7 +737,7 @@ async def file_content(
     return {"content": content}
 
 
-@app.delete("/api/files/{file_id}", status_code=status.HTTP_204_NO_CONTENT)
+@app.delete("/api/files/{file_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(require_capability("workflow.design"))])
 async def delete_file(
     file_id: int,
     settings: Settings = Depends(get_settings),
@@ -724,7 +753,7 @@ async def delete_file(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="File metadata was removed but stored content could not be deleted.") from error
 
 
-@app.post("/api/approvals", response_model=ApprovalState)
+@app.post("/api/approvals", response_model=ApprovalState, dependencies=[Depends(require_capability("workflow.approve"))])
 async def update_approval(
     request: ApprovalRequest,
     store: JarvisStore = Depends(get_store),
@@ -732,19 +761,19 @@ async def update_approval(
     return store.set_approval(request.decision)
 
 
-@app.get("/api/workflows/capacity", response_model=WorkflowCapacity)
+@app.get("/api/workflows/capacity", response_model=WorkflowCapacity, dependencies=[Depends(require_capability("workflow.read"))])
 async def workflow_capacity(
     capacity: WorkflowCapacity = Depends(get_workflow_capacity_from_settings),
 ) -> WorkflowCapacity:
     return capacity
 
 
-@app.get("/api/workflows", response_model=list[Workflow])
+@app.get("/api/workflows", response_model=list[Workflow], dependencies=[Depends(require_capability("workflow.read"))])
 async def workflows(store: JarvisStore = Depends(get_store)) -> list[Workflow]:
     return store.get_workflows()
 
 
-@app.get("/api/workflows/{workflow_id}", response_model=Workflow)
+@app.get("/api/workflows/{workflow_id}", response_model=Workflow, dependencies=[Depends(require_capability("workflow.read"))])
 async def workflow(workflow_id: int, store: JarvisStore = Depends(get_store)) -> Workflow:
     result = store.get_workflow(workflow_id)
     if result is None:
@@ -752,7 +781,7 @@ async def workflow(workflow_id: int, store: JarvisStore = Depends(get_store)) ->
     return result
 
 
-@app.get("/api/workflows/{workflow_id}/export")
+@app.get("/api/workflows/{workflow_id}/export", dependencies=[Depends(require_capability("workflow.read"))])
 async def export_workflow(workflow_id: int, store: JarvisStore = Depends(get_store)) -> Response:
     package = store.export_workflow(workflow_id)
     if package is None:
@@ -765,7 +794,7 @@ async def export_workflow(workflow_id: int, store: JarvisStore = Depends(get_sto
     )
 
 
-@app.post("/api/workflows/import", response_model=WorkflowImportResult)
+@app.post("/api/workflows/import", response_model=WorkflowImportResult, dependencies=[Depends(require_capability("workflow.design"))])
 async def import_workflow(
     file: UploadFile = File(...),
     settings: Settings = Depends(get_settings),
@@ -783,7 +812,7 @@ async def import_workflow(
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"Invalid workflow package: {error}") from error
 
 
-@app.get("/api/workflows/placements", response_model=list[WorkflowWindowPlacement])
+@app.get("/api/workflows/placements", response_model=list[WorkflowWindowPlacement], dependencies=[Depends(require_capability("workflow.read"))])
 async def workflow_placements(
     store: JarvisStore = Depends(get_store),
     capacity: WorkflowCapacity = Depends(get_workflow_capacity_from_settings),
@@ -801,7 +830,7 @@ async def workflow_placements(
     ]
 
 
-@app.post("/api/workflows/reconcile-topology", response_model=TopologyReconciliation)
+@app.post("/api/workflows/reconcile-topology", response_model=TopologyReconciliation, dependencies=[Depends(require_capability("workflow.execute"))])
 async def reconcile_workflow_topology(
     store: JarvisStore = Depends(get_store),
     capacity: WorkflowCapacity = Depends(get_workflow_capacity_from_settings),
@@ -817,7 +846,7 @@ async def reconcile_workflow_topology(
     )
 
 
-@app.post("/api/workflows", response_model=Workflow, status_code=status.HTTP_201_CREATED)
+@app.post("/api/workflows", response_model=Workflow, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_capability("workflow.design"))])
 async def create_workflow(
     request: WorkflowRequest,
     store: JarvisStore = Depends(get_store),
@@ -825,7 +854,7 @@ async def create_workflow(
     return document_workflow(store.create_workflow(request.title, request.description, request.attachment_ids, request.language), "workflow-created")
 
 
-@app.put("/api/workflows/{workflow_id}", response_model=Workflow)
+@app.put("/api/workflows/{workflow_id}", response_model=Workflow, dependencies=[Depends(require_capability("workflow.design"))])
 async def update_workflow(workflow_id: int, request: WorkflowRequest, store: JarvisStore = Depends(get_store)) -> Workflow:
     result = store.update_workflow(workflow_id, request.title, request.description, request.attachment_ids, request.language)
     if result is None:
@@ -833,7 +862,7 @@ async def update_workflow(workflow_id: int, request: WorkflowRequest, store: Jar
     return document_workflow(result, "workflow-revised", "Prior downstream approvals were invalidated.")
 
 
-@app.post("/api/workflows/{workflow_id}/review", response_model=Workflow)
+@app.post("/api/workflows/{workflow_id}/review", response_model=Workflow, dependencies=[Depends(require_workflow_review_capability)])
 async def review_workflow(
     workflow_id: int,
     request: WorkflowReviewRequest,
@@ -866,7 +895,7 @@ async def review_workflow(
     return document_workflow(result, f"review-{request.decision}")
 
 
-@app.post("/api/workflows/{workflow_id}/run-test", response_model=WorkflowTestResult)
+@app.post("/api/workflows/{workflow_id}/run-test", response_model=WorkflowTestResult, dependencies=[Depends(require_capability("workflow.design"))])
 async def run_workflow_test(
     workflow_id: int,
     request: WorkflowTestRequest,
@@ -896,7 +925,7 @@ async def run_workflow_test(
     return WorkflowTestResult(workflow=updated, evidence=evidence)
 
 
-@app.post("/api/workflows/{workflow_id}/design-plan", response_model=Workflow)
+@app.post("/api/workflows/{workflow_id}/design-plan", response_model=Workflow, dependencies=[Depends(require_capability("workflow.design"))])
 async def design_workflow_plan(
     workflow_id: int,
     provider: OpenAICompatibleProvider = Depends(get_provider),
@@ -949,7 +978,7 @@ async def _generate_workflow_plan(
     return document_workflow(result, "workflow-plan-generated", "Final plan ready for approval." if finalizing and not questions else "Plan requires review.")
 
 
-@app.put("/api/workflows/{workflow_id}/clarifications/{question_id}", response_model=Workflow)
+@app.put("/api/workflows/{workflow_id}/clarifications/{question_id}", response_model=Workflow, dependencies=[Depends(require_capability("workflow.design"))])
 async def answer_one_workflow_clarification(
     workflow_id: int,
     question_id: str,
@@ -962,7 +991,7 @@ async def answer_one_workflow_clarification(
     return document_workflow(result, "clarification-answer-submitted", f"Question {question_id} answered; answer content omitted from process log.")
 
 
-@app.post("/api/workflows/{workflow_id}/complete-design-review", response_model=Workflow)
+@app.post("/api/workflows/{workflow_id}/complete-design-review", response_model=Workflow, dependencies=[Depends(require_capability("workflow.design"))])
 async def complete_workflow_design_review(
     workflow_id: int,
     provider: OpenAICompatibleProvider = Depends(get_provider),
@@ -974,7 +1003,7 @@ async def complete_workflow_design_review(
     return await _generate_workflow_plan(workflow_id, provider, store, settings, finalizing=True)
 
 
-@app.post("/api/workflows/{workflow_id}/generate-implementation", response_model=Workflow)
+@app.post("/api/workflows/{workflow_id}/generate-implementation", response_model=Workflow, dependencies=[Depends(require_capability("workflow.design"))])
 async def generate_workflow_implementation(
     workflow_id: int,
     provider: OpenAICompatibleProvider = Depends(get_provider),
@@ -1021,7 +1050,7 @@ async def generate_workflow_implementation(
     return document_workflow(result, "workflow-implementation-generated", "Implementation content omitted from process log.")
 
 
-@app.post("/api/workflows/{workflow_id}/generate-test-plans", response_model=Workflow)
+@app.post("/api/workflows/{workflow_id}/generate-test-plans", response_model=Workflow, dependencies=[Depends(require_capability("workflow.design"))])
 async def generate_workflow_test_plans(
     workflow_id: int,
     provider: OpenAICompatibleProvider = Depends(get_provider),
@@ -1046,7 +1075,7 @@ async def generate_workflow_test_plans(
     return document_workflow(result, "workflow-test-plans-generated", "Test plans are ready for explicit user approval.")
 
 
-@app.put("/api/workflows/{workflow_id}/schedule", response_model=Workflow)
+@app.put("/api/workflows/{workflow_id}/schedule", response_model=Workflow, dependencies=[Depends(require_capability("workflow.approve"))])
 async def schedule_workflow(workflow_id: int, request: WorkflowScheduleRequest, store: JarvisStore = Depends(get_store)) -> Workflow:
     result = store.set_workflow_schedule(workflow_id, request.model_dump())
     if result is None:
@@ -1054,7 +1083,7 @@ async def schedule_workflow(workflow_id: int, request: WorkflowScheduleRequest, 
     return document_workflow(result, "workflow-schedule-recorded")
 
 
-@app.post("/api/workflows/{workflow_id}/execute", response_model=WorkflowRun, status_code=status.HTTP_202_ACCEPTED)
+@app.post("/api/workflows/{workflow_id}/execute", response_model=WorkflowRun, status_code=status.HTTP_202_ACCEPTED, dependencies=[Depends(require_capability("workflow.execute"))])
 async def execute_workflow(
     workflow_id: int,
     request: WorkflowExecuteRequest,
@@ -1072,14 +1101,14 @@ async def execute_workflow(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(error)) from error
 
 
-@app.get("/api/workflows/{workflow_id}/runs", response_model=list[WorkflowRun])
+@app.get("/api/workflows/{workflow_id}/runs", response_model=list[WorkflowRun], dependencies=[Depends(require_capability("workflow.read"))])
 async def list_workflow_runs(workflow_id: int, store: JarvisStore = Depends(get_store)) -> list[WorkflowRun]:
     if store.get_workflow(workflow_id) is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workflow was not found.")
     return store.get_workflow_runs(workflow_id)
 
 
-@app.get("/api/workflow-runs/{run_id}", response_model=WorkflowRun)
+@app.get("/api/workflow-runs/{run_id}", response_model=WorkflowRun, dependencies=[Depends(require_capability("workflow.read"))])
 async def get_workflow_run(run_id: int, store: JarvisStore = Depends(get_store)) -> WorkflowRun:
     run = store.get_workflow_run(run_id)
     if run is None:
@@ -1087,14 +1116,14 @@ async def get_workflow_run(run_id: int, store: JarvisStore = Depends(get_store))
     return run
 
 
-@app.get("/api/workflow-runs/{run_id}/events", response_model=list[WorkflowRunEvent])
+@app.get("/api/workflow-runs/{run_id}/events", response_model=list[WorkflowRunEvent], dependencies=[Depends(require_capability("workflow.read"))])
 async def list_workflow_run_events(run_id: int, after_sequence: int = 0, store: JarvisStore = Depends(get_store)) -> list[WorkflowRunEvent]:
     if store.get_workflow_run(run_id) is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workflow run was not found.")
     return store.get_workflow_run_events(run_id, after_sequence)
 
 
-@app.get("/api/notifications", response_model=list[NotificationOutboxItem])
+@app.get("/api/notifications", response_model=list[NotificationOutboxItem], dependencies=[Depends(require_capability("workflow.read"))])
 async def notification_history(
     category: str | None = None,
     limit: int = 100,
@@ -1103,7 +1132,7 @@ async def notification_history(
     return store.get_notification_outbox_items(category, limit)
 
 
-@app.post("/api/notifications/{item_id}/retry", response_model=NotificationOutboxItem)
+@app.post("/api/notifications/{item_id}/retry", response_model=NotificationOutboxItem, dependencies=[Depends(require_capability("monitoring.configure"))])
 async def retry_notification(item_id: int, store: JarvisStore = Depends(get_store)) -> NotificationOutboxItem:
     item = store.retry_notification_outbox_item(item_id)
     if item is None:
@@ -1114,7 +1143,7 @@ async def retry_notification(item_id: int, store: JarvisStore = Depends(get_stor
     return item
 
 
-@app.post("/api/workflow-runs/{run_id}/cancel", response_model=WorkflowRun)
+@app.post("/api/workflow-runs/{run_id}/cancel", response_model=WorkflowRun, dependencies=[Depends(require_capability("workflow.execute"))])
 async def cancel_workflow_run(run_id: int, manager: WorkflowExecutionManager = Depends(get_workflow_execution)) -> WorkflowRun:
     run = manager.cancel(run_id)
     if run is None:
@@ -1122,7 +1151,7 @@ async def cancel_workflow_run(run_id: int, manager: WorkflowExecutionManager = D
     return run
 
 
-@app.post("/api/workflow-runs/{run_id}/retry", response_model=WorkflowRun, status_code=status.HTTP_202_ACCEPTED)
+@app.post("/api/workflow-runs/{run_id}/retry", response_model=WorkflowRun, status_code=status.HTTP_202_ACCEPTED, dependencies=[Depends(require_capability("workflow.execute"))])
 async def retry_workflow_run(
     run_id: int,
     store: JarvisStore = Depends(get_store),
@@ -1140,7 +1169,7 @@ async def retry_workflow_run(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(error)) from error
 
 
-@app.delete("/api/workflows/{workflow_id}", response_model=Workflow)
+@app.delete("/api/workflows/{workflow_id}", response_model=Workflow, dependencies=[Depends(require_capability("workflow.design"))])
 async def archive_workflow(workflow_id: int, store: JarvisStore = Depends(get_store)) -> Workflow:
     result = store.archive_workflow(workflow_id)
     if result is None:
@@ -1148,7 +1177,7 @@ async def archive_workflow(workflow_id: int, store: JarvisStore = Depends(get_st
     return document_workflow(result, "workflow-archived")
 
 
-@app.post("/api/workflows/{workflow_id}/approve", response_model=Workflow)
+@app.post("/api/workflows/{workflow_id}/approve", response_model=Workflow, dependencies=[Depends(require_capability("workflow.approve"))])
 async def approve_workflow(
     workflow_id: int,
     store: JarvisStore = Depends(get_store),
@@ -1163,7 +1192,7 @@ async def approve_workflow(
     return document_workflow(workflow, "legacy-workflow-approved")
 
 
-@app.post("/api/workflows/{workflow_id}/actions", response_model=WorkflowTransition)
+@app.post("/api/workflows/{workflow_id}/actions", response_model=WorkflowTransition, dependencies=[Depends(require_capability("workflow.execute"))])
 async def transition_workflow(
     workflow_id: int,
     request: WorkflowActionRequest,

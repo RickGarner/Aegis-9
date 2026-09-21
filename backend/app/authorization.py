@@ -18,10 +18,13 @@ ROLES = frozenset({
 CAPABILITIES = {
     "monitoring.read": {"Operator", "MonitoringAdministrator", "SecurityAuditor", "PlatformAdministrator"},
     "monitoring.configure": {"MonitoringAdministrator", "PlatformAdministrator"},
+    "monitoring.acknowledge": {"Operator", "MonitoringAdministrator", "PlatformAdministrator"},
     "credentials.manage": {"PlatformAdministrator"},
+    "workflow.read": {"Operator", "WorkflowDesigner", "WorkflowApprover", "Supervisor", "SecurityAuditor", "PlatformAdministrator"},
     "workflow.design": {"WorkflowDesigner", "PlatformAdministrator"},
     "workflow.approve": {"WorkflowApprover", "PlatformAdministrator"},
     "workflow.supervisor-approve": {"Supervisor", "PlatformAdministrator"},
+    "workflow.execute": {"Operator", "Supervisor", "PlatformAdministrator"},
     "audit.read": {"SecurityAuditor", "PlatformAdministrator"},
     "security.configure": {"PlatformAdministrator"},
 }

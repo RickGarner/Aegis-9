@@ -1,5 +1,15 @@
 # A.E.G.I.S.-9 Handoff
 
+## Authorization checkpoint — 2026-09-21
+
+- Backend role enforcement now covers monitoring and workflow HTTP APIs, with
+  decision-specific workflow review roles and endpoint-level regression tests.
+- `BSOC\BSOC - G - Architecture` remains the temporary
+  `PlatformAdministrator` bootstrap group and passed live capability resolution
+  for the current operator.
+- Remaining authorization work is limited to privileged non-workflow APIs,
+  governed policy administration, and final least-privilege production groups.
+
 ## Current priority checkpoint — 2026-09-08
 
 Xerox FreeFlow Core API integration is now the active priority. The supplied
