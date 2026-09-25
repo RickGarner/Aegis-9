@@ -84,6 +84,10 @@ public sealed class MonitoringClient
             ?? throw new InvalidOperationException("Provider health API returned an empty response.");
     }
 
+    public async Task<ProviderHealth> GetWorkshopHealthAsync(CancellationToken cancellationToken)
+        => await _httpClient.GetFromJsonAsync<ProviderHealth>("api/workshop/status", JsonOptions, cancellationToken)
+            ?? throw new InvalidOperationException("Workshop health API returned an empty response.");
+
     public async Task<SystemHealth> GetSystemHealthAsync(CancellationToken cancellationToken)
     {
         using var response = await _httpClient.GetAsync("api/system/health", cancellationToken);
@@ -319,6 +323,34 @@ public sealed class MonitoringClient
         return await response.Content.ReadFromJsonAsync<WorkflowRun>(JsonOptions, cancellationToken) ?? throw new InvalidOperationException("Workflow retry returned an empty response.");
     }
 
+    public async Task<List<WorkshopJob>> GetWorkshopJobsAsync(int workflowId, CancellationToken cancellationToken)
+        => await _httpClient.GetFromJsonAsync<List<WorkshopJob>>($"api/workflows/{workflowId}/workshop-jobs", JsonOptions, cancellationToken) ?? [];
+
+    public async Task<WorkshopJobResponse> QueueWorkshopJobAsync(int workflowId, string operation, CancellationToken cancellationToken)
+    {
+        using var response = await _httpClient.PostAsJsonAsync($"api/workflows/{workflowId}/workshop-jobs", new WorkshopJobRequest { Operation = operation }, JsonOptions, cancellationToken);
+        await EnsureSuccessWithDetailAsync(response, "Workshop job", cancellationToken);
+        return await response.Content.ReadFromJsonAsync<WorkshopJobResponse>(JsonOptions, cancellationToken)
+            ?? throw new InvalidOperationException("Workshop job API returned an empty response.");
+    }
+
+    public async Task<WorkshopJob> CancelWorkshopJobAsync(int jobId, CancellationToken cancellationToken)
+    {
+        using var response = await _httpClient.PostAsync($"api/workshop-jobs/{jobId}/cancel", null, cancellationToken);
+        await EnsureSuccessWithDetailAsync(response, "Workshop cancellation", cancellationToken);
+        var result = await response.Content.ReadFromJsonAsync<WorkshopJobCancelResponse>(JsonOptions, cancellationToken)
+            ?? throw new InvalidOperationException("Workshop cancellation returned an empty response.");
+        return result.Job;
+    }
+
+    public async Task<WorkshopJobResponse> RetryWorkshopJobAsync(int jobId, CancellationToken cancellationToken)
+    {
+        using var response = await _httpClient.PostAsync($"api/workshop-jobs/{jobId}/retry", null, cancellationToken);
+        await EnsureSuccessWithDetailAsync(response, "Workshop retry", cancellationToken);
+        return await response.Content.ReadFromJsonAsync<WorkshopJobResponse>(JsonOptions, cancellationToken)
+            ?? throw new InvalidOperationException("Workshop retry returned an empty response.");
+    }
+
     private static async Task EnsureSuccessWithDetailAsync(HttpResponseMessage response, string operation, CancellationToken cancellationToken)
     {
         if (response.IsSuccessStatusCode) return;
@@ -542,6 +574,40 @@ public sealed class WorkflowRun
     public string Stdout { get; set; } = string.Empty;
     public string Stderr { get; set; } = string.Empty;
     public string Error { get; set; } = string.Empty;
+}
+
+public sealed class WorkshopJobRequest
+{
+    public string Operation { get; set; } = "design_plan";
+}
+
+public sealed class WorkshopJobResponse
+{
+    public WorkshopJob Job { get; set; } = new();
+    public Workflow? Workflow { get; set; }
+}
+
+public sealed class WorkshopJobCancelResponse
+{
+    public WorkshopJob Job { get; set; } = new();
+    public bool Cancelled { get; set; }
+}
+
+public sealed class WorkshopJob
+{
+    public int Id { get; set; }
+    [JsonPropertyName("workflow_id")] public int WorkflowId { get; set; }
+    public int Revision { get; set; }
+    public string Operation { get; set; } = string.Empty;
+    public string Status { get; set; } = string.Empty;
+    public string Provider { get; set; } = string.Empty;
+    public string Model { get; set; } = string.Empty;
+    [JsonPropertyName("request_json")] public string RequestJson { get; set; } = string.Empty;
+    [JsonPropertyName("response_json")] public string ResponseJson { get; set; } = string.Empty;
+    public string Error { get; set; } = string.Empty;
+    [JsonPropertyName("created_at")] public string CreatedAt { get; set; } = string.Empty;
+    [JsonPropertyName("started_at")] public string? StartedAt { get; set; }
+    [JsonPropertyName("completed_at")] public string? CompletedAt { get; set; }
 }
 
 public sealed class WorkflowRunEvent

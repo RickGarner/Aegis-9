@@ -1,0 +1,37 @@
+[
+  {
+    "content": "[BRIDGE-001] Design authenticated local bridge protocol specification",
+    "id": "BRIDGE-001",
+    "status": "completed"
+  },
+  {
+    "content": "[BRIDGE-002] Implement bridge server component (IDE-side)",
+    "id": "BRIDGE-002",
+    "status": "completed"
+  },
+  {
+    "content": "[BRIDGE-003] Implement bridge client component (Aegis-side)",
+    "id": "BRIDGE-003",
+    "status": "completed"
+  },
+  {
+    "content": "[BRIDGE-004] Add read-only status endpoints (version, session, repository, model, activity)",
+    "id": "BRIDGE-004",
+    "status": "completed"
+  },
+  {
+    "content": "[BRIDGE-005] Implement approval/event message system",
+    "id": "BRIDGE-005",
+    "status": "completed"
+  },
+  {
+    "content": "[BRIDGE-006] Add build/test evidence and artifact handoff",
+    "id": "BRIDGE-006",
+    "status": "completed"
+  },
+  {
+    "content": "[BRIDGE-007] Write comprehensive tests and documentation",
+    "id": "BRIDGE-007",
+    "status": "completed"
+  }
+]

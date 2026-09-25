@@ -1,0 +1,37 @@
+[
+  {
+    "content": "[phase-1] self: Define durable Workshop job contract and preserve existing workflow lifecycle.",
+    "id": "delegation-1",
+    "status": "completed"
+  },
+  {
+    "content": "[phase-2] delegate: Inspect storage migration patterns and recommend minimal job persistence changes.",
+    "id": "delegation-2",
+    "status": "completed"
+  },
+  {
+    "content": "[phase-3] self: Implement Workshop job persistence, service orchestration, and API endpoints.",
+    "id": "delegation-3",
+    "status": "completed"
+  },
+  {
+    "content": "[phase-4] self: Add focused tests for job lifecycle and revision safety.",
+    "id": "delegation-4",
+    "status": "completed"
+  },
+  {
+    "content": "[phase-5] self: Run validation and verify live API behavior.",
+    "id": "delegation-5",
+    "status": "completed"
+  },
+  {
+    "content": "[phase-6] self: Expand transfer payload with workflow attachments and add safe cancellation.",
+    "id": "delegation-6",
+    "status": "completed"
+  },
+  {
+    "content": "[phase-7] self: Restart live API and verify delegation endpoints are published.",
+    "id": "delegation-7",
+    "status": "completed"
+  }
+]

@@ -11,6 +11,7 @@ import psutil
 from pydantic import BaseModel, Field
 
 from app.config import Settings
+from app.network_policy import get_local_only_policy, NetworkPolicyError
 from app.tool_qualification import ToolQualificationReport, ToolQualificationStore
 
 
@@ -285,15 +286,34 @@ class OpenAICompatibleProvider:
         base = str(self._settings.provider_base_url).rstrip("/")
         if not base:
             return []
+        # Validate URL against Local-Only policy
+        policy = get_local_only_policy()
+        try:
+            policy.validate_url(base)
+        except NetworkPolicyError as e:
+            # In Local-Only Mode, reject cloud endpoints
+            if self._settings.local_only_mode:
+                return []
+            raise
         endpoint = ProviderEndpoint("configured", self._settings.provider, f"{base}/models", f"{base}/chat/completions", self._settings.litellm_api_key if self._settings.provider == "litellm" else None)
         return await self._probe(endpoint)
 
     async def _probe(self, endpoint: ProviderEndpoint) -> list[ProviderRoute]:
         try:
+            # Validate endpoint URLs against Local-Only policy
+            policy = get_local_only_policy()
+            if self._settings.local_only_mode:
+                policy.validate_url(endpoint.catalog_url)
+                policy.validate_url(endpoint.chat_url)
             async with httpx.AsyncClient(timeout=self._settings.provider_discovery_timeout_seconds) as client:
                 response = await client.get(endpoint.catalog_url, headers=self._headers(endpoint.api_key))
                 response.raise_for_status()
                 payload = response.json()
+        except NetworkPolicyError:
+            # In Local-Only Mode, reject cloud endpoints silently
+            if self._settings.local_only_mode:
+                return []
+            raise
         except (httpx.HTTPError, ValueError):
             return []
 
@@ -312,6 +332,14 @@ class OpenAICompatibleProvider:
 
     async def _try_routes(self, routes: list[ProviderRoute], messages: Sequence[ChatMessage], errors: list[str]) -> tuple[str, ProviderRoute] | None:
         for route in routes:
+            # Validate chat URL against Local-Only policy
+            policy = get_local_only_policy()
+            if self._settings.local_only_mode:
+                try:
+                    policy.validate_url(route.chat_url)
+                except NetworkPolicyError:
+                    errors.append(f"{route.location}/{route.provider}/{route.model}: Cloud endpoint blocked in Local-Only Mode")
+                    continue
             payload = {"model": route.model, "messages": [message.model_dump() for message in messages], "stream": False, "max_tokens": self._settings.max_response_tokens}
             for attempt in range(self._settings.provider_retry_count + 1):
                 try:
@@ -555,6 +583,121 @@ class OpenAICompatibleProvider:
         except (OSError, subprocess.SubprocessError):
             pass
         return "", 0
+
+
+class WorkshopLocalProvider(OpenAICompatibleProvider):
+    """Workshop local inference with the shared, qualified workflow tool loop.
+
+    An explicit loopback port is an operator-selected endpoint. Automatic
+    discovery requires a Workshop ancestor and refuses ambiguous model routes.
+    Neither mode permits fallback to another provider.
+    """
+
+    async def chat_for_task_with_tools(
+        self, task: str, messages: Sequence[ChatMessage], tools: Sequence[dict[str, Any]],
+        executor: Callable[[str, dict[str, Any]], Awaitable[str]], max_turns: int = 8,
+    ) -> RoutedChatResult:
+        if not self._candidates:
+            await self.discover()
+        if not self._candidates:
+            raise ProviderError(self._detail)
+        return await super().chat_for_task_with_tools(task, messages, tools, executor, max_turns)
+
+    async def discover(self, force: bool = False) -> ProviderHealth:
+        async with self._lock:
+            if self._candidates and not force:
+                return self._health()
+            self._candidates = []
+            self._active = None
+            self._location = "local"
+            self._status = "scanning"
+            if not self._settings.workshop_enabled:
+                self._status = "disabled"
+                self._detail = "Workshop integration is disabled in configuration."
+                return self._health()
+
+            host = self._settings.workshop_local_host
+            host = "[::1]" if host == "::1" else "127.0.0.1"
+            ports = ([self._settings.workshop_local_port]
+                     if self._settings.workshop_local_port is not None
+                     else await asyncio.to_thread(self._workshop_ports))
+            routes: list[ProviderRoute] = []
+            errors: list[str] = []
+            for port in ports:
+                base = f"http://{host}:{port}/v1"
+                try:
+                    async with httpx.AsyncClient(timeout=self._settings.provider_discovery_timeout_seconds) as client:
+                        response = await client.get(f"{base}/models")
+                        response.raise_for_status()
+                        payload = response.json()
+                    models = payload.get("data") if isinstance(payload, dict) else None
+                    if not isinstance(models, list):
+                        raise ValueError("model catalog must contain a data array")
+                    for item in models:
+                        model = item.get("id") if isinstance(item, dict) else None
+                        if not isinstance(model, str) or not model.strip() or self._is_embedding(model):
+                            continue
+                        if self._settings.workshop_model and model != self._settings.workshop_model:
+                            continue
+                        route = ProviderRoute("local", "workshop", model, f"{base}/chat/completions")
+                        if route not in routes:
+                            routes.append(route)
+                except (httpx.HTTPError, ValueError, TypeError) as error:
+                    errors.append(f"Port {port}: {error}")
+
+            if len(routes) != 1:
+                self._status = "unavailable"
+                if len(routes) > 1:
+                    self._detail = "Multiple Workshop model routes found. Set JARVIS_WORKSHOP_LOCAL_PORT and JARVIS_WORKSHOP_MODEL explicitly."
+                else:
+                    self._detail = ("No usable Workshop model found. Start a model in Workshop or configure its loopback port/model. "
+                                    "Automatic discovery requires an accessible Workshop parent process. " + " | ".join(errors))
+                return self._health()
+            self._candidates = routes
+            self._active = routes[0]
+            self._status = "ready"
+            self._detail = f"Workshop local model '{routes[0].model}' at {routes[0].chat_url}. Tool support is checked before workflow generation."
+            return self._health()
+
+    @staticmethod
+    def _workshop_ports() -> list[int]:
+        owners: set[int] = set()
+        for process in psutil.process_iter(["pid", "name"]):
+            if (process.info.get("name") or "").casefold() not in {"llama-server.exe", "llama-server"}:
+                continue
+            try:
+                parents = process.parents()
+                if any(parent.name().casefold() in {
+                    "workshop-desktop.exe", "workshop-desktop",
+                    "workshop-backend-x86_64-pc-windows-msvc.exe",
+                    "workshop-backend-x86_64-pc-windows-msvc",
+                } for parent in parents):
+                    owners.add(process.pid)
+            except (psutil.Error, OSError):
+                continue
+        if not owners:
+            return []
+        try:
+            return sorted({connection.laddr.port for connection in psutil.net_connections(kind="tcp")
+                           if connection.pid in owners and connection.status == psutil.CONN_LISTEN
+                           and connection.laddr.ip in {"127.0.0.1", "::1", "0.0.0.0", "::"}})
+        except (psutil.Error, OSError):
+            return []
+
+    async def _scan_location(self, location: str) -> list[ProviderRoute]:
+        # The base chat path may request a refresh after failure. Never scan
+        # DMR/Ollama for a Workshop request; the next request can rediscover it.
+        return []
+
+    def _health(self) -> ProviderHealth:
+        return ProviderHealth(
+            available=self._active is not None and self._status == "ready",
+            provider="workshop",
+            model=self._active.model if self._active else "",
+            location="local",
+            status=self._status,
+            detail=self._detail,
+        )
 
 
 async def check_system_health(settings: Settings) -> SystemHealth:

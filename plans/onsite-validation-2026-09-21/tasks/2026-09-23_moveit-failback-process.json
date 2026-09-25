@@ -1,0 +1,27 @@
+[
+  {
+    "content": "[FAILBACK-001] Design automated fail-back detection and execution architecture",
+    "id": "FAILBACK-001",
+    "status": "completed"
+  },
+  {
+    "content": "[FAILBACK-002] Implement primary server availability detection",
+    "id": "FAILBACK-002",
+    "status": "completed"
+  },
+  {
+    "content": "[FAILBACK-003] Implement fail-back prerequisites validation",
+    "id": "FAILBACK-003",
+    "status": "completed"
+  },
+  {
+    "content": "[FAILBACK-004] Create main orchestration script",
+    "id": "FAILBACK-004",
+    "status": "completed"
+  },
+  {
+    "content": "[FAILBACK-005] Create monitoring and alerting for fail-back events",
+    "id": "FAILBACK-005",
+    "status": "completed"
+  }
+]

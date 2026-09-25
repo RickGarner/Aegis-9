@@ -93,6 +93,9 @@ cd backend
 
 ## Documentation
 
+- `docs/WORKSHOP-INTEGRATION-PLAN.md` - Workshop integration completion plan, changes, validation evidence, and remaining acceptance work
+- `docs/WORKSHOP-INTEGRATION-SETUP.md` - local Workshop configuration and operator validation steps
+- `docs/WORKSHOP-MANUAL-TEST-PLAN.md` - detailed manual workflow acceptance cases, sample inputs, expected results, and evidence checklist
 - `docs/CURRENT-VERSION.md` - canonical branch, current file map, verification state, and multi-computer startup rules
 - `docs/handoff.md` - continuity record and current status
 - `docs/native-desktop.md` - native Windows application architecture and window roles

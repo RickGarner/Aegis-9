@@ -1,0 +1,77 @@
+[
+  {
+    "content": "[EXT-201] Audit and document MOVEit HA onsite discovery requirements",
+    "id": "EXT-201",
+    "status": "completed"
+  },
+  {
+    "content": "[EXT-202] Audit and document Xerox FreeFlow Core recovery validation requirements",
+    "id": "EXT-202",
+    "status": "completed"
+  },
+  {
+    "content": "[EXT-203] Create external integration status dashboard",
+    "id": "EXT-203",
+    "status": "completed"
+  },
+  {
+    "content": "[EXT-204] Document offline .NET SDK/provisioning requirements",
+    "id": "EXT-204",
+    "status": "completed"
+  },
+  {
+    "content": "[EXT-205] Implement disposable Windows Sandbox runner spec",
+    "id": "EXT-205",
+    "status": "completed"
+  },
+  {
+    "content": "[EXT-206] Discover MOVEit Web Admin URLs and endpoints",
+    "id": "EXT-206",
+    "status": "completed"
+  },
+  {
+    "content": "[EXT-207] Discover MOVEit service account credentials",
+    "id": "EXT-207",
+    "status": "completed"
+  },
+  {
+    "content": "[EXT-208] Discover MOVEit SQL Server configuration",
+    "id": "EXT-208",
+    "status": "completed"
+  },
+  {
+    "content": "[EXT-209] Test FreeFlow JMF connectivity and query format",
+    "id": "EXT-209",
+    "status": "completed"
+  },
+  {
+    "content": "[EXT-210] Document FreeFlow Core JMF capabilities",
+    "id": "EXT-210",
+    "status": "completed"
+  },
+  {
+    "content": "[EXT-211] Schedule MOVEit onsite credential validation",
+    "id": "EXT-211",
+    "status": "pending"
+  },
+  {
+    "content": "[EXT-212] Test FreeFlow KnownMessages capability",
+    "id": "EXT-212",
+    "status": "pending"
+  },
+  {
+    "content": "[EXT-213] Test FreeFlow job operations (enumerate, submit, cancel)",
+    "id": "EXT-213",
+    "status": "pending"
+  },
+  {
+    "content": "[EXT-214] Source offline .NET SDK packages",
+    "id": "EXT-214",
+    "status": "pending"
+  },
+  {
+    "content": "[EXT-215] Implement Windows Sandbox runner spec",
+    "id": "EXT-215",
+    "status": "pending"
+  }
+]

@@ -1,0 +1,37 @@
+[
+  {
+    "content": "[BRIDGE-101] Add write-capable approval exchange endpoints to bridge protocol",
+    "id": "BRIDGE-101",
+    "status": "completed"
+  },
+  {
+    "content": "[BRIDGE-102] Implement workflow revision open request/response in bridge server",
+    "id": "BRIDGE-102",
+    "status": "completed"
+  },
+  {
+    "content": "[BRIDGE-103] Add build/test evidence submission with hash verification",
+    "id": "BRIDGE-103",
+    "status": "completed"
+  },
+  {
+    "content": "[BRIDGE-104] Create Developer Studio bridge client for Aegis communication",
+    "id": "BRIDGE-104",
+    "status": "completed"
+  },
+  {
+    "content": "[BRIDGE-105] Implement artifact handoff with integrity verification",
+    "id": "BRIDGE-105",
+    "status": "completed"
+  },
+  {
+    "content": "[BRIDGE-106] Add bridge acceptance tests for full workflow round-trip",
+    "id": "BRIDGE-106",
+    "status": "completed"
+  },
+  {
+    "content": "[BRIDGE-107] Document clean-machine setup and validation procedure",
+    "id": "BRIDGE-107",
+    "status": "completed"
+  }
+]

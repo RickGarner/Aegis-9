@@ -5,6 +5,36 @@
       "type": "group",
       "subject": "BSOC\\BSOC - G - Architecture",
       "roles": ["PlatformAdministrator"]
+    },
+    {
+      "type": "group",
+      "subject": "BSOC\\BSOC - G - MOVEit Admin",
+      "roles": ["MonitoringAdministrator", "Operator"]
+    },
+    {
+      "type": "group",
+      "subject": "BSOC\\BSOC - G - FreeFlow Admin",
+      "roles": ["MonitoringAdministrator", "Operator"]
+    },
+    {
+      "type": "group",
+      "subject": "BSOC\\BSOC - G - ARCH ADMIN",
+      "roles": ["WorkflowDesigner"]
+    },
+    {
+      "type": "group",
+      "subject": "BSOC\\BSOC - G - Entrypoint Admins",
+      "roles": ["WorkflowApprover"]
+    },
+    {
+      "type": "group",
+      "subject": "BSOC\\BSOC - G - Program Admins",
+      "roles": ["Supervisor", "WorkflowApprover"]
+    },
+    {
+      "type": "group",
+      "subject": "BSOC\\BSOC - G - DUO Enforce MFA",
+      "roles": ["SecurityAuditor"]
     }
   ]
 }

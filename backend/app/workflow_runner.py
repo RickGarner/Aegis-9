@@ -1,3 +1,4 @@
+import base64
 import hashlib
 import json
 import os
@@ -7,8 +8,11 @@ import tempfile
 import time
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Optional
 
 from pydantic import BaseModel, Field
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+from cryptography.hazmat.primitives.serialization import load_pem_private_key
 
 
 class PermissionManifest(BaseModel):
@@ -32,6 +36,8 @@ class WorkflowTestEvidence(BaseModel):
     duration_ms: int = 0
     evidence_sha256: str
     summary: str
+    artifact_signature: Optional[str] = None  # Ed25519 signature
+    previous_hash: Optional[str] = None  # Chain linkage
 
 
 @dataclass(frozen=True)
@@ -40,17 +46,42 @@ class PreparedArtifact:
     source_text: str
     sha256: str
     manifest: PermissionManifest
+    signature: Optional[str] = None  # Ed25519 base64 signature
+    previous_hash: Optional[str] = None  # Previous artifact hash for chain
 
 
 class WorkflowTestRunner:
     """Creates immutable artifacts and performs bounded non-production validation."""
 
-    def __init__(self, artifact_root: Path, timeout_seconds: int = 30, output_limit: int = 64_000) -> None:
+    def __init__(self, artifact_root: Path, timeout_seconds: int = 30, output_limit: int = 64_000, signing_key_path: Optional[Path] = None) -> None:
         self._artifact_root = artifact_root
         self._timeout_seconds = timeout_seconds
         self._output_limit = output_limit
+        self._signing_key: Optional[Ed25519PrivateKey] = self._load_signing_key(signing_key_path)
 
-    def prepare(self, transfer_id: str, revision: int, language: str, implementation: str) -> PreparedArtifact:
+    def _load_signing_key(self, key_path: Optional[Path]) -> Optional[Ed25519PrivateKey]:
+        """Load Ed25519 private key for artifact signing if provided."""
+        if key_path is None or not key_path.exists():
+            return None
+        try:
+            key_data = load_pem_private_key(key_path.read_bytes(), password=None)
+            if isinstance(key_data, Ed25519PrivateKey):
+                return key_data
+            return None
+        except Exception:
+            return None
+
+    def _sign_artifact(self, content: str) -> Optional[str]:
+        """Sign artifact content with Ed25519 key, return base64 signature or None if not configured."""
+        if self._signing_key is None:
+            return None
+        try:
+            signature = self._signing_key.sign(content.encode("utf-8"))
+            return base64.b64encode(signature).decode("ascii")
+        except Exception:
+            return None
+
+    def prepare(self, transfer_id: str, revision: int, language: str, implementation: str, previous_hash: Optional[str] = None) -> PreparedArtifact:
         source = self._extract_source(language, implementation)
         digest = hashlib.sha256(source.encode("utf-8")).hexdigest()
         manifest = self._analyze(language, source)
@@ -68,7 +99,9 @@ class WorkflowTestRunner:
             raise RuntimeError("Immutable permission manifest does not match the stored artifact.")
         if not manifest_path.exists():
             manifest_path.write_text(manifest_payload, encoding="utf-8", newline="\n")
-        return PreparedArtifact(source_path, source, digest, manifest)
+        # Sign the artifact
+        signature = self._sign_artifact(source)
+        return PreparedArtifact(source_path, source, digest, manifest, signature=signature, previous_hash=previous_hash)
 
     def run(self, artifact: PreparedArtifact, language: str, profile: str) -> WorkflowTestEvidence:
         if profile not in {"static", "restricted"}:
@@ -219,6 +252,7 @@ class WorkflowTestRunner:
             permission_manifest=artifact.manifest, exit_code=exit_code,
             stdout=stdout, stderr=stderr, duration_ms=duration_ms,
             evidence_sha256=hashlib.sha256(payload.encode("utf-8")).hexdigest(), summary=summary,
+            artifact_signature=artifact.signature, previous_hash=artifact.previous_hash,
         )
 
     def _bounded(self, value: bytes | str | None) -> str:

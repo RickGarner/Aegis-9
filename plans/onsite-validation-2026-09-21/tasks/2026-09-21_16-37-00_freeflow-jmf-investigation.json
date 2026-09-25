@@ -1,0 +1,32 @@
+[
+  {
+    "content": "[ONSITE-VAL-001] Document FreeFlow JMF HTTP 500 error and required investigation",
+    "id": "onsite-001",
+    "status": "completed"
+  },
+  {
+    "content": "[ONSITE-VAL-002] Record tested JMF formats that failed (CIP4 QueryKnownDevices, JMF Brief DeviceFilter)",
+    "id": "onsite-002",
+    "status": "completed"
+  },
+  {
+    "content": "[ONSITE-VAL-003] Note handoff: User reported Brief DeviceFilter + CIP4 typed query produced HTTP 200",
+    "id": "onsite-003",
+    "status": "completed"
+  },
+  {
+    "content": "[ONSITE-VAL-004] When correct format obtained, update backend/app/freeflow_jmf.py with working query",
+    "id": "onsite-004",
+    "status": "completed"
+  },
+  {
+    "content": "[ONSITE-VAL-005] Validate FreeFlow device enumeration after format fix",
+    "id": "onsite-005",
+    "status": "completed"
+  },
+  {
+    "content": "[ONSITE-VAL-006] Update config/freeflow-servers.json with discovered IPs and JMF status",
+    "id": "onsite-006",
+    "status": "completed"
+  }
+]

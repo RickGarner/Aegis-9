@@ -1,0 +1,32 @@
+[
+  {
+    "content": "[RELEASE-001] Create release promotion/merge criteria system with acceptance matrix",
+    "id": "RELEASE-001",
+    "status": "completed"
+  },
+  {
+    "content": "[RELEASE-002] Implement clean-machine packaging validation with hash verification",
+    "id": "RELEASE-002",
+    "status": "completed"
+  },
+  {
+    "content": "[RELEASE-003] Add database backup/restore with integrity verification and schema validation",
+    "id": "RELEASE-003",
+    "status": "completed"
+  },
+  {
+    "content": "[RELEASE-004] Implement interrupted upgrade recovery with state machine",
+    "id": "RELEASE-004",
+    "status": "completed"
+  },
+  {
+    "content": "[RELEASE-005] Create rollback procedures and API endpoints",
+    "id": "RELEASE-005",
+    "status": "completed"
+  },
+  {
+    "content": "[RELEASE-006] Write comprehensive tests and documentation",
+    "id": "RELEASE-006",
+    "status": "completed"
+  }
+]

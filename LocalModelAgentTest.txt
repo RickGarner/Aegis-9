@@ -1,0 +1,1 @@
+Visual Studio 2026 local Ollama agent test successful.

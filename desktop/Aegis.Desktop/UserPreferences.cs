@@ -27,6 +27,7 @@ public sealed class UserPreferences
     public double OperationsCenterHeight { get; set; } = 780;
     public bool OperationsCenterMaximized { get; set; }
     public string OperationsCenterLayoutMode { get; set; } = "Standard";
+    public bool LocalOnlyMode { get; set; } = false;
 
     private static string PreferencesPath => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Aegis-9", "settings.json");
 

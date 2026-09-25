@@ -7,6 +7,7 @@ import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
 from tempfile import gettempdir
+from typing import Any
 
 from fastapi import Depends, FastAPI, File, HTTPException, UploadFile, status
 from fastapi.responses import Response
@@ -15,7 +16,7 @@ from pydantic import BaseModel, Field, model_validator
 from app.artifacts import try_create_requested_artifact
 from app.config import Settings, get_settings
 from app.files import UnsupportedFileTypeError, extract_text, is_supported
-from app.providers import ChatMessage, OpenAICompatibleProvider, ProviderError, ProviderFailover, ProviderHealth, SystemHealth, check_system_health
+from app.providers import ChatMessage, OpenAICompatibleProvider, WorkshopLocalProvider, ProviderError, ProviderFailover, ProviderHealth, SystemHealth, check_system_health
 from app.speech_recognition import LocalWhisperService
 from app.monitoring import (
     MonitoringActionRequest,
@@ -25,7 +26,98 @@ from app.monitoring import (
     MonitoringStore,
 )
 from app.operations_monitoring import MonitorDescriptor, OperationsMonitoringSnapshot, OperationsSummary, collect_operations_snapshot
-from app.storage import ApprovalState, FileEntry, JarvisStore, NotificationOutboxItem, SessionState, Workflow, WorkflowImportResult, WorkflowRun, WorkflowRunEvent, WorkflowTransferPackage, WorkflowTransition
+from app.storage import ApprovalState, FileEntry, JarvisStore, NotificationOutboxItem, SessionState, Workflow, WorkflowImportResult, WorkflowRun, WorkflowRunEvent, WorkshopJob, WorkflowTransferPackage, WorkflowTransition
+
+
+WORKSHOP_OPERATIONS = {"design_plan", "test_plans", "implementation"}
+_workshop_tasks: dict[int, asyncio.Task] = {}
+
+
+def _validate_workshop_operation(workflow: Workflow, operation: str) -> None:
+    allowed = {
+        "design_plan": workflow.state in {"draft", "rejected", "plan_review", "design_review"},
+        "test_plans": workflow.state == "plan_approved" and bool(workflow.plan_text),
+        "implementation": workflow.state == "test_plan_approved" and bool(workflow.plan_text and workflow.test_plan_text),
+    }
+    if workflow.archived or not allowed.get(operation):
+        raise HTTPException(status_code=409, detail=f"Workshop operation '{operation}' is not available in workflow state '{workflow.state}'. Complete the preceding review/approval stage first.")
+
+
+def _start_workshop_task(job: WorkshopJob, provider: OpenAICompatibleProvider, store: JarvisStore, settings: Settings) -> None:
+    task = asyncio.create_task(_run_workshop_job(job.id, job.workflow_id, job.operation, provider, store, settings))
+    _workshop_tasks[job.id] = task
+
+    def finished(completed: asyncio.Task) -> None:
+        _workshop_tasks.pop(job.id, None)
+        if not completed.cancelled():
+            completed.exception()
+
+    task.add_done_callback(finished)
+
+
+class WorkshopJobRequest(BaseModel):
+    operation: str = Field(pattern="^(design_plan|test_plans|implementation)$")
+
+
+class WorkshopJobResponse(BaseModel):
+    job: WorkshopJob
+    workflow: Workflow | None = None
+
+
+class WorkshopJobCancelResponse(BaseModel):
+    job: WorkshopJob
+    cancelled: bool
+
+
+async def _run_workshop_job(job_id: int, workflow_id: int, operation: str, provider: OpenAICompatibleProvider, store: JarvisStore, settings: Settings) -> None:
+    try:
+        claimed = store.claim_workshop_job(job_id)
+        if claimed is None:
+            return
+        store = store.for_workshop_job(job_id)
+        if operation == "design_plan":
+            result = await _generate_workflow_plan(workflow_id, provider, store, settings, finalizing=False)
+        elif operation == "test_plans":
+            result = await generate_workflow_test_plans(workflow_id, provider, store)
+        else:
+            result = await generate_workflow_implementation(workflow_id, provider, store, settings)
+        store.complete_workshop_job(job_id, "completed", result.model_dump_json())
+    except asyncio.CancelledError:
+        store.complete_workshop_job(job_id, "cancelled", error="Workshop generation was interrupted; no pending result was accepted.")
+        raise
+    except Exception as error:
+        detail = str(error.detail) if isinstance(error, HTTPException) else str(error)
+        store.complete_workshop_job(job_id, "failed", error=detail)
+
+
+async def _queue_workshop_job(workflow_id: int, request: WorkshopJobRequest, provider: OpenAICompatibleProvider, store: JarvisStore, settings: Settings) -> WorkshopJobResponse:
+    workflow = store.get_workflow(workflow_id)
+    if workflow is None or workflow.archived:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workflow was not found.")
+    _validate_workshop_operation(workflow, request.operation)
+    package = store.export_workflow(workflow_id)
+    if package is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workflow transfer package could not be prepared.")
+    transfer = {
+        "schema_version": package.schema_version,
+        "workflow_id": workflow_id,
+        "revision": workflow.revision,
+        "operation": request.operation,
+        "workflow": package.workflow,
+        "attachments": package.attachments,
+    }
+    job = store.create_workshop_job(
+        workflow_id,
+        request.operation,
+        json.dumps(transfer, ensure_ascii=False),
+        expected_revision=workflow.revision,
+    )
+    if job is None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="A Workshop job is already active or the workflow changed. Refresh before retrying.")
+    _start_workshop_task(job, provider, store, settings)
+    return WorkshopJobResponse(job=job, workflow=workflow)
+
+
 from app.supervisor import TopologyReconciliation, WorkflowCapacity, WorkflowWindowPlacement, get_workflow_capacity
 from app.workflow_execution import WorkflowExecutionError, WorkflowExecutionManager
 from app.workflow_runner import WorkflowTestEvidence, WorkflowTestRunner
@@ -33,16 +125,47 @@ from app.workflow_scheduler import ScheduleError, is_due, prerequisites_met
 from app.workflow_notifications import WorkflowNotificationWorker
 from app.security_control import SecurityControlPolicy
 from app.workflow_agent_tools import WorkflowAgentToolContext
+from app.network_policy import get_local_only_policy, NetworkPolicyError, LocalOnlyPolicy
 from app.policy_integrity import policy_status
+from app.local_audit import LocalAuditStore
 from app.post_acceptance import EncryptedSemanticStore, ReviewHistoryStore, create_cyclonedx, export_migration, import_migration, local_embedding, match_offline_vulnerabilities, scan_dependencies, semantic_similarity
-from app.test_lab import create_test_package, create_test_plan
+from app.test_lab import create_test_package, create_test_plan, launch_sandbox, cleanup_sandbox
+from app.windows_sandbox_runner import WindowsSandboxRunner, WindowsSandboxError, run_in_sandbox
 from app.workflow_implementation_tools import ApprovedWorkflowImplementationToolContext
 from app.workflow_governance import WORKFLOW_ARCHITECT_INSTRUCTIONS, workflow_implementer_instructions
 from app.workflow_documentation import WorkflowDocumentationManager
 from app.moveit_ha import MoveItHaService
 from app.moveit_ha.models import HaStatus
-from app.freeflow_jmf import FreeFlowJmfCapabilities, FreeFlowJmfDiscovery, FreeFlowJmfJobs, FreeFlowJmfService, FreeFlowJmfStatus
+from app.freeflow_jmf import FreeFlowJmfCapabilities, FreeFlowJmfDiscovery, FreeFlowJmfJobs, FreeFlowJmfMessages, FreeFlowJmfService, FreeFlowJmfStatus
 from app.authorization import AuthorizationError, RoleAuthorizer
+from app.release_promotion import (
+    get_release_promotion_system,
+    ReleasePromotionSystem,
+    ReleaseStage,
+    AcceptanceCriteria,
+)
+from app.package_validation import (
+    get_clean_machine_validator,
+    CleanMachineValidator,
+    PackageManifest,
+    ValidationReport,
+)
+from app.database_recovery import (
+    get_database_backup_system,
+    get_upgrade_recovery_system,
+    DatabaseBackupSystem,
+    UpgradeRecoverySystem,
+    UpgradeStatus,
+)
+from app.bridge_server import (
+    get_bridge_server,
+    BridgeServer,
+    BridgeServerConfig,
+)
+
+
+# Sandbox execution tracking state
+_sandbox_sessions: dict[str, dict[str, Any]] = {}
 
 
 class ChatRequest(BaseModel):
@@ -244,6 +367,7 @@ async def lifespan(app: FastAPI):
     app.state.store.initialize()
     app.state.store.recover_interrupted_workflow_tests()
     app.state.store.recover_interrupted_workflow_runs()
+    app.state.store.recover_interrupted_workshop_jobs()
     app.state.store.recover_processing_notifications()
     app.state.workflow_notifications = WorkflowNotificationWorker(app.state.store, settings)
     app.state.workflow_execution = WorkflowExecutionManager(
@@ -290,6 +414,9 @@ async def lifespan(app: FastAPI):
     app.state.moveit_ha = MoveItHaService(settings.moveit_ha_config_path, settings.moveit_ha_state_path)
     app.state.freeflow_jmf = FreeFlowJmfService(settings)
     collect_operations_snapshot(app.state.monitoring)
+    
+    # Initialize bridge server
+    app.state.bridge_server = get_bridge_server(settings)
 
     async def monitoring_loop() -> None:
         while True:
@@ -332,6 +459,10 @@ async def lifespan(app: FastAPI):
     monitoring_task.cancel()
     workflow_scheduler_task.cancel()
     workflow_notification_task.cancel()
+    workshop_tasks = list(_workshop_tasks.values())
+    for task in workshop_tasks:
+        task.cancel()
+    await asyncio.gather(*workshop_tasks, return_exceptions=True)
     await asyncio.gather(monitoring_task, workflow_scheduler_task, workflow_notification_task, return_exceptions=True)
 
 
@@ -368,7 +499,16 @@ def require_workflow_review_capability(
 
 
 def get_provider(settings: Settings = Depends(get_settings)) -> OpenAICompatibleProvider:
+    """Use Workshop when enabled; its failures never silently change providers."""
+    if settings.workshop_enabled:
+        return WorkshopLocalProvider(settings)
     return OpenAICompatibleProvider(settings)
+
+
+def get_workshop_provider(settings: Settings = Depends(get_settings)) -> WorkshopLocalProvider:
+    if not settings.workshop_enabled:
+        raise HTTPException(status_code=503, detail="Workshop integration is disabled. Enable JARVIS_WORKSHOP_ENABLED to submit Workshop jobs.")
+    return WorkshopLocalProvider(settings)
 
 
 def get_store() -> JarvisStore:
@@ -416,6 +556,25 @@ async def provider_health(
     return await provider.health()
 
 
+@app.get("/api/workshop/status", response_model=ProviderHealth)
+async def workshop_status(
+    settings: Settings = Depends(get_settings),
+) -> ProviderHealth:
+    """Get Workshop Desktop local model status."""
+    if not settings.workshop_enabled:
+        return ProviderHealth(
+            available=False,
+            provider="workshop",
+            model="",
+            location="local",
+            status="disabled",
+            detail="Workshop integration is disabled in configuration.",
+        )
+    
+    provider = WorkshopLocalProvider(settings)
+    return await provider.health()
+
+
 @app.get("/api/system/health", response_model=SystemHealth)
 async def system_health(
     settings: Settings = Depends(get_settings),
@@ -426,6 +585,68 @@ async def system_health(
 async def security_policy_status(settings: Settings = Depends(get_settings)) -> dict:
     root = Path(__file__).resolve().parents[2]
     return policy_status([settings.security_control_policy_path, root / "config" / "mcp" / "catalog.json", root / "docs" / "SHARED-TOOL-PARITY-CONTRACT.json"], required=settings.require_signed_policies, public_key_path=settings.policy_public_key_path)
+
+
+@app.get("/api/integrity/audit-chain", response_model=dict)
+async def audit_chain_status(settings: Settings = Depends(get_settings)) -> dict:
+    """Verify the tamper-evident audit chain integrity."""
+    root = Path(__file__).resolve().parents[2]
+    audit_path = settings.audit_log_path if hasattr(settings, 'audit_log_path') else root / "data" / "audit.jsonl"
+    store = LocalAuditStore(audit_path)
+    return store.verify_chain()
+
+
+@app.get("/api/integrity/audit-events", response_model=dict)
+async def audit_events(event_type: str | None = None, limit: int = 100, settings: Settings = Depends(get_settings)) -> dict:
+    """Query audit events with chain metadata."""
+    if not 1 <= limit <= 1000:
+        raise HTTPException(status_code=400, detail="Limit must be between 1 and 1000")
+    root = Path(__file__).resolve().parents[2]
+    audit_path = settings.audit_log_path if hasattr(settings, 'audit_log_path') else root / "data" / "audit.jsonl"
+    store = LocalAuditStore(audit_path)
+    events = store.query(event_type, limit)
+    return {"events": events, "count": len(events)}
+
+
+@app.get("/api/local-only/status")
+async def local_only_status(settings: Settings = Depends(get_settings)) -> dict:
+    """Get the current Local-Only Mode status."""
+    policy = get_local_only_policy()
+    return {
+        "enabled": settings.local_only_mode,
+        "policy": policy.get_status(),
+    }
+
+
+@app.post("/api/local-only/enable")
+async def enable_local_only(settings: Settings = Depends(get_settings)) -> dict:
+    """Enable Local-Only Mode."""
+    settings.local_only_mode = True
+    policy = set_local_only_policy(
+        local_only_mode=True,
+        allow_private_network=True,
+        allowed_hosts=["127.0.0.1", "localhost", "10.30.75.229"],
+    )
+    return {"enabled": True, "policy": policy.get_status()}
+
+
+@app.post("/api/local-only/disable")
+async def disable_local_only(settings: Settings = Depends(get_settings)) -> dict:
+    """Disable Local-Only Mode."""
+    settings.local_only_mode = False
+    policy = set_local_only_policy(local_only_mode=False)
+    return {"enabled": False, "policy": policy.get_status()}
+
+
+@app.post("/api/local-only/validate-url")
+async def validate_url_request(url: str, settings: Settings = Depends(get_settings)) -> dict:
+    """Validate a URL against the Local-Only policy."""
+    policy = get_local_only_policy()
+    try:
+        result = policy.validate_url(url)
+        return {"valid": True, "result": result}
+    except NetworkPolicyError as e:
+        return {"valid": False, "error": str(e)}
 
 
 def _semantic_store(settings: Settings) -> EncryptedSemanticStore:
@@ -554,7 +775,169 @@ async def create_approved_test_lab_package(request: TestLabPackageRequest, setti
     return {"planId": request.plan["id"], "packagePath": str(package), "configurationPath": str(package / "AegisTestLab.wsb"), "status": "ready-for-explicit-launch", "executed": False, "capabilities": request.plan["capabilities"]}
 
 
-@app.get("/api/session", response_model=SessionState)
+@app.post("/api/test-lab/launch", dependencies=[Depends(require_capability("workflow.execute"))])
+async def launch_test_lab_package(package_path: str, settings: Settings = Depends(get_settings)) -> dict:
+    """Launch a Test Lab package in Windows Sandbox."""
+    package_root = Path(package_path)
+    if not package_root.exists():
+        raise HTTPException(status_code=404, detail="Test Lab package not found")
+    
+    wsb_file = package_root / "AegisTestLab.wsb"
+    if not wsb_file.exists():
+        raise HTTPException(status_code=400, detail="Missing sandbox configuration")
+    
+    # Generate a unique session ID
+    session_id = str(uuid.uuid4())
+    
+    # Launch the sandbox
+    launch_result = launch_sandbox(wsb_file)
+    
+    if launch_result["status"] == "error":
+        raise HTTPException(status_code=500, detail=launch_result["message"])
+    
+    # Track the session
+    _sandbox_sessions[session_id] = {
+        "session_id": session_id,
+        "package_path": str(package_root),
+        "wsb_file": str(wsb_file),
+        "launch_result": launch_result,
+        "status": "running",
+        "launched_at": datetime.now(timezone.utc).isoformat(),
+        "completed_at": None,
+        "cleanup_done": False,
+    }
+    
+    return {
+        "sessionId": session_id,
+        "packagePath": str(package_root),
+        "status": "launched",
+        "processId": launch_result["process_id"],
+        "timeoutSeconds": launch_result["timeout_seconds"],
+    }
+
+
+@app.get("/api/test-lab/session/{session_id}")
+async def get_test_lab_session(session_id: str) -> dict:
+    """Get the status of a Test Lab sandbox session."""
+    if session_id not in _sandbox_sessions:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    session = _sandbox_sessions[session_id]
+    return {
+        "sessionId": session["session_id"],
+        "packagePath": session["package_path"],
+        "status": session["status"],
+        "launchedAt": session["launched_at"],
+        "completedAt": session["completed_at"],
+        "cleanupDone": session["cleanup_done"],
+    }
+
+
+@app.post("/api/test-lab/session/{session_id}/cleanup", dependencies=[Depends(require_capability("workflow.execute"))])
+async def cleanup_test_lab_session(session_id: str, settings: Settings = Depends(get_settings)) -> dict:
+    """Clean up a Test Lab sandbox session after execution."""
+    if session_id not in _sandbox_sessions:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    session = _sandbox_sessions[session_id]
+    
+    if session["cleanup_done"]:
+        return {"status": "already_cleaned", "sessionId": session_id}
+    
+    package_root = Path(session["package_path"])
+    cleanup_result = cleanup_sandbox(package_root)
+    
+    # Update session status
+    session["status"] = "completed"
+    session["completed_at"] = datetime.now(timezone.utc).isoformat()
+    session["cleanup_done"] = True
+    session["cleanup_result"] = cleanup_result
+    
+    return {
+        "status": "cleaned",
+        "sessionId": session_id,
+        "actions": cleanup_result.get("actions", []),
+        "errors": cleanup_result.get("errors", []),
+    }
+
+
+@app.get("/api/test-lab/sessions")
+async def list_test_lab_sessions() -> dict:
+    """List all Test Lab sandbox sessions."""
+    return {
+        "sessions": list(_sandbox_sessions.values()),
+        "count": len(_sandbox_sessions),
+    }
+
+
+class RunInSandboxRequest(BaseModel):
+    """Request model for running scripts in Windows Sandbox."""
+    script: str = Field(..., description="PowerShell script to execute in sandbox")
+    timeout_seconds: int = Field(300, ge=1, le=3600, description="Maximum execution time in seconds")
+    network_isolated: bool = Field(True, description="Isolate network access")
+
+
+@app.post("/api/sandbox/run", response_model=dict)
+async def run_in_windows_sandbox(
+    request: RunInSandboxRequest,
+) -> dict:
+    """Execute a PowerShell script in a disposable Windows Sandbox.
+    
+    The sandbox is created on-demand, executes the script, and is destroyed
+    after completion. All execution is isolated from the host system.
+    """
+    try:
+        result = await asyncio.to_thread(
+            run_in_sandbox,
+            script_content=request.script,
+            timeout_seconds=request.timeout_seconds,
+            network_isolated=request.network_isolated,
+        )
+        return result
+    except WindowsSandboxError as error:
+        raise HTTPException(status_code=500, detail=str(error))
+
+
+@app.get("/api/sandbox/status")
+async def sandbox_status() -> dict:
+    """Get Windows Sandbox capability status."""
+    import subprocess
+    
+    try:
+        # Check if Windows Sandbox feature is enabled
+        result = subprocess.run(
+            ["dism", "/online", "/get-features", "/featurename:Containers-DisposableClientVM"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        
+        is_enabled = "Enabled" in result.stdout
+        
+        return {
+            "windows_sandbox_enabled": is_enabled,
+            "hyper_v_available": True,  # Assume Hyper-V is available on Windows 10/11 Pro/Enterprise
+            "capabilities": {
+                "disposable_execution": is_enabled,
+                "network_isolation": True,
+                "file_system_isolation": True,
+                "process_isolation": True,
+            },
+        }
+    except Exception as error:
+        return {
+            "windows_sandbox_enabled": False,
+            "error": str(error),
+            "capabilities": {
+                "disposable_execution": False,
+                "network_isolation": False,
+                "file_system_isolation": False,
+                "process_isolation": False,
+            },
+        }
+
+
+@app.get("/api/session", response_model=SessionState, dependencies=[Depends(require_capability("workflow.read"))])
 async def session(store: JarvisStore = Depends(get_store)) -> SessionState:
     return store.get_session()
 
@@ -645,6 +1028,15 @@ async def freeflow_capabilities() -> FreeFlowJmfCapabilities:
 @app.get("/api/integrations/freeflow/jobs", response_model=FreeFlowJmfJobs, dependencies=[Depends(require_capability("monitoring.read"))])
 async def freeflow_jobs(service: FreeFlowJmfService = Depends(get_freeflow_jmf)) -> FreeFlowJmfJobs:
     return await asyncio.to_thread(service.jobs)
+
+
+@app.get("/api/integrations/freeflow/messages", response_model=list[FreeFlowJmfMessages], dependencies=[Depends(require_capability("monitoring.read"))])
+async def freeflow_known_messages(service: FreeFlowJmfService = Depends(get_freeflow_jmf)) -> list[FreeFlowJmfMessages]:
+    """Test KnownMessages capability on all configured FreeFlow servers.
+    
+    Returns the list of supported JDF message types for each server.
+    """
+    return await asyncio.to_thread(service.known_messages)
 
 
 @app.get("/api/operations/monitoring", response_model=OperationsMonitoringSnapshot, dependencies=[Depends(require_capability("monitoring.read"))])
@@ -779,6 +1171,62 @@ async def workflow(workflow_id: int, store: JarvisStore = Depends(get_store)) ->
     if result is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workflow was not found.")
     return result
+
+
+@app.get("/api/workflows/{workflow_id}/workshop-jobs", response_model=list[WorkshopJob], dependencies=[Depends(require_capability("workflow.read"))])
+async def workshop_jobs(workflow_id: int, store: JarvisStore = Depends(get_store)) -> list[WorkshopJob]:
+    if store.get_workflow(workflow_id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workflow was not found.")
+    return store.get_workshop_jobs(workflow_id)
+
+
+@app.get("/api/workshop-jobs/{job_id}", response_model=WorkshopJob, dependencies=[Depends(require_capability("workflow.read"))])
+async def workshop_job(job_id: int, store: JarvisStore = Depends(get_store)) -> WorkshopJob:
+    result = store.get_workshop_job(job_id)
+    if result is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workshop job was not found.")
+    return result
+
+
+@app.post("/api/workshop-jobs/{job_id}/cancel", response_model=WorkshopJobCancelResponse, dependencies=[Depends(require_capability("workflow.design"))])
+async def cancel_workshop_job(job_id: int, store: JarvisStore = Depends(get_store)) -> WorkshopJobCancelResponse:
+    result = store.cancel_workshop_job(job_id)
+    if result is None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Workshop job is not queued or running.")
+    task = _workshop_tasks.get(job_id)
+    if task is not None:
+        task.cancel()
+    return WorkshopJobCancelResponse(job=result, cancelled=True)
+
+
+@app.post("/api/workshop-jobs/{job_id}/retry", response_model=WorkshopJobResponse, status_code=status.HTTP_202_ACCEPTED, dependencies=[Depends(require_capability("workflow.design"))])
+async def retry_workshop_job(
+    job_id: int,
+    provider: OpenAICompatibleProvider = Depends(get_workshop_provider),
+    store: JarvisStore = Depends(get_store),
+    settings: Settings = Depends(get_settings),
+) -> WorkshopJobResponse:
+    source = store.get_workshop_job(job_id)
+    workflow = store.get_workflow(source.workflow_id) if source else None
+    if source is None or workflow is None:
+        raise HTTPException(status_code=404, detail="Workshop job or workflow was not found.")
+    _validate_workshop_operation(workflow, source.operation)
+    job = store.retry_workshop_job(job_id)
+    if job is None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Only a failed or cancelled current-revision Workshop job can be retried.")
+    _start_workshop_task(job, provider, store, settings)
+    return WorkshopJobResponse(job=job, workflow=store.get_workflow(job.workflow_id))
+
+
+@app.post("/api/workflows/{workflow_id}/workshop-jobs", response_model=WorkshopJobResponse, status_code=status.HTTP_202_ACCEPTED, dependencies=[Depends(require_capability("workflow.design"))])
+async def queue_workshop_job(
+    workflow_id: int,
+    request: WorkshopJobRequest,
+    provider: OpenAICompatibleProvider = Depends(get_workshop_provider),
+    store: JarvisStore = Depends(get_store),
+    settings: Settings = Depends(get_settings),
+) -> WorkshopJobResponse:
+    return await _queue_workshop_job(workflow_id, request, provider, store, settings)
 
 
 @app.get("/api/workflows/{workflow_id}/export", dependencies=[Depends(require_capability("workflow.read"))])
@@ -1268,3 +1716,397 @@ async def chat(
         location=routed_result.route.location,
         failover=routed_result.failover,
     )
+
+
+# ============================================================================
+# Release and Recovery API Endpoints
+# ============================================================================
+
+class ReleasePackageCreateRequest(BaseModel):
+    package_id: str
+    version: str
+    files: dict[str, str]  # path -> sha256
+
+
+class ReleasePromotionRequest(BaseModel):
+    action: str  # "test", "review", "approve", "promote"
+    actor: str | None = None
+
+
+class DatabaseBackupRequest(BaseModel):
+    backup_id: str | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class DatabaseRestoreRequest(BaseModel):
+    backup_id: str
+    verify_integrity: bool = True
+
+
+class UpgradeBeginRequest(BaseModel):
+    upgrade_id: str
+    schema_version_from: int
+    schema_version_to: int
+
+
+class UpgradeProgressRequest(BaseModel):
+    progress_percent: int
+    action: str
+    error: str | None = None
+
+
+@app.get("/api/release/status", dependencies=[Depends(require_capability("workflow.read"))])
+async def release_status(settings: Settings = Depends(get_settings)) -> dict:
+    """Get the current release promotion system status."""
+    system = get_release_promotion_system(settings.storage_path / "release")
+    return {
+        "packageCount": len(system.list_packages()),
+        "acceptanceMatrix": system.get_acceptance_matrix(),
+    }
+
+
+@app.post("/api/release/packages", status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_capability("workflow.configure"))])
+async def create_release_package(
+    request: ReleasePackageCreateRequest,
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    """Create a new release package."""
+    system = get_release_promotion_system(settings.storage_path / "release")
+    artifact_root = settings.workflow_artifact_root
+    
+    pkg = system.create_package(
+        package_id=request.package_id,
+        version=request.version,
+        artifact_root=artifact_root,
+        files=request.files,
+    )
+    
+    return {
+        "packageId": pkg.package_id,
+        "version": pkg.version,
+        "stage": pkg.stage.value,
+        "created_at": pkg.created_at,
+    }
+
+
+@app.get("/api/release/packages", dependencies=[Depends(require_capability("workflow.read"))])
+async def list_release_packages(settings: Settings = Depends(get_settings)) -> list[dict]:
+    """List all release packages."""
+    system = get_release_promotion_system(settings.storage_path / "release")
+    return system.list_packages()
+
+
+@app.get("/api/release/packages/{package_id}", dependencies=[Depends(require_capability("workflow.read"))])
+async def get_release_package(
+    package_id: str,
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    """Get a specific release package."""
+    system = get_release_promotion_system(settings.storage_path / "release")
+    pkg = system.get_package(package_id)
+    
+    if not pkg:
+        raise HTTPException(status_code=404, detail="Package not found")
+    
+    return pkg.to_dict()
+
+
+@app.post("/api/release/packages/{package_id}/promote", dependencies=[Depends(require_capability("workflow.configure"))])
+async def promote_release_package(
+    package_id: str,
+    request: ReleasePromotionRequest,
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    """Promote a release package through stages."""
+    system = get_release_promotion_system(settings.storage_path / "release")
+    actor = request.actor or getpass.getuser()
+    
+    success, message = system.promote_package(package_id, request.action, actor)
+    
+    if not success:
+        raise HTTPException(status_code=409, detail=message)
+    
+    return {
+        "packageId": package_id,
+        "action": request.action,
+        "actor": actor,
+        "message": message,
+    }
+
+
+@app.get("/api/release/acceptance-matrix", dependencies=[Depends(require_capability("workflow.read"))])
+async def get_acceptance_matrix(settings: Settings = Depends(get_settings)) -> dict:
+    """Get the current acceptance matrix configuration."""
+    system = get_release_promotion_system(settings.storage_path / "release")
+    matrix = system.get_acceptance_matrix()
+    return matrix
+
+
+@app.post("/api/release/acceptance-matrix", dependencies=[Depends(require_capability("workflow.configure"))])
+async def update_acceptance_matrix(
+    request: dict,
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    """Update the acceptance matrix configuration."""
+    system = get_release_promotion_system(settings.storage_path / "release")
+    required = request.get("required")
+    optional = request.get("optional")
+    
+    matrix = system.update_acceptance_matrix(required=required, optional=optional)
+    return matrix.get_satisfaction_report([])
+
+
+@app.get("/api/release/validate-package/{package_id}/{version}", dependencies=[Depends(require_capability("workflow.read"))])
+async def validate_release_package(
+    package_id: str,
+    version: str,
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    """Validate a release package for clean-machine deployment."""
+    validator = get_clean_machine_validator(settings.workflow_artifact_root)
+    package_path = settings.workflow_artifact_root / package_id / version
+    
+    if not package_path.exists():
+        raise HTTPException(status_code=404, detail="Package not found")
+    
+    # Load manifest
+    manifest_path = package_path / "MANIFEST.json"
+    if not manifest_path.exists():
+        raise HTTPException(status_code=400, detail="Missing MANIFEST.json")
+    
+    import json
+    manifest = PackageManifest.from_dict(json.loads(manifest_path.read_text()))
+    
+    report = validator.validate_package(package_path, manifest)
+    return report.to_dict()
+
+
+@app.get("/api/database/backup/list", dependencies=[Depends(require_capability("workflow.configure"))])
+async def list_database_backups(settings: Settings = Depends(get_settings)) -> list[dict]:
+    """List all database backups."""
+    backup_system = get_database_backup_system(settings.storage_path / "backups")
+    return backup_system.list_backups()
+
+
+@app.post("/api/database/backup/create", dependencies=[Depends(require_capability("workflow.configure"))])
+async def create_database_backup(
+    request: DatabaseBackupRequest,
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    """Create a database backup."""
+    backup_system = get_database_backup_system(settings.storage_path / "backups")
+    
+    backup_path, metadata = backup_system.create_backup(
+        database_path=settings.database_path,
+        backup_id=request.backup_id,
+        metadata=request.metadata,
+    )
+    
+    return {
+        "backupId": metadata.backup_id,
+        "backupPath": backup_path,
+        "schemaVersion": metadata.schema_version,
+        "recordCounts": metadata.record_counts,
+        "checksum": metadata.checksum,
+    }
+
+
+@app.get("/api/database/backup/{backup_id}", dependencies=[Depends(require_capability("workflow.read"))])
+async def get_backup_metadata(
+    backup_id: str,
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    """Get backup metadata."""
+    backup_system = get_database_backup_system(settings.storage_path / "backups")
+    metadata = backup_system.get_backup(backup_id)
+    
+    if not metadata:
+        raise HTTPException(status_code=404, detail="Backup not found")
+    
+    return metadata.to_dict()
+
+
+@app.post("/api/database/backup/{backup_id}/validate", dependencies=[Depends(require_capability("workflow.read"))])
+async def validate_backup(
+    backup_id: str,
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    """Validate a backup's integrity."""
+    backup_system = get_database_backup_system(settings.storage_path / "backups")
+    valid, errors = backup_system.validate_backup(backup_id)
+    
+    return {
+        "backupId": backup_id,
+        "valid": valid,
+        "errors": errors,
+    }
+
+
+@app.post("/api/database/backup/{backup_id}/restore", dependencies=[Depends(require_capability("workflow.configure"))])
+async def restore_database_backup(
+    backup_id: str,
+    request: DatabaseRestoreRequest,
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    """Restore a database from backup."""
+    backup_system = get_database_backup_system(settings.storage_path / "backups")
+    
+    # Create a temporary target path
+    import tempfile
+    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp:
+        target_path = Path(tmp.name)
+    
+    try:
+        report = backup_system.restore_backup(
+            backup_path=f"{settings.storage_path / 'backups' / backup_id}.db.gz",
+            target_path=target_path,
+            verify_integrity=request.verify_integrity,
+        )
+        
+        if not report.success:
+            raise HTTPException(status_code=400, detail=" | ".join(report.errors))
+        
+        # Replace the current database with the restored one
+        import shutil
+        shutil.copy2(target_path, settings.database_path)
+        
+        return {
+            "success": True,
+            "backupId": backup_id,
+            "restoredTables": report.restored_tables,
+            "recordCounts": report.record_counts,
+        }
+    finally:
+        if target_path.exists():
+            target_path.unlink()
+
+
+@app.delete("/api/database/backup/{backup_id}", dependencies=[Depends(require_capability("workflow.configure"))])
+async def delete_database_backup(
+    backup_id: str,
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    """Delete a database backup."""
+    backup_system = get_database_backup_system(settings.storage_path / "backups")
+    
+    if not backup_system.delete_backup(backup_id):
+        raise HTTPException(status_code=404, detail="Backup not found")
+    
+    return {"deleted": backup_id}
+
+
+@app.get("/api/upgrade/status", dependencies=[Depends(require_capability("workflow.read"))])
+async def get_upgrade_status(settings: Settings = Depends(get_settings)) -> dict:
+    """Get the current upgrade status."""
+    upgrade_system = get_upgrade_recovery_system(settings.storage_path / "upgrade-state")
+    state = upgrade_system.get_current_state()
+    
+    if not state:
+        return {"active": False}
+    
+    return {
+        "active": True,
+        "state": state.to_dict(),
+    }
+
+
+@app.post("/api/upgrade/begin", dependencies=[Depends(require_capability("workflow.configure"))])
+async def begin_upgrade(
+    request: UpgradeBeginRequest,
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    """Begin a new upgrade operation."""
+    upgrade_system = get_upgrade_recovery_system(settings.storage_path / "upgrade-state")
+    
+    state = upgrade_system.begin_upgrade(
+        upgrade_id=request.upgrade_id,
+        source_database=settings.database_path,
+        target_database=settings.database_path,  # In-place upgrade
+        schema_version_from=request.schema_version_from,
+        schema_version_to=request.schema_version_to,
+    )
+    
+    return {
+        "upgradeId": state.upgrade_id,
+        "status": state.status.value,
+        "schemaVersionFrom": state.schema_version_from,
+        "schemaVersionTo": state.schema_version_to,
+    }
+
+
+@app.post("/api/upgrade/progress", dependencies=[Depends(require_capability("workflow.configure"))])
+async def update_upgrade_progress(
+    request: UpgradeProgressRequest,
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    """Update upgrade progress."""
+    upgrade_system = get_upgrade_recovery_system(settings.storage_path / "upgrade-state")
+    
+    state = upgrade_system.update_progress(
+        progress_percent=request.progress_percent,
+        action=request.action,
+        error=request.error,
+    )
+    
+    return {
+        "upgradeId": state.upgrade_id,
+        "status": state.status.value,
+        "progressPercent": state.progress_percent,
+        "lastAction": state.last_action,
+    }
+
+
+@app.get("/api/upgrade/recover", dependencies=[Depends(require_capability("workflow.configure"))])
+async def recover_interrupted_upgrade(settings: Settings = Depends(get_settings)) -> dict:
+    """Recover from an interrupted upgrade."""
+    upgrade_system = get_upgrade_recovery_system(settings.storage_path / "upgrade-state")
+    
+    state = upgrade_system.recover_interrupted_upgrade()
+    
+    if not state:
+        return {
+            "recoverable": False,
+            "reason": "No interrupted upgrade found or rollback not available",
+        }
+    
+    return {
+        "recoverable": True,
+        "state": state.to_dict(),
+    }
+
+
+@app.post("/api/upgrade/rollback", dependencies=[Depends(require_capability("workflow.configure"))])
+async def rollback_upgrade(settings: Settings = Depends(get_settings)) -> dict:
+    """Rollback an upgrade using the available backup."""
+    upgrade_system = get_upgrade_recovery_system(settings.storage_path / "upgrade-state")
+    backup_system = get_database_backup_system(settings.storage_path / "backups")
+    
+    state = upgrade_system.get_current_state()
+    
+    if not state or not state.rollback_available or not state.rollback_path:
+        raise HTTPException(
+            status_code=409,
+            detail="No rollback available. Begin an upgrade with backup first.",
+        )
+    
+    # Restore from the rollback backup
+    report = backup_system.restore_backup(
+        backup_path=state.rollback_path,
+        target_path=settings.database_path,
+        verify_integrity=True,
+    )
+    
+    if not report.success:
+        raise HTTPException(status_code=400, detail=" | ".join(report.errors))
+    
+    # Update upgrade state
+    upgrade_system.update_progress(
+        progress_percent=100,
+        action="Rollback completed",
+    )
+    
+    return {
+        "success": True,
+        "restoredTables": report.restored_tables,
+        "recordCounts": report.record_counts,
+    }

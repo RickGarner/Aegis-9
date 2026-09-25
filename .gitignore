@@ -12,6 +12,12 @@ venv/
 # .NET / Desktop
 desktop/**/bin/
 desktop/**/obj/
+/.artifacts/
+/.build/
+/.review/
+/.playwright-mcp/
+*.egg-info/
+/backend/test_debug*/
 
 # IDE
 .vscode/

@@ -5,12 +5,14 @@
   "preferredPrimary": {
     "name": "BSOAUTALB001",
     "hostname": "BSOAUTALB001",
-    "nodeNumber": 1
+    "nodeNumber": 1,
+    "ipAddress": "10.30.67.105"
   },
   "preferredSecondary": {
     "name": "BSOAUTALB002",
     "hostname": "BSOAUTALB002",
-    "nodeNumber": 2
+    "nodeNumber": 2,
+    "ipAddress": "10.30.67.106"
   },
   "database": {
     "type": "mssql",
@@ -49,12 +51,15 @@
   },
   "environmentProfile": {
     "moveitVersion": "",
-    "serviceName": "",
-    "webAdminUrl": "",
+    "serviceName": "MOVEitCentral",
+    "webAdminUrl": "https://{hostname}:443/webadmin/",
     "runtimeRoleQuery": "",
     "gracefulShutdownMethod": "",
     "clearAdminReplicationMethod": "",
     "runningTaskQuery": "",
-    "winRmValidated": false
+    "winRmValidated": false,
+    "discoveredServices": ["MOVEitCentral", "MICAdmin"],
+    "serviceStatus": "STOPPED",
+    "onsiteDiscoveryDate": "2026-09-21"
   }
 }

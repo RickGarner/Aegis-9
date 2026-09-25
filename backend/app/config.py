@@ -63,6 +63,31 @@ class Settings(BaseSettings):
         default="dmr/docker.io/ai/qwen3-coder:30b-a3b-q4_K_M,dmr/docker.io/ai/qwen3:8b-q4_K_M,ollama/llama3.1:8b,ollama/llama3.2:latest",
         validation_alias="JARVIS_TOOL_CAPABLE_MODELS",
     )
+    workshop_enabled: bool = Field(
+        default=True,
+        validation_alias="JARVIS_WORKSHOP_ENABLED",
+    )
+    workshop_local_host: Literal["127.0.0.1", "localhost", "::1"] = Field(
+        default="127.0.0.1",
+        validation_alias="JARVIS_WORKSHOP_LOCAL_HOST",
+    )
+    workshop_local_port: int | None = Field(
+        default=None,
+        ge=1,
+        le=65535,
+        validation_alias="JARVIS_WORKSHOP_LOCAL_PORT",
+    )
+    workshop_model: str | None = Field(default=None, validation_alias="JARVIS_WORKSHOP_MODEL")
+    workshop_priority: int = Field(
+        default=0,
+        ge=0,
+        le=10,
+        validation_alias="JARVIS_WORKSHOP_PRIORITY",
+    )
+    local_only_mode: bool = Field(
+        default=False,
+        validation_alias="JARVIS_LOCAL_ONLY_MODE",
+    )
     fallback_model: str | None = Field(
         default="llama3.1:8b",
         validation_alias="JARVIS_FALLBACK_MODEL",
@@ -86,6 +111,8 @@ class Settings(BaseSettings):
     whisper_model: str = Field(default="small.en", validation_alias="JARVIS_WHISPER_MODEL")
     whisper_device: str = Field(default="auto", validation_alias="JARVIS_WHISPER_DEVICE")
     whisper_compute_type: str = Field(default="auto", validation_alias="JARVIS_WHISPER_COMPUTE_TYPE")
+    voice_runtime_url: str = Field(default="http://127.0.0.1:5050", validation_alias="JARVIS_VOICE_RUNTIME_URL")
+    runtime_health_timeout_seconds: float = Field(default=3, ge=0.5, le=15, validation_alias="JARVIS_RUNTIME_HEALTH_TIMEOUT_SECONDS")
     database_path: Path = Field(
         default=Path(__file__).resolve().parents[2] / "storage" / "jarvis.db",
         validation_alias="JARVIS_DATABASE_PATH",
@@ -122,6 +149,7 @@ class Settings(BaseSettings):
     post_acceptance_storage_root: Path = Field(default=Path("storage/post-acceptance"), validation_alias="JARVIS_POST_ACCEPTANCE_STORAGE_ROOT")
     test_lab_root: Path = Field(default=Path("storage/test-lab"), validation_alias="JARVIS_TEST_LAB_ROOT")
     tool_qualification_store_path: Path = Field(default=Path("storage/tool-capability-reports.json"), validation_alias="JARVIS_TOOL_QUALIFICATION_STORE_PATH")
+    audit_log_path: Path = Field(default=Path("storage/audit.jsonl"), validation_alias="JARVIS_AUDIT_LOG_PATH")
     server_inventory_path: Path = Field(
         default=Path(__file__).resolve().parents[2] / "config" / "monitored-servers.json",
         validation_alias="JARVIS_SERVER_INVENTORY_PATH",
@@ -134,6 +162,7 @@ class Settings(BaseSettings):
     developer_studio_bridge_url: str = Field(default="http://127.0.0.1:8765", validation_alias="JARVIS_DEVELOPER_STUDIO_BRIDGE_URL")
     developer_studio_bridge_token: str | None = Field(default=None, validation_alias="AEGIS_BRIDGE_TOKEN")
     developer_studio_bridge_timeout_seconds: float = Field(default=3, ge=0.5, le=15, validation_alias="JARVIS_DEVELOPER_STUDIO_BRIDGE_TIMEOUT_SECONDS")
+    aegis_bridge_secret: str | None = Field(default=None, validation_alias="AEGIS_BRIDGE_SECRET")
     moveit_servers: str = Field(
         default="BSOAUTALB001,BSOAUTALB002",
         validation_alias="JARVIS_MOVEIT_SERVERS",

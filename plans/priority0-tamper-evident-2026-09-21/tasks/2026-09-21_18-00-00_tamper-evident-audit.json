@@ -1,0 +1,32 @@
+[
+  {
+    "content": "[TAMPER-001] Review existing policy signing (sign_policies.py, policy_integrity.py)",
+    "id": "TAMPER-001",
+    "status": "completed"
+  },
+  {
+    "content": "[TAMPER-002] Add artifact signing to workflow_runner.py (Ed25519 signatures for generated artifacts)",
+    "id": "TAMPER-002",
+    "status": "completed"
+  },
+  {
+    "content": "[TAMPER-003] Implement sequence/previous-hash/current-hash audit chain in local_audit.py",
+    "id": "TAMPER-003",
+    "status": "completed"
+  },
+  {
+    "content": "[TAMPER-004] Add integrity verification endpoint to backend API",
+    "id": "TAMPER-004",
+    "status": "completed"
+  },
+  {
+    "content": "[TAMPER-005] Create tests for artifact signature verification and audit chain",
+    "id": "TAMPER-005",
+    "status": "completed"
+  },
+  {
+    "content": "[TAMPER-006] Document tamper-evident workflow and migration procedure for legacy artifacts",
+    "id": "TAMPER-006",
+    "status": "completed"
+  }
+]

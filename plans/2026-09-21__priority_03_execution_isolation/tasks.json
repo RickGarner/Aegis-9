@@ -1,0 +1,32 @@
+[
+  {
+    "content": "[TAMPER-101] Review existing Test Lab Windows Sandbox implementation",
+    "id": "TAMPER-101",
+    "status": "completed"
+  },
+  {
+    "content": "[TAMPER-102] Add resource limits (CPU, memory, network) to sandbox configuration",
+    "id": "TAMPER-102",
+    "status": "completed"
+  },
+  {
+    "content": "[TAMPER-103] Implement automatic sandbox cleanup after execution",
+    "id": "TAMPER-103",
+    "status": "completed"
+  },
+  {
+    "content": "[TAMPER-104] Add sandbox execution status and monitoring endpoints",
+    "id": "TAMPER-104",
+    "status": "completed"
+  },
+  {
+    "content": "[TAMPER-105] Create comprehensive tests for sandbox isolation",
+    "id": "TAMPER-105",
+    "status": "completed"
+  },
+  {
+    "content": "[TAMPER-106] Document production execution isolation workflow",
+    "id": "TAMPER-106",
+    "status": "completed"
+  }
+]

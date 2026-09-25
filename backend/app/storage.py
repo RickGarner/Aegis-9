@@ -100,6 +100,22 @@ class WorkflowRun(BaseModel):
     error: str = ""
 
 
+class WorkshopJob(BaseModel):
+    id: int
+    workflow_id: int
+    revision: int
+    operation: str
+    status: str
+    provider: str = "workshop"
+    model: str = ""
+    request_json: str = ""
+    response_json: str = ""
+    error: str = ""
+    created_at: str
+    started_at: str | None = None
+    completed_at: str | None = None
+
+
 class WorkflowRunEvent(BaseModel):
     id: int
     run_id: int
@@ -161,6 +177,44 @@ class SessionState(BaseModel):
 class JarvisStore:
     def __init__(self, database_path: Path) -> None:
         self._database_path = database_path
+        self._workshop_job_id: int | None = None
+
+    def for_workshop_job(self, job_id: int) -> "JarvisStore":
+        """Give one background task a commit guard without changing other callers."""
+        scoped = JarvisStore(self._database_path)
+        scoped._workshop_job_id = job_id
+        return scoped
+
+    def _guard_workshop_write(self, connection, workflow_id: int) -> bool:
+        if self._workshop_job_id is None:
+            return True
+        # Serialize validation and result persistence against edits/cancellation.
+        connection.execute("BEGIN IMMEDIATE")
+        job = connection.execute("SELECT * FROM workshop_jobs WHERE id=? AND workflow_id=? AND status='running'",
+                                 (self._workshop_job_id, workflow_id)).fetchone()
+        row = connection.execute(f"SELECT {self._workflow_columns()} FROM workflows WHERE id=? AND archived=0", (workflow_id,)).fetchone()
+        if job is None or row is None or job["revision"] != row["revision"]:
+            return False
+        try:
+            snapshot = json.loads(job["request_json"])["workflow"]
+        except (ValueError, KeyError, TypeError):
+            return False
+        current = self._workflow_from_row(row).model_dump(mode="json")
+        # Compare inputs, including same-revision clarification/approval changes.
+        fields = ("title", "description", "attachment_ids", "language", "revision", "state",
+                  "approval_stage", "plan_text", "test_plan_text", "implementation_text",
+                  "clarification_questions", "clarification_answers")
+        return isinstance(snapshot, dict) and all(snapshot.get(key) == current.get(key) for key in fields)
+
+    def _finish_workshop_write(self, connection, row, provider: str, model: str) -> None:
+        if self._workshop_job_id is None:
+            return
+        connection.execute(
+            "UPDATE workshop_jobs SET status='completed',provider=?,model=?,response_json=?,error='',completed_at=CURRENT_TIMESTAMP WHERE id=? AND status='running'",
+            (provider, model, self._workflow_from_row(row).model_dump_json(), self._workshop_job_id),
+        )
+        connection.execute("INSERT INTO activity_logs(event_type,message,tone) VALUES(?,?,?)",
+                           ("workshop-job-completed", f"Workshop job {self._workshop_job_id} completed using {provider}/{model}.", "success"))
 
     def initialize(self) -> None:
         self._database_path.parent.mkdir(parents=True, exist_ok=True)
@@ -289,6 +343,26 @@ class JarvisStore:
                     FOREIGN KEY(run_id) REFERENCES workflow_runs(id),
                     UNIQUE(run_id, sequence)
                 );
+
+                CREATE TABLE IF NOT EXISTS workshop_jobs (
+                    id INTEGER PRIMARY KEY,
+                    workflow_id INTEGER NOT NULL,
+                    revision INTEGER NOT NULL,
+                    operation TEXT NOT NULL,
+                    status TEXT NOT NULL DEFAULT 'queued' CHECK(status IN ('queued','running','completed','failed','cancelled')),
+                    provider TEXT NOT NULL DEFAULT 'workshop',
+                    model TEXT NOT NULL DEFAULT '',
+                    request_json TEXT NOT NULL DEFAULT '',
+                    response_json TEXT NOT NULL DEFAULT '',
+                    error TEXT NOT NULL DEFAULT '',
+                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    started_at TEXT,
+                    completed_at TEXT,
+                    FOREIGN KEY(workflow_id) REFERENCES workflows(id)
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_workshop_jobs_workflow
+                    ON workshop_jobs(workflow_id, revision, id DESC);
 
                 CREATE TABLE IF NOT EXISTS notification_outbox (
                     id INTEGER PRIMARY KEY,
@@ -702,14 +776,17 @@ class JarvisStore:
     def save_workflow_plan(self, workflow_id: int, content: str, provider: str, model: str, questions: list[dict] | None = None, finalizing: bool = False) -> Workflow | None:
         questions = questions or []
         with self._connect() as connection:
+            if not self._guard_workshop_write(connection, workflow_id):
+                return None
             current = connection.execute("SELECT title, state FROM workflows WHERE id = ? AND archived = 0", (workflow_id,)).fetchone()
-            if current is None or current["state"] not in {"draft", "rejected", "plan_review"}:
+            if current is None or current["state"] not in {"draft", "rejected", "plan_review", "design_review"}:
                 return None
             next_state = "needs_clarification" if questions else "plan_review" if finalizing else "design_review"
             connection.execute("UPDATE workflows SET plan_text = ?, plan_provider = ?, plan_model = ?, test_plan_text='', test_plan_provider='', test_plan_model='', implementation_text = '', implementation_provider = '', implementation_model = '', clarification_questions_json = ?, artifact_sha256='', permission_manifest_json='{}', latest_test_status='', latest_test_evidence_sha256='', latest_test_summary='', state = ?, approval_stage = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", (content, provider, model, json.dumps(questions), next_state, next_state, workflow_id))
             message = f"Final plan for '{current['title']}' is ready for approval or rejection." if finalizing and not questions else f"Plan designed for '{current['title']}' by {provider}/{model}."
             connection.execute("INSERT INTO activity_logs (event_type, message, tone) VALUES (?, ?, ?)", ("workflow-ready" if finalizing and not questions else "workflow-ai", message, "success" if finalizing and not questions else "info"))
             row = connection.execute(f"SELECT {self._workflow_columns()} FROM workflows WHERE id = ?", (workflow_id,)).fetchone()
+            self._finish_workshop_write(connection, row, provider, model)
         return self._workflow_from_row(row)
 
     def save_clarification_answer(self, workflow_id: int, question_id: str, answer: str) -> Workflow | None:
@@ -743,18 +820,23 @@ class JarvisStore:
 
     def save_workflow_implementation(self, workflow_id: int, content: str, provider: str, model: str) -> Workflow | None:
         with self._connect() as connection:
+            if not self._guard_workshop_write(connection, workflow_id):
+                return None
             current = connection.execute("SELECT title, state FROM workflows WHERE id = ? AND archived = 0", (workflow_id,)).fetchone()
             if current is None or current["state"] != "test_plan_approved":
                 return None
             connection.execute("UPDATE workflows SET implementation_text = ?, implementation_provider = ?, implementation_model = ?, state = 'implementation_review', approval_stage = 'implementation_review', artifact_sha256='', permission_manifest_json='{}', latest_test_status='', latest_test_evidence_sha256='', latest_test_summary='', updated_at = CURRENT_TIMESTAMP WHERE id = ?", (content, provider, model, workflow_id))
             connection.execute("INSERT INTO activity_logs (event_type, message, tone) VALUES (?, ?, ?)", ("workflow-ai", f"Implementation generated for '{current['title']}' by {provider}/{model}.", "info"))
             row = connection.execute(f"SELECT {self._workflow_columns()} FROM workflows WHERE id = ?", (workflow_id,)).fetchone()
+            self._finish_workshop_write(connection, row, provider, model)
         return self._workflow_from_row(row)
 
     def save_workflow_test_plan(self, workflow_id: int, content: str, provider: str, model: str) -> Workflow | None:
         if not content.strip():
             return None
         with self._connect() as connection:
+            if not self._guard_workshop_write(connection, workflow_id):
+                return None
             current = connection.execute("SELECT title,state FROM workflows WHERE id=? AND archived=0", (workflow_id,)).fetchone()
             if current is None or current["state"] != "plan_approved":
                 return None
@@ -767,6 +849,7 @@ class JarvisStore:
                 ("workflow-test-plan", f"Non-production test plans generated for '{current['title']}' by {provider}/{model}; user approval is required before implementation.", "info"),
             )
             row = connection.execute(f"SELECT {self._workflow_columns()} FROM workflows WHERE id=?", (workflow_id,)).fetchone()
+            self._finish_workshop_write(connection, row, provider, model)
         return self._workflow_from_row(row)
 
     def revise_workflow_implementation(self, workflow_id: int, content: str, actor: str, reason: str) -> Workflow | None:
@@ -994,6 +1077,154 @@ class JarvisStore:
                     ON latest.id = runs.id"""
             ).fetchall()
         return {int(row["workflow_id"]): WorkflowRun(**dict(row)) for row in rows}
+
+    def create_workshop_job(
+        self,
+        workflow_id: int,
+        operation: str,
+        request_json: str,
+        provider: str = "workshop",
+        model: str = "",
+        expected_revision: int | None = None,
+    ) -> WorkshopJob | None:
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            workflow = connection.execute(
+                "SELECT id,revision,state,archived FROM workflows WHERE id=?",
+                (workflow_id,),
+            ).fetchone()
+            if workflow is None or workflow["archived"] or not operation.strip():
+                return None
+            if expected_revision is not None and workflow["revision"] != expected_revision:
+                return None
+            if connection.execute("SELECT 1 FROM workshop_jobs WHERE workflow_id=? AND status IN ('queued','running')", (workflow_id,)).fetchone():
+                return None
+            cursor = connection.execute(
+                """INSERT INTO workshop_jobs(
+                    workflow_id,revision,operation,status,provider,model,request_json
+                ) VALUES(?,?,?,?,?,?,?)""",
+                (workflow_id, workflow["revision"], operation.strip(), "queued", provider, model, request_json),
+            )
+            job_id = int(cursor.lastrowid)
+            connection.execute(
+                "INSERT INTO activity_logs(event_type,message,tone) VALUES(?,?,?)",
+                ("workshop-job-queued", f"Workshop job {job_id} queued for workflow {workflow_id} revision {workflow['revision']}: {operation.strip()}.", "info"),
+            )
+            row = connection.execute("SELECT * FROM workshop_jobs WHERE id=?", (job_id,)).fetchone()
+        return WorkshopJob(**dict(row))
+
+    def claim_workshop_job(self, job_id: int) -> WorkshopJob | None:
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute(
+                """SELECT jobs.*, workflows.revision AS current_revision, workflows.archived
+                FROM workshop_jobs jobs JOIN workflows ON workflows.id=jobs.workflow_id
+                WHERE jobs.id=? AND jobs.status='queued'""",
+                (job_id,),
+            ).fetchone()
+            if row is None:
+                return None
+            if row["archived"] or row["revision"] != row["current_revision"]:
+                connection.execute("UPDATE workshop_jobs SET status='failed',error='Workflow was revised or archived before generation.',completed_at=CURRENT_TIMESTAMP WHERE id=?", (job_id,))
+                return None
+            connection.execute(
+                "UPDATE workshop_jobs SET status='running', started_at=CURRENT_TIMESTAMP WHERE id=? AND status='queued'",
+                (job_id,),
+            )
+            updated = connection.execute("SELECT * FROM workshop_jobs WHERE id=?", (job_id,)).fetchone()
+        return WorkshopJob(**dict(updated))
+
+    def complete_workshop_job(self, job_id: int, status: str, response_json: str = "", error: str = "") -> WorkshopJob | None:
+        if status not in {"completed", "failed", "cancelled"}:
+            raise ValueError("Invalid terminal Workshop job status.")
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute(
+                "SELECT * FROM workshop_jobs WHERE id=? AND status IN ('queued','running')",
+                (job_id,),
+            ).fetchone()
+            if row is None:
+                return None
+            connection.execute(
+                """UPDATE workshop_jobs SET status=?,response_json=?,error=?,completed_at=CURRENT_TIMESTAMP
+                WHERE id=? AND status IN ('queued','running')""",
+                (status, response_json, error, job_id),
+            )
+            connection.execute(
+                "INSERT INTO activity_logs(event_type,message,tone) VALUES(?,?,?)",
+                ("workshop-job-completed", f"Workshop job {job_id} finished with status {status}.", "success" if status == "completed" else "warning"),
+            )
+            updated = connection.execute("SELECT * FROM workshop_jobs WHERE id=?", (job_id,)).fetchone()
+        return WorkshopJob(**dict(updated))
+
+    def cancel_workshop_job(self, job_id: int) -> WorkshopJob | None:
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute(
+                "SELECT * FROM workshop_jobs WHERE id=? AND status IN ('queued','running')",
+                (job_id,),
+            ).fetchone()
+            if row is None:
+                return None
+            connection.execute(
+                "UPDATE workshop_jobs SET status='cancelled', error='Cancelled by operator.', completed_at=CURRENT_TIMESTAMP WHERE id=? AND status IN ('queued','running')",
+                (job_id,),
+            )
+            connection.execute(
+                "INSERT INTO activity_logs(event_type,message,tone) VALUES(?,?,?)",
+                ("workshop-job-cancelled", f"Workshop job {job_id} was cancelled by an operator.", "warning"),
+            )
+            updated = connection.execute("SELECT * FROM workshop_jobs WHERE id=?", (job_id,)).fetchone()
+        return WorkshopJob(**dict(updated))
+
+    def retry_workshop_job(self, job_id: int) -> WorkshopJob | None:
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            source = connection.execute(
+                """SELECT jobs.*, workflows.revision AS current_revision, workflows.archived
+                FROM workshop_jobs jobs JOIN workflows ON workflows.id=jobs.workflow_id
+                WHERE jobs.id=?""",
+                (job_id,),
+            ).fetchone()
+            if source is None or source["archived"] or source["status"] not in {"failed", "cancelled"}:
+                return None
+            if source["revision"] != source["current_revision"]:
+                return None
+            if connection.execute("SELECT 1 FROM workshop_jobs WHERE workflow_id=? AND status IN ('queued','running')", (source["workflow_id"],)).fetchone():
+                return None
+            cursor = connection.execute(
+                """INSERT INTO workshop_jobs(
+                    workflow_id,revision,operation,status,provider,model,request_json
+                ) VALUES(?,?,?,?,?,?,?)""",
+                (source["workflow_id"], source["current_revision"], source["operation"], "queued", source["provider"], source["model"], source["request_json"]),
+            )
+            new_id = int(cursor.lastrowid)
+            connection.execute(
+                "INSERT INTO activity_logs(event_type,message,tone) VALUES(?,?,?)",
+                ("workshop-job-retried", f"Workshop job {new_id} retried from job {job_id} for workflow {source['workflow_id']} revision {source['current_revision']}.", "info"),
+            )
+            row = connection.execute("SELECT * FROM workshop_jobs WHERE id=?", (new_id,)).fetchone()
+        return WorkshopJob(**dict(row))
+
+    def get_workshop_jobs(self, workflow_id: int, limit: int = 50) -> list[WorkshopJob]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                "SELECT * FROM workshop_jobs WHERE workflow_id=? ORDER BY id DESC LIMIT ?",
+                (workflow_id, limit),
+            ).fetchall()
+        return [WorkshopJob(**dict(row)) for row in rows]
+
+    def get_workshop_job(self, job_id: int) -> WorkshopJob | None:
+        with self._connect() as connection:
+            row = connection.execute("SELECT * FROM workshop_jobs WHERE id=?", (job_id,)).fetchone()
+        return WorkshopJob(**dict(row)) if row else None
+
+    def recover_interrupted_workshop_jobs(self) -> int:
+        with self._connect() as connection:
+            cursor = connection.execute(
+                "UPDATE workshop_jobs SET status='failed', error='Aegis-9 restarted before the Workshop job completed. Review and retry.', completed_at=CURRENT_TIMESTAMP WHERE status IN ('queued','running')"
+            )
+            return cursor.rowcount
 
     def get_latest_workflow_notification_states(self) -> dict[int, WorkflowNotificationState]:
         states: dict[int, WorkflowNotificationState] = {}

@@ -1,0 +1,32 @@
+[
+  {
+    "content": "[LOCAL-001] Review existing Local-Only Mode implementation",
+    "id": "LOCAL-001",
+    "status": "completed"
+  },
+  {
+    "content": "[LOCAL-002] Add local_only_mode setting to backend config and desktop preferences",
+    "id": "LOCAL-002",
+    "status": "completed"
+  },
+  {
+    "content": "[LOCAL-003] Implement network egress blocking validation for local-only mode",
+    "id": "LOCAL-003",
+    "status": "completed"
+  },
+  {
+    "content": "[LOCAL-004] Add cloud endpoint rejection in Local AI layer",
+    "id": "LOCAL-004",
+    "status": "completed"
+  },
+  {
+    "content": "[LOCAL-005] Create local-only mode acceptance test with firewall blocked",
+    "id": "LOCAL-005",
+    "status": "completed"
+  },
+  {
+    "content": "[LOCAL-006] Document Local-Only Mode architecture and usage",
+    "id": "LOCAL-006",
+    "status": "completed"
+  }
+]

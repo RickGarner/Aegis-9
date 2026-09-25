@@ -4,19 +4,33 @@
     "role": "Primary",
     "version": "8.0.0",
     "build": "33969",
+    "ipAddress": "10.30.67.21",
     "webUrl": "http://BSOXERALB001/FreeFlowCore",
     "jmfUrl": "http://BSOXERALB001:7751/FreeFlowCore",
+    "jmfEndpoint": "/FreeFlowCore/",
+    "jmfPort": 7751,
     "expectedText": "",
-    "enabled": true
+    "enabled": true,
+    "onsiteDiscoveryDate": "2026-09-21",
+    "jmfStatus": "REACHABLE_BUT_ERROR",
+    "jmfError": "HTTP 500 - Server-side NullPointerException with tested query formats",
+    "jmfInvestigationNotes": "plans/onsite-validation-2026-09-21/freeflow-jmf-investigation-notes.md"
   },
   {
     "name": "BSOXERALB002",
     "role": "Backup",
     "version": "8.1.2",
     "build": "35113",
+    "ipAddress": "10.30.67.20",
     "webUrl": "http://BSOXERALB002/FreeFlowCore",
     "jmfUrl": "http://BSOXERALB002:7751/FreeFlowCore",
+    "jmfEndpoint": "/FreeFlowCore/",
+    "jmfPort": 7751,
     "expectedText": "",
-    "enabled": true
+    "enabled": true,
+    "onsiteDiscoveryDate": "2026-09-21",
+    "jmfStatus": "REACHABLE_BUT_ERROR",
+    "jmfError": "HTTP 500 - Server-side NullPointerException with tested query formats",
+    "jmfInvestigationNotes": "plans/onsite-validation-2026-09-21/freeflow-jmf-investigation-notes.md"
   }
 ]

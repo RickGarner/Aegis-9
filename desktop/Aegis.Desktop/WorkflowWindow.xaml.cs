@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Threading;
 
@@ -12,6 +13,8 @@ public partial class WorkflowWindow : Window
     private CancellationTokenSource? _refreshCancellation;
     private Workflow? _workflow;
     private WorkflowRun? _latestRun;
+    private List<WorkshopJob> _workshopJobs = [];
+    private WorkshopJob? _selectedWorkshopJob;
     private bool _refreshing;
 
     public WorkflowWindow(int workflowId)
@@ -52,6 +55,14 @@ public partial class WorkflowWindow : Window
             UpdatedText.Text = $"Updated {DateTime.Now:HH:mm:ss}";
             var runs = await _client.GetWorkflowRunsAsync(_workflow.Id, _refreshCancellation.Token);
             _latestRun = runs.FirstOrDefault();
+            var selectedJobId = _selectedWorkshopJob?.Id;
+            _workshopJobs = await _client.GetWorkshopJobsAsync(_workflow.Id, _refreshCancellation.Token);
+            WorkshopJobsList.SelectionChanged -= WorkshopJobsList_SelectionChanged;
+            WorkshopJobsList.ItemsSource = _workshopJobs.Select(job => $"#{job.Id} · rev {job.Revision} · {job.Operation} · {job.Status.ToUpperInvariant()}" ).ToList();
+            _selectedWorkshopJob = _workshopJobs.FirstOrDefault(job => job.Id == selectedJobId) ?? _workshopJobs.FirstOrDefault();
+            WorkshopJobsList.SelectedIndex = _selectedWorkshopJob is null ? -1 : _workshopJobs.IndexOf(_selectedWorkshopJob);
+            WorkshopJobsList.SelectionChanged += WorkshopJobsList_SelectionChanged;
+            ShowWorkshopJob();
             if (_latestRun is null)
             {
                 ResultText.Text = $"Revision {_workflow.Revision}. Test: {_workflow.LatestTestStatus}. Supervisor: {(string.IsNullOrWhiteSpace(_workflow.SupervisorApprovedBy) ? "not approved" : _workflow.SupervisorApprovedBy)}.";
@@ -121,6 +132,52 @@ public partial class WorkflowWindow : Window
         if (_latestRun is null) return;
         try { _latestRun = await _client.CancelWorkflowRunAsync(_latestRun.Id, CancellationToken.None); await RefreshAsync(); }
         catch (Exception error) { ResultText.Text = error.Message; }
+    }
+    private async void SendToWorkshopButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_workflow is null) return;
+        var operation = (WorkshopOperationInput.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "design_plan";
+        try
+        {
+            SendWorkshopButton.IsEnabled = false;
+            WorkshopStatusText.Text = "Checking Workshop local model availability…";
+            var health = await _client.GetWorkshopHealthAsync(CancellationToken.None);
+            if (!health.Available) throw new InvalidOperationException(health.Detail);
+            var response = await _client.QueueWorkshopJobAsync(_workflow.Id, operation, CancellationToken.None);
+            _selectedWorkshopJob = response.Job;
+            WorkshopStatusText.Text = $"Workshop job {response.Job.Id} queued for revision {response.Job.Revision}.";
+            await RefreshAsync();
+        }
+        catch (Exception error) { WorkshopStatusText.Text = $"Workshop request failed: {error.Message}"; }
+        finally { SendWorkshopButton.IsEnabled = true; }
+    }
+    private async void CancelWorkshopButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_selectedWorkshopJob is null) return;
+        try
+        {
+            if (_selectedWorkshopJob.Status.Equals("queued", StringComparison.OrdinalIgnoreCase) || _selectedWorkshopJob.Status.Equals("running", StringComparison.OrdinalIgnoreCase))
+                await _client.CancelWorkshopJobAsync(_selectedWorkshopJob.Id, CancellationToken.None);
+            else if (_selectedWorkshopJob.Status.Equals("failed", StringComparison.OrdinalIgnoreCase) || _selectedWorkshopJob.Status.Equals("cancelled", StringComparison.OrdinalIgnoreCase))
+                _selectedWorkshopJob = (await _client.RetryWorkshopJobAsync(_selectedWorkshopJob.Id, CancellationToken.None)).Job;
+            await RefreshAsync();
+        }
+        catch (Exception error) { WorkshopStatusText.Text = $"Workshop job action failed: {error.Message}"; }
+    }
+    private void WorkshopJobsList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (WorkshopJobsList.SelectedIndex >= 0 && WorkshopJobsList.SelectedIndex < _workshopJobs.Count)
+            _selectedWorkshopJob = _workshopJobs[WorkshopJobsList.SelectedIndex];
+        ShowWorkshopJob();
+    }
+
+    private void ShowWorkshopJob()
+    {
+        if (_selectedWorkshopJob is null) return;
+        var job = _selectedWorkshopJob;
+        WorkshopStatusText.Text = $"Job {job.Id}: {job.Status}. {job.Provider} {job.Model}\n{job.Error}".Trim();
+        WorkshopJobActionButton.Content = job.Status is "failed" or "cancelled" ? "Retry job" : "Cancel job";
+        WorkshopJobActionButton.IsEnabled = job.Status is "queued" or "running" or "failed" or "cancelled";
     }
     private async void RetryRunButton_Click(object sender, RoutedEventArgs e)
     {

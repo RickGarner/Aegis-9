@@ -1,0 +1,37 @@
+[
+  {
+    "content": "[PHASE-1] Map existing Aegis-9 workflow architecture and identify insertion points",
+    "id": "phase1-1",
+    "status": "completed"
+  },
+  {
+    "content": "[PHASE-1] Trace workflow lifecycle from creation through execution",
+    "id": "phase1-2",
+    "status": "completed"
+  },
+  {
+    "content": "[PHASE-2] Discover Workshop Desktop's supported local invocation mechanism",
+    "id": "phase2-1",
+    "status": "completed"
+  },
+  {
+    "content": "[PHASE-3] Build minimal Workshop connectivity POC",
+    "id": "phase3-1",
+    "status": "completed"
+  },
+  {
+    "content": "[PHASE-4] Define IWorkflowGenerationProvider interface",
+    "id": "phase4-1",
+    "status": "completed"
+  },
+  {
+    "content": "[PHASE-5] Implement WorkshopLocalWorkflowProvider",
+    "id": "phase5-1",
+    "status": "completed"
+  },
+  {
+    "content": "[PHASE-6] Test Workshop integration with chat endpoint",
+    "id": "phase6-1",
+    "status": "completed"
+  }
+]

@@ -61,12 +61,40 @@ def create_test_package(root: Path, files: dict[str, str], plan: dict[str, Any])
     (input_root / "synthetic-data.json").write_text(json.dumps([item["syntheticInput"] for item in plan["testCases"]], indent=2), encoding="utf-8")
     (input_root / "manifest.json").write_text(json.dumps({"schemaVersion": 1, "planId": plan["id"], "hashes": hashes, "capabilities": plan["capabilities"]}, indent=2), encoding="utf-8")
     (input_root / "Run-AegisTestLab.ps1").write_text(SANDBOX_RUNNER, encoding="utf-8")
-    (package_root / "AegisTestLab.wsb").write_text(sandbox_configuration(input_root, output_root), encoding="utf-8")
+    # Use resource limits from plan or defaults
+    memory_limit = plan.get("resourceLimits", {}).get("memoryMB", 4096)
+    cpu_limit = plan.get("resourceLimits", {}).get("cpuPercent", 100)
+    (package_root / "AegisTestLab.wsb").write_text(sandbox_configuration(input_root, output_root, memory_limit_mb=memory_limit, cpu_limit_percent=cpu_limit), encoding="utf-8")
     return package_root
 
 
-def sandbox_configuration(input_root: Path, output_root: Path) -> str:
-    return f"<Configuration><Networking>Disable</Networking><ClipboardRedirection>Disable</ClipboardRedirection><PrinterRedirection>Disable</PrinterRedirection><AudioInput>Disable</AudioInput><VideoInput>Disable</VideoInput><ProtectedClient>Enable</ProtectedClient><MemoryInMB>4096</MemoryInMB><MappedFolders><MappedFolder><HostFolder>{escape(str(input_root))}</HostFolder><SandboxFolder>C:\\AegisTestLab\\Input</SandboxFolder><ReadOnly>true</ReadOnly></MappedFolder><MappedFolder><HostFolder>{escape(str(output_root))}</HostFolder><SandboxFolder>C:\\AegisTestLab\\Output</SandboxFolder><ReadOnly>false</ReadOnly></MappedFolder></MappedFolders><LogonCommand><Command>powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\\AegisTestLab\\Input\\Run-AegisTestLab.ps1</Command></LogonCommand></Configuration>"
+def sandbox_configuration(input_root: Path, output_root: Path, memory_limit_mb: int = 4096, cpu_limit_percent: int = 100) -> str:
+    """Generate Windows Sandbox configuration with resource limits."""
+    return f"""<Configuration>
+  <Networking>Disable</Networking>
+  <ClipboardRedirection>Disable</ClipboardRedirection>
+  <PrinterRedirection>Disable</PrinterRedirection>
+  <AudioInput>Disable</AudioInput>
+  <VideoInput>Disable</VideoInput>
+  <MappedFolders>
+    <MappedFolder>
+      <HostFolder>{escape(str(input_root))}</HostFolder>
+      <SandboxFolder>C:\\AegisTestLab\\Input</SandboxFolder>
+      <ReadOnly>true</ReadOnly>
+    </MappedFolder>
+    <MappedFolder>
+      <HostFolder>{escape(str(output_root))}</HostFolder>
+      <SandboxFolder>C:\\AegisTestLab\\Output</SandboxFolder>
+      <ReadOnly>false</ReadOnly>
+    </MappedFolder>
+  </MappedFolders>
+  <LogonCommand>
+    <Command>powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\\AegisTestLab\\Input\\Run-AegisTestLab.ps1</Command>
+  </LogonCommand>
+  <MemoryInMB>{memory_limit_mb}</MemoryInMB>
+  <CPULimit>{cpu_limit_percent}</CPULimit>
+  <ProtectedClient>Enable</ProtectedClient>
+</Configuration>"""
 
 
 SANDBOX_RUNNER = r"""$ErrorActionPreference = 'Stop'
@@ -79,3 +107,87 @@ try {
 } catch {$results += [pscustomobject]@{Test='Harness';File='';Passed=$false;Detail=$_.Exception.Message}}
 [pscustomobject]@{SchemaVersion=1;StartedAt=$started.ToUniversalTime().ToString('o');CompletedAt=(Get-Date).ToUniversalTime().ToString('o');Network='disabled';Credentials='none';Results=$results}|ConvertTo-Json -Depth 8|Set-Content C:\AegisTestLab\Output\evidence.json -Encoding UTF8
 """
+
+
+def launch_sandbox(sandbox_wsb_path: Path, timeout_seconds: int = 300) -> dict[str, Any]:
+    """Launch Windows Sandbox and return launch metadata.
+    
+    Args:
+        sandbox_wsb_path: Path to the .wsb configuration file
+        timeout_seconds: Maximum time to wait for sandbox to be ready
+        
+    Returns:
+        Dictionary with launch status, process ID, and sandbox name
+    """
+    import subprocess
+    import time
+    
+    if not sandbox_wsb_path.exists():
+        return {"status": "error", "message": f"Sandbox file not found: {sandbox_wsb_path}"}
+    
+    try:
+        # Launch Windows Sandbox
+        process = subprocess.Popen(
+            [str(sandbox_wsb_path)],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            shell=False
+        )
+        
+        # Wait briefly for sandbox to initialize
+        time.sleep(2)
+        
+        return {
+            "status": "launched",
+            "process_id": process.pid,
+            "sandbox_file": str(sandbox_wsb_path),
+            "timeout_seconds": timeout_seconds,
+            "launched_at": datetime.now(timezone.utc).isoformat(),
+        }
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
+def cleanup_sandbox(package_root: Path, sandbox_name: str | None = None) -> dict[str, Any]:
+    """Clean up sandbox artifacts after execution.
+    
+    Args:
+        package_root: Root directory of the test package
+        sandbox_name: Optional sandbox name to target for cleanup
+        
+    Returns:
+        Dictionary with cleanup status and details
+    """
+    import subprocess
+    import shutil
+    
+    result = {
+        "status": "success",
+        "actions": [],
+        "errors": [],
+    }
+    
+    try:
+        # Remove evidence output (sandbox-generated results)
+        output_dir = package_root / "output"
+        if output_dir.exists():
+            shutil.rmtree(output_dir)
+            result["actions"].append(f"Removed output directory: {output_dir}")
+        
+        # Optional: Kill any remaining sandbox processes
+        if sandbox_name:
+            try:
+                subprocess.run(
+                    ["taskkill", "/IM", "WindowsSandbox.exe", "/F"],
+                    capture_output=True,
+                    timeout=10
+                )
+                result["actions"].append("Terminated sandbox processes")
+            except Exception as e:
+                result["errors"].append(f"Failed to terminate sandbox: {e}")
+        
+    except Exception as e:
+        result["status"] = "partial"
+        result["errors"].append(str(e))
+    
+    return result

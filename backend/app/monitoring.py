@@ -22,6 +22,13 @@ from pydantic import BaseModel, Field
 from app.config import Settings
 from app.credential_broker import resolve_credential
 from app.security_control import SecurityControlError, SecurityControlPolicy
+from app.bridge_protocol import (
+    BridgeEnvelope,
+    StatusPayload,
+    BridgeSource,
+    MessageType,
+    ActivityStatus,
+)
 
 
 Severity = Literal["info", "warning", "error"]
@@ -589,6 +596,12 @@ class FreeFlowAdapter:
 
 
 class DeveloperStudioBridgeAdapter:
+    """
+    Adapter for communicating with Developer Studio via authenticated local bridge.
+    
+    Provides read-only status queries with HMAC-SHA256 authentication.
+    """
+    
     PATH = "/aegis/bridge/v1/status"
 
     def __init__(self, settings: Settings) -> None:
@@ -601,42 +614,79 @@ class DeveloperStudioBridgeAdapter:
         try:
             self._security.require("developer-studio-status", "read-status", mutating=False)
         except SecurityControlError as error:
-            return DeveloperStudioMonitor(status="unavailable", last_checked_at=checked_at, detail=f"Developer Studio status is blocked by security policy: {error}")
+            return DeveloperStudioMonitor(
+                status="unavailable",
+                last_checked_at=checked_at,
+                detail=f"Developer Studio status is blocked by security policy: {error}",
+            )
+        
         if len(self._token) < 32:
-            return DeveloperStudioMonitor(status="unavailable", last_checked_at=checked_at, detail="Developer Studio bridge credentials are not configured.")
+            return DeveloperStudioMonitor(
+                status="unavailable",
+                last_checked_at=checked_at,
+                detail="Developer Studio bridge credentials are not configured.",
+            )
+        
+        # Generate authenticated request
         timestamp = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
         nonce = secrets.token_hex(16)
         canonical = f"GET\n{self.PATH}\n{timestamp}\n{nonce}".encode()
         signature = hmac.new(self._token.encode(), canonical, hashlib.sha256).hexdigest()
+        
         try:
             response = httpx.get(
                 f"{self._url}{self.PATH}",
-                headers={"X-Aegis-Timestamp": timestamp, "X-Aegis-Nonce": nonce, "X-Aegis-Signature": signature},
+                headers={
+                    "X-Aegis-Timestamp": timestamp,
+                    "X-Aegis-Nonce": nonce,
+                    "X-Aegis-Signature": signature,
+                    "Content-Type": "application/json",
+                },
                 timeout=self._timeout,
             )
+            
             if response.status_code == 401:
-                return DeveloperStudioMonitor(status="unavailable", last_checked_at=checked_at, detail="Developer Studio bridge authentication failed.")
+                return DeveloperStudioMonitor(
+                    status="unavailable",
+                    last_checked_at=checked_at,
+                    detail="Developer Studio bridge authentication failed.",
+                )
+            
             response.raise_for_status()
             envelope = response.json()
-            if envelope.get("protocolVersion") != "1.0" or envelope.get("source") != "aegis-developer-studio" or envelope.get("type") != "status":
+            
+            # Validate envelope structure
+            if envelope.get("protocolVersion") != "1.0" or \
+               envelope.get("source") != "aegis-developer-studio" or \
+               envelope.get("type") != "status":
                 raise ValueError("bridge response contract identity is invalid")
+            
             payload = envelope.get("payload")
             if not isinstance(payload, dict):
                 raise ValueError("bridge status payload is missing")
-            repositories = payload.get("repositoryPaths")
+            
+            # Parse status payload
+            status_payload = StatusPayload.from_dict(payload)
+            
             return DeveloperStudioMonitor(
                 status="healthy",
                 last_checked_at=checked_at,
-                detail=f"Authenticated Developer Studio {payload.get('productVersion', 'unknown')} session is {payload.get('activity', 'unknown')}.",
-                product_version=str(payload.get("productVersion") or ""),
-                session_id=str(payload.get("sessionId") or envelope.get("sessionId") or ""),
-                repositories=[str(item) for item in repositories[:20]] if isinstance(repositories, list) else [],
-                provider=str(payload.get("provider") or ""),
-                model=str(payload.get("model") or ""),
-                activity=str(payload.get("activity") or "unknown"),
+                detail=f"Authenticated Developer Studio {status_payload.product_version} session is {status_payload.activity.value}.",
+                product_version=status_payload.product_version,
+                session_id=status_payload.session_id,
+                repositories=status_payload.repository_paths[:20] if status_payload.repository_paths else [],
+                provider=status_payload.provider,
+                model=status_payload.model,
+                activity=status_payload.activity.value,
+                is_local_only=status_payload.is_local_only,
             )
+            
         except (httpx.HTTPError, ValueError) as error:
-            return DeveloperStudioMonitor(status="unavailable", last_checked_at=checked_at, detail=f"Developer Studio bridge is unreachable or invalid: {error}")
+            return DeveloperStudioMonitor(
+                status="unavailable",
+                last_checked_at=checked_at,
+                detail=f"Developer Studio bridge is unreachable or invalid: {error}",
+            )
 
 
 class MonitoringCollector:

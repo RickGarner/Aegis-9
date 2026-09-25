@@ -99,6 +99,27 @@ class FreeFlowJmfJob(BaseModel):
     end_time: str = ""
 
 
+class FreeFlowJmfMessage(BaseModel):
+    """Represents a single JDF message type discovered via KnownMessages."""
+    message_type: str = ""
+    description: str = ""
+    direction: str = ""  # "send", "receive", or "bidirectional"
+    version: str = ""
+
+
+class FreeFlowJmfMessages(BaseModel):
+    """KnownMessages response for a single server."""
+    generated_at: str
+    name: str
+    role: str
+    version: str = ""
+    state: str
+    detail: str
+    http_status: int | None = None
+    response_ms: int | None = None
+    messages: list[FreeFlowJmfMessage] = Field(default_factory=list)
+
+
 class FreeFlowJmfServerJobs(BaseModel):
     name: str
     role: str
@@ -167,21 +188,57 @@ def compare_server_devices(servers: list[FreeFlowJmfServerResult]) -> FreeFlowJm
 
 
 def build_known_devices_request() -> bytes:
+    """Build KnownDevices query using the format confirmed working with FreeFlow Core.
+    
+    Working format (produces HTTP 200):
+    - Root: <JMF> with xmlns="http://www.CIP4.org/JDFSchema_1_1"
+    - Query with Type="KnownDevices" and xsi:type="QueryKnownDevices"
+    - DeviceFilter DeviceDetails="Brief" inside Query
+    """
     root = ET.Element(
         f"{{{JDF_NAMESPACE}}}JMF",
         {
+            f"{{{XSI_NAMESPACE}}}type": "QueryKnownDevices",
+            "MaxVersion": "1.6",
             "SenderID": "AEGIS9",
             "TimeStamp": datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z"),
-            "Version": "1.3",
-            "MaxVersion": "1.6",
+            "Version": "1.6",
         },
     )
     query = ET.SubElement(
         root,
         f"{{{JDF_NAMESPACE}}}Query",
-        {"ID": f"q-{uuid4().hex}", "Type": "KnownDevices", f"{{{XSI_NAMESPACE}}}type": "QueryKnownDevices"},
+        {"ID": f"q-{uuid4().hex}", "Type": "KnownDevices"},
     )
-    ET.SubElement(query, f"{{{JDF_NAMESPACE}}}DeviceFilter", {"DeviceDetails": "Brief"})
+    ET.SubElement(
+        query,
+        f"{{{JDF_NAMESPACE}}}DeviceFilter",
+        {"DeviceDetails": "Brief"},
+    )
+    return ET.tostring(root, encoding="utf-8", xml_declaration=True)
+
+
+def build_known_messages_request() -> bytes:
+    """Build KnownMessages query to discover supported JDF message types.
+    
+    KnownMessages returns a list of message types that the FreeFlow Core
+    can send or receive, which helps identify supported capabilities.
+    """
+    root = ET.Element(
+        f"{{{JDF_NAMESPACE}}}JMF",
+        {
+            f"{{{XSI_NAMESPACE}}}type": "QueryKnownMessages",
+            "MaxVersion": "1.6",
+            "SenderID": "AEGIS9",
+            "TimeStamp": datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z"),
+            "Version": "1.6",
+        },
+    )
+    query = ET.SubElement(
+        root,
+        f"{{{JDF_NAMESPACE}}}Query",
+        {"ID": f"q-{uuid4().hex}", "Type": "KnownMessages"},
+    )
     return ET.tostring(root, encoding="utf-8", xml_declaration=True)
 
 
@@ -201,6 +258,61 @@ def build_queue_status_request() -> bytes:
         {"ID": f"q-{uuid4().hex}", "Type": "QueueStatus", f"{{{XSI_NAMESPACE}}}type": "QueryQueueStatus"},
     )
     return ET.tostring(root, encoding="utf-8", xml_declaration=True)
+
+
+def parse_known_messages(payload: bytes) -> list[FreeFlowJmfMessage]:
+    """Parse KnownMessages response to extract supported JDF message types.
+    
+    KnownMessages returns a list of message types that FreeFlow Core supports.
+    Each message type indicates a capability for JDF communication.
+    
+    The response contains MessageService elements with Type attributes.
+    """
+    if len(payload) > MAX_JMF_RESPONSE_BYTES:
+        raise FreeFlowJmfError("FreeFlow JMF response exceeded the 1 MiB safety limit.")
+    try:
+        root = ET.fromstring(payload)
+    except ET.ParseError as error:
+        raise FreeFlowJmfError("FreeFlow JMF returned malformed XML.") from error
+    
+    messages: list[FreeFlowJmfMessage] = []
+    seen_types: set[str] = set()
+    
+    # Look for MessageService elements in the response
+    for element in root.iter():
+        if element.tag.rsplit("}", 1)[-1] != "MessageService":
+            continue
+        
+        attributes = {str(key): str(value) for key, value in element.attrib.items()}
+        message_type = attributes.get("Type", "")
+        
+        # Avoid duplicates
+        if not message_type or message_type in seen_types:
+            continue
+        seen_types.add(message_type)
+        
+        # Extract description from attributes if available
+        description = attributes.get("Description", "")
+        
+        # Extract direction from attributes
+        # Query=True means it can be queried, Command=True means it can be commanded
+        direction = "bidirectional"
+        if attributes.get("Query") == "true" and attributes.get("Command") == "false":
+            direction = "receive"
+        elif attributes.get("Query") == "false" and attributes.get("Command") == "true":
+            direction = "send"
+        
+        # Extract version if available
+        version = attributes.get("Version", "1.0")
+        
+        messages.append(FreeFlowJmfMessage(
+            message_type=message_type,
+            description=description,
+            direction=direction,
+            version=version,
+        ))
+    
+    return messages
 
 
 def parse_known_devices(payload: bytes) -> list[FreeFlowJmfDevice]:
@@ -317,6 +429,87 @@ class FreeFlowJmfService:
             server.devices = [device for device in server.devices if device.kind == kind]
             server.detail = f"Returned {len(server.devices)} {kind}(s)." if server.state == "healthy" else server.detail
         return result
+
+    def known_messages(self, *, force: bool = False) -> list[FreeFlowJmfMessages]:
+        """Test KnownMessages capability on all configured FreeFlow servers.
+        
+        Returns a list of KnownMessages results, one per server.
+        """
+        generated_at = datetime.now(timezone.utc).isoformat()
+        try:
+            payload = json.loads(self._inventory_path.read_text(encoding="utf-8"))
+        except (OSError, jsonDecodeError) as error:
+            return [FreeFlowJmfMessages(
+                generated_at=generated_at,
+                name="Inventory",
+                role="Configuration",
+                state="unavailable",
+                detail=f"FreeFlow inventory could not be loaded: {error}",
+                messages=[],
+            )]
+        
+        results: list[FreeFlowJmfMessages] = []
+        for item in (payload if isinstance(payload, list) else []):
+            if not isinstance(item, dict) or not item.get("enabled", True):
+                continue
+            
+            name = str(item.get("name", "Unknown"))
+            role = str(item.get("role", "FreeFlow Core"))
+            version = str(item.get("version", ""))
+            url = str(item.get("jmfUrl", "")).strip()
+            
+            if not url:
+                results.append(FreeFlowJmfMessages(
+                    generated_at=generated_at,
+                    name=name,
+                    role=role,
+                    version=version,
+                    state="unconfigured",
+                    detail="JMF endpoint is not configured.",
+                    messages=[],
+                ))
+                continue
+            
+            started = time.perf_counter()
+            try:
+                response = httpx.post(
+                    url,
+                    content=build_known_messages_request(),
+                    headers={"Content-Type": "application/vnd.cip4-jmf+xml", "Accept": "application/vnd.cip4-jmf+xml, application/xml, text/xml"},
+                    timeout=self._timeout,
+                    verify=self._verify_tls,
+                )
+                elapsed = round((time.perf_counter() - started) * 1000)
+                response.raise_for_status()
+                messages = parse_known_messages(response.content)
+                results.append(FreeFlowJmfMessages(
+                    generated_at=generated_at,
+                    name=name,
+                    role=role,
+                    version=version,
+                    jmf_url=url,
+                    state="healthy",
+                    detail=f"KnownMessages returned {len(messages)} message type(s).",
+                    http_status=response.status_code,
+                    response_ms=elapsed,
+                    messages=messages,
+                ))
+            except (httpx.HTTPError, FreeFlowJmfError) as error:
+                elapsed = round((time.perf_counter() - started) * 1000)
+                results.append(FreeFlowJmfMessages(
+                    generated_at=generated_at,
+                    name=name,
+                    role=role,
+                    version=version,
+                    jmf_url=url,
+                    state="error",
+                    detail=str(error),
+                    http_status=getattr(getattr(error, "response", None), "status_code", None),
+                    response_ms=elapsed,
+                    messages=[],
+                ))
+        
+        return results
 
     def status(self) -> FreeFlowJmfStatus:
         result = self.discover()
